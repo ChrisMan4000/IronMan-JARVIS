@@ -2,8 +2,8 @@
 
 *Tony Stark had a billion dollars and a genius brain. I had a free Claude web chat and 36 hours.*
 
-![The HUD, with a box on every panel telling you where its data comes from](docs/images/hud-annotated.png)
-<sub>Click the image to see it full size. Every orange box says where that panel gets its data.</sub>
+![The IronMan J.A.R.V.I.S. HUD](docs/images/hud-screenshot.png)
+<sub>The HUD at 5120x1440. Click the image to see it full size.</sub>
 
 > **Credit where it is due:** this is a **fork of [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (Apache-2.0). The brain, the server and the engine are theirs. I added the full-screen HUD, voice, smart-home tools and installer on top. Please go give the original project a star. The original README is in [docs/OPENJARVIS-README.md](docs/OPENJARVIS-README.md).
 
@@ -72,6 +72,9 @@ powershell -ExecutionPolicy Bypass -File .\uninstall-jarvis.ps1
 It shows what it will remove and its size, and you must type `UNINSTALL` to continue. It removes the project folder, your Jarvis settings, keys and logs in `%USERPROFILE%\.openjarvis`, the desktop icon and the Jarvis environment settings. It **never** touches Git, Node, uv, Rust, LM Studio or your downloaded models. If you also use plain OpenJarvis, note that it shares the `.openjarvis` settings folder.
 
 ## Where does the HUD get its data?
+
+![The same HUD, with a box on every panel telling you where its data comes from](docs/images/hud-annotated.png)
+<sub>Every orange box says where that panel gets its data. Full list below.</sub>
 
 | # | Panel | Source |
 |---|---|---|
