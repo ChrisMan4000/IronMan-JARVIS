@@ -5,6 +5,9 @@
 ![The IronMan J.A.R.V.I.S. HUD](docs/images/hud-screenshot.png)
 <sub>The HUD at 5120x1440. Click the image to see it full size.</sub>
 
+![The same HUD, with an orange box on every panel telling you where its data comes from](docs/images/hud-annotated.png)
+<sub>Every orange box says where that panel gets its data. The full list is further down.</sub>
+
 > **Credit where it is due:** this is a **fork of [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (Apache-2.0). The brain, the server and the engine are theirs. I added the full-screen HUD, voice, smart-home tools and installer on top. Please go give the original project a star. The original README is in [docs/OPENJARVIS-README.md](docs/OPENJARVIS-README.md).
 
 ## The honest part
@@ -73,8 +76,7 @@ It shows what it will remove and its size, and you must type `UNINSTALL` to cont
 
 ## Where does the HUD get its data?
 
-![The same HUD, with a box on every panel telling you where its data comes from](docs/images/hud-annotated.png)
-<sub>Every orange box says where that panel gets its data. Full list below.</sub>
+See the annotated screenshot at the top. Here is the same information as text:
 
 | # | Panel | Source |
 |---|---|---|
