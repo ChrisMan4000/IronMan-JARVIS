@@ -1,0 +1,47 @@
+# IronMan J.A.R.V.I.S. example settings. install-jarvis.ps1 copies this to
+#   C:\Users\<you>\.openjarvis\config.toml
+# Secrets (Hue key, Tado login, Serply key) are NEVER stored here.
+
+[engine]
+default = "lmstudio"
+
+[engine.lmstudio]
+host = "http://localhost:1234"
+
+[agent]
+default_agent = "simple"      # start-jarvis.ps1 starts the server with --agent orchestrator
+
+[tools]
+# Hue and Tado are optional: the installer removes the ones you do not choose.
+# code_interpreter, file_read and shell_exec are OFF by default: text from a web page,
+# news item or document can try to trick the model into using them (prompt injection).
+# Add them to the list yourself only if you understand that risk.
+enabled = [
+  "web_search",
+  "oracle_search",
+  "rss_news",
+  "hue_lights",
+  "hue_set",
+  "hue_light_list",
+  "hue_all_set",
+  "tado_heating",
+]
+
+[tools.mcp]
+enabled = false
+
+[speech]
+# English only: the voice does not pronounce other languages correctly.
+backend = "faster-whisper"
+model = "base"
+language = "en"
+device = "cpu"
+compute_type = "int8"
+tts_backend = "kokoro"
+voice_id = "am_adam"
+
+[analytics]
+enabled = false               # no usage data is sent anywhere (upstream PostHog is OFF)
+
+[[skills.sources]]
+source = "hermes"
