@@ -1,3 +1,4 @@
+// Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Routes, Route } from 'react-router';
 import { Layout } from './components/Layout';
@@ -74,7 +75,36 @@ export default function App() {
       .finally(() => setModelsLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Mirror the LM Studio model and model list from the hardware helper (auto-update)
+  useEffect(() => {
+    let lastModel = '';
+    let lastIds = '';
+    const sync = async () => {
+      try {
+        const r = await fetch('http://127.0.0.1:8765/');
+        const j = await r.json();
+        const id: string = j.model || '';
+        const m = await fetchModels();
+        const ids = m.map((x) => x.id).join('|');
+        if (ids !== lastIds) {
+          setModels(m);
+          lastIds = ids;
+        }
+        if (id && id !== lastModel) {
+          useAppStore.getState().setSelectedModel(id);
+          lastModel = id;
+        }
+      } catch {
+        // helper or server not reachable: try again next time
+      }
+    };
+    sync();
+    const timer = setInterval(sync, 3000);
+    return () => clearInterval(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch server info
+
   useEffect(() => {
     fetchServerInfo().then(setServerInfo).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

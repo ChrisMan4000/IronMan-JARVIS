@@ -1,0 +1,27 @@
+IronMan J.A.R.V.I.S.
+
+This project is a derivative work of OpenJarvis
+(https://github.com/open-jarvis/OpenJarvis), licensed under the Apache License 2.0
+(see LICENSE). All credit for the OpenJarvis core goes to its authors.
+
+Changes made in this fork (Apache-2.0, section 4b). The base is OpenJarvis commit
+1a9c8cf70fbc24872ba2327115040d4c7a99a11a (2026-10-02).
+
+Modified OpenJarvis files (each carries a "Modified for the IronMan J.A.R.V.I.S. project" line):
+  frontend/src/App.tsx
+  frontend/src/components/Chat/InputArea.tsx
+  frontend/src/hooks/useSpeech.ts
+  src/openjarvis/cli/serve.py
+  src/openjarvis/engine/_openai_compat.py
+  src/openjarvis/speech/faster_whisper.py
+  src/openjarvis/tools/__init__.py
+  src/openjarvis/tools/_stubs.py
+
+Files added by this project:
+  frontend/public/hud.html           the full-screen HUD
+  src/openjarvis/tools/hue_*.py      Philips Hue tools (optional)
+  src/openjarvis/tools/tado_heating.py   Tado heating tool (optional)
+  src/openjarvis/tools/rss_news.py   news headlines tool
+  src/openjarvis/tools/oracle_search.py  document search tool
+  tools/                             local hardware helper, wake word service, helper scripts
+  start-jarvis.ps1, install-jarvis.ps1, uninstall-jarvis.ps1, config.example.toml

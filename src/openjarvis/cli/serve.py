@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """``jarvis serve`` — OpenAI-compatible API server."""
 
 from __future__ import annotations
@@ -371,6 +372,22 @@ def serve(
                                 tools.append(t)
                                 existing.add(t.spec.name)
 
+                    # Skills installed in ~/.openjarvis/skills, added as tools
+                    try:
+                        from pathlib import Path as _SkPath
+                        from openjarvis.skills.manager import SkillManager as _SkMgr
+
+                        if config.skills.enabled:
+                            _skm = _SkMgr(bus, capability_policy=sec.capability_policy)
+                            _skm.discover(
+                                paths=[_SkPath(config.skills.skills_dir).expanduser()]
+                            )
+                            _sk_have = {t.spec.name for t in tools}
+                            for _skt in _skm.get_skill_tools():
+                                if _skt.spec.name not in _sk_have:
+                                    tools.append(_skt)
+                    except Exception as exc:
+                        logger.warning("Skills failed to load in serve: %s", exc)
                     if tools:
                         agent_kwargs["tools"] = tools
                     # Reuse these for the scheduler's ToolExecutor (#263).

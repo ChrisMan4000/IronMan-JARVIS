@@ -131,3 +131,12 @@ learning.db
 minion_logs/
 *.oj-debug.json
 oj-debug.*.json
+
+# IronMan J.A.R.V.I.S. - never commit secrets or local files
+hue-key.txt
+tado-token.json
+*.bak*
+.openjarvis/
+tools/dbip.mmdb
+tools/npu/.venv/
+tools/npu/models/

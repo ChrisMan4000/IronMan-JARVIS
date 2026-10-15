@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Faster-Whisper speech-to-text backend (local, CTranslate2-based)."""
 
 from __future__ import annotations
@@ -119,6 +120,8 @@ class FasterWhisperBackend(SpeechBackend):
                 kwargs = {}
                 if language:
                     kwargs["language"] = language
+                else:
+                    kwargs["language"] = "en"
 
                 segments_iter, info = model.transcribe(tmp.name, **kwargs)
                 segments_list = list(segments_iter)

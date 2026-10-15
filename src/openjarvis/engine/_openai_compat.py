@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Shared base for OpenAI-compatible ``/v1/`` engines."""
 
 from __future__ import annotations
@@ -25,6 +26,21 @@ from openjarvis.engine._stubs import StreamChunk
 from openjarvis.intelligence.model_catalog import resolve_model_id_for_engine
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_lmstudio_settings(payload):
+    """Per-model reasoning/thinking switches saved by the HUD (hud-model-settings.json). Both default to off."""
+    import json as _json
+    import os as _os
+
+    try:
+        path = _os.path.join(_os.path.expanduser("~"), ".openjarvis", "hud-model-settings.json")
+        with open(path, encoding="utf-8") as fh:
+            s = _json.load(fh).get(payload.get("model"), {})
+    except Exception:
+        s = {}
+    payload.setdefault("reasoning_effort", "medium" if s.get("reasoning") else "none")
+    payload.setdefault("chat_template_kwargs", {"enable_thinking": bool(s.get("thinking"))})
 
 
 class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
@@ -97,6 +113,8 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
             **kwargs,
         }
         # Default to tool_choice=auto when tools are provided
+        if self.engine_id == "lmstudio":
+            _apply_lmstudio_settings(payload)
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
         try:
@@ -189,6 +207,8 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
             **kwargs,
         }
         # Default to tool_choice=auto when tools are provided
+        if self.engine_id == "lmstudio":
+            _apply_lmstudio_settings(payload)
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
         url = f"{self._api_prefix}/chat/completions"
@@ -252,6 +272,8 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
             "stream": True,
             **kwargs,
         }
+        if self.engine_id == "lmstudio":
+            _apply_lmstudio_settings(payload)
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
         url = f"{self._api_prefix}/chat/completions"

@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Tools primitive — tool system with ABC interface and built-in tools."""
 
 from __future__ import annotations
@@ -34,6 +35,41 @@ except ImportError:
 
 try:
     import openjarvis.tools.web_search  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.oracle_search  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.hue_lights  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.hue_propose  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.hue_execute  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.hue_set  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.hue_light_list  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.hue_all_set  # noqa: F401
 except ImportError:
     pass
 
@@ -159,6 +195,16 @@ except ImportError:
 
 try:
     import openjarvis.tools.apple_calendar  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.rss_news  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.tado_heating  # noqa: F401
 except ImportError:
     pass
 
