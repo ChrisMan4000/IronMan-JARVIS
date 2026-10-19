@@ -37,6 +37,17 @@ Write-Host "removed icon and user settings"
 # 3. settings, keys and logs
 if (Test-Path $Cfg) { Remove-Item $Cfg -Recurse -Force -ErrorAction SilentlyContinue; Write-Host "removed $Cfg" }
 
+# 3b. optional fan monitor task (only exists if tools\setup-fan-monitor.ps1 was used; removing it needs an administrator window)
+if (Get-ScheduledTask -TaskName 'LibreHardwareMonitor Hidden' -ErrorAction SilentlyContinue) {
+  Unregister-ScheduledTask -TaskName 'LibreHardwareMonitor Hidden' -Confirm:$false -ErrorAction SilentlyContinue
+  if (Get-ScheduledTask -TaskName 'LibreHardwareMonitor Hidden' -ErrorAction SilentlyContinue) {
+    Write-Host "The fan monitor task is still there. Run this uninstaller as administrator, or run: Unregister-ScheduledTask -TaskName 'LibreHardwareMonitor Hidden'" -ForegroundColor Yellow
+  } else {
+    netsh advfirewall firewall delete rule name="Block LHM 8085 from network" | Out-Null
+    Write-Host "removed the fan monitor task (LibreHardwareMonitor itself stays installed)"
+  }
+}
+
 # 4. optional: voice model cache (shared with other Hugging Face programs, so ask)
 $hf = Join-Path $env:USERPROFILE '.cache\huggingface\hub\models--hexgrad--Kokoro-82M'
 if ((Test-Path $hf) -and (Ask "Also remove the downloaded voice model (Kokoro, $(SizeGB $hf) GB)?")) { Remove-Item $hf -Recurse -Force -ErrorAction SilentlyContinue; Write-Host "removed voice model" }

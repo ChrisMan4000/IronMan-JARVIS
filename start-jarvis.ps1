@@ -72,6 +72,8 @@ if ($model -notmatch '^[A-Za-z0-9._:/@+-]+$') {
 }
 
 # --- Step 3: start the helper programs and the Jarvis server, each in its own terminal tab
+# optional fan monitor: only runs if tools\setup-fan-monitor.ps1 was used (starts LibreHardwareMonitor hidden, closes it again after Jarvis stops)
+Start-ScheduledTask -TaskName "LibreHardwareMonitor Hidden" -ErrorAction SilentlyContinue
 if (Test-Path "$root\tools\backup-watch.ps1") { Start-Process wt -WindowStyle Minimized -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"Backup Watcher`" --suppressApplicationTitle powershell -ExecutionPolicy Bypass -File `"$root\tools\backup-watch.ps1`"" }  # optional personal backup, not part of the public repo
 Start-Sleep -Seconds 2
 Start-Process wt -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"HWStatsHelper 8765`" --suppressApplicationTitle powershell -NoExit -Command `"uv run --no-sync python tools\hwstats.py`""

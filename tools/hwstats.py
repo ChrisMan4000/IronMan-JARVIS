@@ -640,6 +640,32 @@ def serve_news(h):
 
 
 # ---------------------------------------------------------------- HTTP server
+# Fan speeds from LibreHardwareMonitor (local web server, port 8085). Read-only, fixed local address.
+def _walk_fans(node, out):
+    v = str(node.get("Value", ""))
+    if v.endswith("RPM"):
+        m = re.match(r"[\d.,]+", v)
+        if m:
+            out.append({"name": str(node.get("Text", ""))[:40], "rpm": int(float(m.group(0).replace(",", ".")))})
+    for c in node.get("Children", []) or []:
+        _walk_fans(c, out)
+
+
+def fans_loop():
+    while True:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8085/data.json", timeout=3) as r:
+                out = []
+                _walk_fans(json.loads(r.read().decode("utf-8")), out)
+                stats["fans"] = [f for f in out if not f["name"].startswith("GPU Fan")]
+        except Exception:
+            stats["fans"] = None
+        time.sleep(2)
+
+
+threading.Thread(target=fans_loop, daemon=True).start()
+
+
 class H(BaseHTTPRequestHandler):
     """Routes GET requests. Anything with a wrong Host header is refused first."""
 

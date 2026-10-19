@@ -20,11 +20,12 @@
 ## What you get
 
 - **Full-screen HUD** with live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections and a glowing 3D brain.
-- **Talk to it.** Say "Hey Jarvis" (optional wake word) or press **F6**. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Say "stop" while it talks and it shuts up.
+- **Talk to it.** Say "Hey Jarvis" (optional wake word) or press **F6**. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
 - **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account.
 - **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning.
 - **Philips Hue lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
 - **Tado heating (optional):** "heating off in the living room".
+- **Live fan speeds (optional):** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. Needs the free LibreHardwareMonitor, see [Optional: live fan speeds](#optional-live-fan-speeds).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
 - **Web search (optional):** needs your own [Serply](https://serply.io) key.
 - **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin *Big RAG* and some patience.
@@ -65,6 +66,18 @@ powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 
 Set your city in `frontend/public/hud.html` (search for `HOME_CFG`). Four values: name, latitude, longitude, time zone. The default is London.
 
+## Optional: live fan speeds
+
+The HUD can show real fan speeds (CPU fan, water pump, case fans) next to the GPU fan. Windows has no simple built-in way to read them, so this uses the free [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases). Which fans show up depends on your mainboard. Without it, the panel just says `LIBREHARDWAREMONITOR OFFLINE` and everything else works.
+
+1. Download LibreHardwareMonitor and unzip it into `C:\Program Files\LibreHardwareMonitor`.
+2. Start it once by hand (as administrator). In its **Options** menu turn on **Remote Web Server > Run** (port 8085) and make sure **Run On Windows Startup** is **off**. Then close it.
+3. Open a PowerShell **as administrator** in this folder and run: `powershell -ExecutionPolicy Bypass -File .\tools\setup-fan-monitor.ps1`
+
+From then on, starting Jarvis starts LibreHardwareMonitor hidden, and it closes itself about 30 seconds after Jarvis has stopped. Its tray icon can be hidden in Windows Settings > Personalization > Taskbar > Other system tray icons.
+
+**Why the firewall rule?** LibreHardwareMonitor's web server listens on every network interface, without a password (and it writes that setting back on every start). The setup script therefore adds a firewall rule that blocks port 8085 from the network; this PC can still read it. The setup script has not been tested on a freshly wiped PC. The uninstaller removes the task and the rule (run it as administrator for that part).
+
 ## Uninstall ("Project Jarvis" gone)
 
 ```powershell
@@ -101,6 +114,7 @@ Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the worl
 ## Safety notes
 
 - `code_interpreter`, `file_read` and `shell_exec` are **off** by default. Text from a web page, a news item or a document can try to trick a model into using them (prompt injection). Turn them on in `config.toml` only if you understand that.
+- If you use the optional fan monitor: LibreHardwareMonitor's web server (port 8085) has no password and listens on all interfaces. Keep the firewall rule from `tools/setup-fan-monitor.ps1` in place.
 - Never share `hue-key.txt`, `tado-token.json` or your Serply key. The installer keeps them out of this folder.
 
 ## What changed from OpenJarvis?

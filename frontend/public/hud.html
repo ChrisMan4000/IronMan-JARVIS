@@ -21,11 +21,12 @@ var HOME_CFG={name:"Your City",lat:51.51,lon:-0.13,tz:"Europe/London"};
 let MODEL='google/gemma-4-26b-a4b-qat';const TH=0.02,SIL=900,NOSPEECH=10000,PI=Math.PI;
 const cv=document.getElementById('cv'),g=cv.getContext('2d'),log=document.getElementById('log');
 let on=false,state='idle',level=0,ctx,micAn,outAn,stream,rec,chunks=[],timer,playing=null;
-let hist=[{role:'system',content:'You are Jarvis, a concise voice assistant. Answer in one to three short sentences of plain text, no markdown. Begin every reply with your confidence in exactly this form: NN% confidence, where NN is your real confidence from 0 to 100 for this answer (never copy an example number; use a different number when your confidence differs). When you use the oracle_search tool, end your reply with one extra final line in exactly this form: Sources: exact_file_name_1.pdf; exact_file_name_2.pdf (use the exact file names from the search results, separated by semicolons, no numbering). Leave the Sources line out when you did not use documents. When you use the web_search tool, end your reply with one extra final line in exactly this form: Links: https://full-url-1; https://full-url-2 (use the full URLs from the search results, at most 3). Leave the Links line out when you did not search the web. Never claim you cannot provide links: the page turns file names and URLs into clickable links by itself. For questions like how many documents mention a word, call oracle_search with mode keyword and report its numbers. Never say you are searching without actually calling the tool: call it first, then answer. For weather, news, prices, sports or anything current or recent, always call web_search first and never answer from memory. When the user asks for the news, call web_search immediately for the latest top headlines and never ask which topics they want first. If you say you will search, you must call the tool in that same turn. Even for future dates such as the weather in two weeks, call web_search first and report what it finds, and say how uncertain long range forecasts are. Never refuse to search. When the user asks to switch Hue lights or a room on or off, you must call the hue_set tool in that same turn, and you must never say the lights were switched unless the tool returned a result. For questions about which lights are on, call hue_lights, or hue_light_list for single lights. When the user asks for news or headlines, you must call the rss_news tool in that same turn (feeds: nyt, bbc, dw, aljazeera, tagesschau, spiegel, wired, ars, hackernews, verge, arxiv, nature, quanta; default bbc), report only what it returned, and never invent headlines. After the headlines, end your reply with one final line in exactly this form: Links: url1 url2 (the article addresses from the tool, separated by spaces). When the user asks about or wants to change the heating, radiators or room temperature, you must call the tado_heating tool in that same turn (actions: status, set, boost, off, resume), report only what it returned, and never say the heating was changed unless the tool returned a result.'}];
+let hist=[{role:'system',content:'You are Jarvis, a concise voice assistant. Answer in one to three short sentences of plain text, no markdown. Begin every reply with your confidence in exactly this form: NN% confidence, where NN is your real confidence from 0 to 100 for this answer (never copy an example number; use a different number when your confidence differs). When you use the oracle_search tool, end your reply with one extra final line in exactly this form: Sources: exact_file_name_1.pdf; exact_file_name_2.pdf (use the exact file names from the search results, separated by semicolons, no numbering). Leave the Sources line out when you did not use documents. When you use the web_search tool, end your reply with one extra final line in exactly this form: Links: https://full-url-1; https://full-url-2 (use the full URLs from the search results, at most 3). Leave the Links line out when you did not search the web. Never claim you cannot provide links: the page turns file names and URLs into clickable links by itself. For questions like how many documents mention a word, call oracle_search with mode keyword and report its numbers. Never say you are searching without actually calling the tool: call it first, then answer. For weather, news, prices, sports or anything current or recent, always call web_search first and never answer from memory. When the user asks for the news, call web_search immediately for the latest top headlines and never ask which topics they want first. If you say you will search, you must call the tool in that same turn. Even for future dates such as the weather in two weeks, call web_search first and report what it finds, and say how uncertain long range forecasts are. Never refuse to search. Always give temperatures in degrees Celsius only and never in Fahrenheit: convert any Fahrenheit value from search results and leave the Fahrenheit value out. For every question about the user documents, call oracle_search again in that same turn, even for a follow-up question, and never answer from earlier results or from memory. When the user asks to switch Hue lights or a room on or off, you must call the hue_set tool in that same turn, and you must never say the lights were switched unless the tool returned a result. For questions about which lights are on, call hue_lights, or hue_light_list for single lights. When the user asks for news or headlines, you must call the rss_news tool in that same turn (feeds: nyt, bbc, dw, aljazeera, tagesschau, spiegel, wired, ars, hackernews, verge, arxiv, nature, quanta; default bbc), report only what it returned, and never invent headlines. After the headlines, end your reply with one final line in exactly this form: Links: url1 url2 (the article addresses from the tool, separated by spaces). When the user asks about or wants to change the heating, radiators or room temperature, you must call the tado_heating tool in that same turn (actions: status, set, boost, off, resume), report only what it returned, and never say the heating was changed unless the tool returned a result.'}];
 const LABEL={idle:'STANDBY',listening:'LISTENING',thinking:'PROCESSING',speaking:'SPEAKING'};
 // Add one line to the log. The text is inserted as plain text (never as HTML), so text from the web,
 // documents or the model cannot inject code; only real http(s) addresses become clickable links.
-function putText(d,t){t=String(t);let p=0;
+function putText(d,t){t=String(t);let p=0;t.replace(/\*\*([^*\n]+?)\*\*/g,(m,x,i)=>{putPlain(d,t.slice(p,i));const b=document.createElement("b");putPlain(b,x);d.appendChild(b);p=i+m.length;return m});putPlain(d,t.slice(p))}
+function putPlain(d,t){t=String(t);let p=0;
   t.replace(/https?:\/\/[^\s<>"'\])]+/g,(u,i)=>{d.appendChild(document.createTextNode(t.slice(p,i)));
     const a=document.createElement("a");a.href=u;a.target="_blank";a.rel="noopener noreferrer";a.style.color="#ff9a3d";a.textContent=u;d.appendChild(a);p=i+u.length;return u});
   d.appendChild(document.createTextNode(t.slice(p)))}
@@ -227,7 +228,8 @@ tIn.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();sendText()}};
 addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{e.preventDefault();setFile(e.dataTransfer.files[0])});
 addEventListener('paste',e=>{const f=e.clipboardData&&e.clipboardData.files&&e.clipboardData.files[0];if(f)setFile(f)});
-const W1=s=>{const w=s.replace(/[^A-Za-z0-9 ]/g,"").trim();return w.length>=2&&w.length<=9&&w.indexOf(" ")<0&&!/^(you|the|uh|um)$/i.test(w)};const BARGE=0.012;let interrupted=false;
+const W1=s=>{const w=s.replace(/[^A-Za-z0-9 ]/g,"").trim();return w.length>=2&&w.length<=9&&w.indexOf(" ")<0&&!/^(you|the|uh|um)$/i.test(w)};const BARGE=0.006;let interrupted=false;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state==='speaking'){interrupted=true;if(playing)try{playing.stop()}catch(x){}}});
 async function bargeStart(){
   let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch(e){return null}
   const an=ctx.createAnalyser();an.fftSize=1024;const src=ctx.createMediaStreamSource(st);src.connect(an);
@@ -250,9 +252,9 @@ async function bargeStart(){
     window.TQ--;chk=false};
   const sp=ctx.createScriptProcessor(4096,1,1),ring=[];let cap=null;
   sp.onaudioprocess=e=>{const x=new Float32Array(e.inputBuffer.getChannelData(0));ring.push(x);if(ring.length>6)ring.shift();
-    if(cap){cap.push(x);if(cap.length>=18){const c=cap;cap=null;sendClip(c)}}};
+    if(cap){cap.push(x);if(cap.length>=14){const c=cap;cap=null;chk=false;sendClip(c)}}};
   src.connect(sp);sp.connect(ctx.destination);
-  const checkWord=()=>{if(cap||chk)return;chk=true;window.CK=(window.CK||0)+1;cap=ring.slice()};
+  const checkWord=()=>{if(cap||chk||(window.TQ||0)>=2)return;chk=true;window.CK=(window.CK||0)+1;cap=ring.slice()};
   const timer=setInterval(()=>{an.getFloatTimeDomainData(d);let s=0;for(const v of d)s+=v*v;const r=Math.sqrt(s/d.length);
     window.BL=r;window.MICPK=Math.max((window.MICPK||0)*0.97,r);window.MICMX=Math.max(window.MICMX||0,r);loud=r>BARGE?loud+1:0;
     window.MICLD=loud;if(loud>=1&&!chk&&!closed)checkWord();},50);
@@ -312,7 +314,7 @@ let hwSkip=0;
 async function hwPoll(){if(document.hidden&&(hwSkip++%5))return;try{const j=await(await fetch('http://127.0.0.1:8765')).json();hw=j;hwOk=true;try{lampApply(j)}catch(e){}
   push(H.cl,j.cpu_load);if(j.model)MODEL=j.model;hwModel=j.model||null;if(j.net){push(H.nd,j.net.down_pct);push(H.nu,j.net.up_pct)}{const q=j.gpu||{load:0,temp:0,power:0};push(H.gl,q.load);push(H.gt,q.temp);push(H.pw,q.power)}}catch(e){hwOk=false}}
 poll();setInterval(poll,3000);hwPoll();setInterval(hwPoll,800);
-async function weather(){try{const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+HOME_CFG.lat+'&longitude='+HOME_CFG.lon+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&daily=precipitation_probability_max&forecast_days=1&timezone='+encodeURIComponent(HOME_CFG.tz));const j=await r.json();wx=j.current;wx.pp=(j.daily&&j.daily.precipitation_probability_max)?j.daily.precipitation_probability_max[0]:null}catch(e){wx=null}}
+async function weather(){try{const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+HOME_CFG.lat+'&longitude='+HOME_CFG.lon+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&daily=precipitation_probability_max,sunshine_duration,daylight_duration&forecast_days=1&timezone='+encodeURIComponent(HOME_CFG.tz));const j=await r.json();wx=j.current;wx.pp=(j.daily&&j.daily.precipitation_probability_max)?j.daily.precipitation_probability_max[0]:null;wx.sun=(j.daily&&j.daily.daylight_duration&&j.daily.daylight_duration[0]>0&&j.daily.sunshine_duration&&j.daily.sunshine_duration[0]!=null)?Math.round(100*j.daily.sunshine_duration[0]/j.daily.daylight_duration[0]):null}catch(e){wx=null}}
 weather();setInterval(weather,8000000);
 const TC={s:-1,t:'',d:''};
 const wm=c=>c==0?'CLEAR SKY':c<4?'PARTLY CLOUDY':c<50?'FOG':c<60?'DRIZZLE':c<70?'RAIN':c<80?'SNOW':c<90?'SHOWERS':'THUNDERSTORM';
@@ -522,10 +524,10 @@ if(!cmp&&wl>200*u){
 /* right wing: neural lanes */
 const x1=cx+Rc+130*u,wr=xr-50*u-x1;
 if(!cmp&&wr>200*u){
-  tx('NEURAL LANES // TOKEN FLOW (SIM)',x1,y0-16*u,14*u,C);
+  tx('FAN SPEEDS // LIVE',x1,y0-16*u,14*u,C);const fa=(hw&&hw.fans)||[],FNR=[];fa.forEach(f=>{if(/^(CPU|Pump|System)/i.test(f.name)||f.rpm>0)FNR.push({n:f.name.toUpperCase(),v:f.rpm,m:4000,s:' RPM'})});if(hw&&hw.gpu&&hw.gpu.fan!=null)FNR.splice(Math.min(2,FNR.length),0,{n:'GPU FAN',v:hw.gpu.fan,m:100,s:' %'});if(hw&&hw.fans===null)tx('LIBREHARDWAREMONITOR OFFLINE',x1+wr,y0-16*u,11*u,'#ff9a3d','right');
   for(let k=0;k<6;k++){const y=y0+k*rh,col=k%2?'#ff9a3d':'#2b9bff';
-    tx('LANE '+(k+1),x1,y+12*u,11*u,dim);tx((nz(40,k+3)*100*(0.4+level)).toFixed(0)+'%',x1+wr,y+12*u,12*u,col,'right');
-    area(x1,y+18*u,wr,rh-28*u,(i)=>nz(i+Math.floor(t/120),k+3)*(0.3+level*1.5),col)}}
+    const fr=FNR[k];if(!fr)continue;tx(fr.n,x1,y+12*u,11*u,dim);tx(Math.round(fr.v)+fr.s,x1+wr,y+12*u,12*u,col,'right');
+    g.fillStyle=col;g.globalAlpha=0.25;g.fillRect(x1,y+20*u,wr,10*u);g.globalAlpha=0.9;g.fillRect(x1,y+20*u,wr*Math.min(1,fr.v/fr.m),10*u);g.globalAlpha=1}}
 
 /* compass */
 g.shadowColor=C;g.shadowBlur=8*u;
@@ -697,9 +699,9 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   tx('EEG // VOICE OUTPUT',L2+28*u,y2+h2*0.55,12*u,dim);plot(wave(state==='speaking'?outAn:null),L2+28*u,y2+h2*0.55+8*u,pw-56*u,h2*0.3,'#7fdcff',t);
 
   /* R1: clock + weather */
-  const h3=Hh*0.26,ns=Math.floor(Date.now()/1000);
+  const h3=Hh*0.26,hcs=h3*0.88,ns=Math.floor(Date.now()/1000);
   if(TC.s!==ns){TC.s=ns;const now=new Date();TC.t=now.toLocaleTimeString('en-GB');TC.d=now.toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase()}
-  box(R1,top,pw,h3,'CHRONO // SESSION',C);
+  box(R1,top,pw,hcs,'CHRONO // SESSION',C);
   tx(TC.t,R1+28*u,top+110*u,Math.min(64*u,pw/6),C);
   tx(TC.d,R1+28*u,top+142*u,15*u,dim);
   {const x0=R1+28*u,y0=top+190*u,fs=15*u;
@@ -711,13 +713,13 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   const up=Math.floor((Date.now()-t00)/1000);
   [['SESSION',String(Math.floor(up/60)).padStart(2,'0')+':'+String(up%60).padStart(2,'0')],['FPS',fps.toFixed(0)],['CPU THREADS',navigator.hardwareConcurrency||'-']].forEach(([k,v],i)=>{
     const y=top+245*u+i*30*u;tx(k,R1+28*u,y,13*u,dim);tx(String(v),R1+pw-24*u,y,13*u,C,'right')});
-  const wy=top+h3+Hh*0.02,wh=h3;
+  const wy=top+hcs+Hh*0.02,wh=2*h3-hcs;
   box(R1,wy,pw,wh,'ATMOSPHERICS // '+HOME_CFG.name.toUpperCase(),C);
   if(wx){tx(Math.round(wx.temperature_2m)+'\u00B0C',R1+28*u,wy+150*u,Math.min(110*u,pw/4.2),C);
     tx(wm(wx.weather_code),R1+28*u,wy+190*u,22*u,'#ff9a3d');tx('FEELS LIKE '+Math.round(wx.apparent_temperature)+'\u00B0C',R1+28*u,wy+225*u,15*u,dim);
     tx('HUMIDITY  '+wx.relative_humidity_2m+'%',R1+28*u,wy+262*u,14*u,dim);bar(R1+28*u,wy+272*u,pw-56*u,10*u,wx.relative_humidity_2m/100,'#2b9bff');
     tx('WIND  '+wx.wind_speed_10m+' km/h',R1+28*u,wy+300*u,14*u,dim);bar(R1+28*u,wy+310*u,pw-56*u,10*u,Math.min(1,wx.wind_speed_10m/60),'#3dff9a');{const pp=wx.pp==null?0:wx.pp,snow=(wx.weather_code>=71&&wx.weather_code<=77)||wx.weather_code==85||wx.weather_code==86||wx.temperature_2m<=0.5;
-    tx((snow?'SNOW':'RAIN')+' LIKELIHOOD (TODAY)  '+(wx.pp==null?'--':pp+'%'),R1+28*u,wy+338*u,14*u,dim);bar(R1+28*u,wy+348*u,pw-56*u,10*u,pp/100,snow?'#cfe8ff':'#2b9bff')}}
+    tx((snow?'SNOW':'RAIN')+' LIKELIHOOD (TODAY)  '+(wx.pp==null?'--':pp+'%'),R1+28*u,wy+338*u,14*u,dim);bar(R1+28*u,wy+348*u,pw-56*u,10*u,pp/100,snow?'#cfe8ff':'#2b9bff')}tx('SUN LIKELIHOOD (TODAY)  '+(wx.sun==null?'--':wx.sun+'%'),R1+28*u,wy+376*u,14*u,dim);bar(R1+28*u,wy+386*u,pw-56*u,10*u,(wx.sun||0)/100,'#ff9a3d')}
   else tx('ACQUIRING SIGNAL...',R1+28*u,wy+110*u,16*u,dim);
 {
 g.shadowBlur=0;g.globalAlpha=1;g.setLineDash([]);
@@ -767,8 +769,8 @@ cs2.slice().sort((a,b)=>b.n-a.n).slice(0,6).forEach((q,i)=>{const y=fy+(i+1)*18*
 }
 
   /* R2: data stream + core rings */
-  box(R2,top,pw,h3,'DATA STREAM',C);
-  const k2=Math.floor((h3-70*u)/(34*u)),off=Math.floor(t/900);
+  box(R2,top,pw,hcs,'DATA STREAM',C);
+  const k2=Math.floor((hcs-70*u)/(34*u)),off=Math.floor(t/900);
   for(let i=0;i<k2;i++){const q=metrics.length?metrics[(i+off)%metrics.length]:null;if(!q)break;
     const y=top+72*u+i*34*u;g.globalAlpha=1-i/(k2*1.3);tx(q[0].split('.').slice(-2).join('.').slice(0,32),R2+28*u,y,12*u,dim);tx(q[1].toFixed(2),R2+pw-24*u,y,12*u,C,'right');g.globalAlpha=1}
   box(R2,wy,pw,wh,'NEURAL CORE',C);
