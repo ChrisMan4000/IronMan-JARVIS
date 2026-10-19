@@ -86,11 +86,11 @@ See the annotated screenshot at the top. Here is the same information as text:
 | 4 | Audio | level of your microphone and of Jarvis's voice (browser audio) |
 | 5 | Core diagnostics | CPU/GPU charts from the helper. "SYNAPSE" is simulated |
 | 6 | Voice ring | click or F6. Wake word: `tools/npu/wake_service.py` (8766). Whisper and Kokoro run locally |
-| 7 | Neural lanes | simulated, just for looks |
+| 7 | Fan speeds | real fan speeds (RPM) from LibreHardwareMonitor via the helper; the GPU fan comes from `nvidia-smi` |
 | 8 | Chat | OpenJarvis (8000) to LM Studio (1234). Sources = your documents, links = web search |
 | 9 | Chrono | your PC clock; CO2 from NOAA Mauna Loa, fetched by the helper |
 | 10 | Data stream | the same telemetry as panel 2 |
-| 11 | Weather | Open-Meteo.com for the city you set |
+| 11 | Weather | Open-Meteo.com for the city you set (temperature, wind, rain and sun likelihood for today) |
 | 12 | Neural core | glows with voice level and "thinking" |
 | 13 | Network traffic | connections from the helper, places from an offline DB-IP database |
 
