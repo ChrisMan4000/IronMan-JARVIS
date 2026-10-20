@@ -13,6 +13,8 @@ Modified OpenJarvis files (each carries a "Modified for the IronMan J.A.R.V.I.S.
   frontend/src/hooks/useSpeech.ts
   src/openjarvis/cli/serve.py
   src/openjarvis/engine/_openai_compat.py
+  src/openjarvis/memory/service.py
+  src/openjarvis/memory/store.py
   src/openjarvis/speech/faster_whisper.py
   src/openjarvis/tools/__init__.py
   src/openjarvis/tools/_stubs.py

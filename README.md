@@ -80,7 +80,7 @@ From then on, starting Jarvis starts LibreHardwareMonitor hidden, and it closes 
 
 ## Memory: Jarvis remembers things
 
-Tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. This is OpenJarvis's own memory service, switched on by `[memory] enabled = true` in `config.toml` (it is on in `config.example.toml`; set it to `false` to turn it off, then restart the server). After each exchange the loaded model picks out durable facts (one extra model call per exchange) and stores them **only on your PC** in `~/.openjarvis/memory_facts.jsonl` (at most 1000, the oldest are dropped). Small models sometimes store wrong facts.
+Tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. This is OpenJarvis's own memory service, switched on by `[memory] enabled = true` in `config.toml` (it is on in `config.example.toml`; set it to `false` to turn it off, then restart the server). After each exchange the loaded model picks out durable facts (one extra model call per exchange) and stores them **only on your PC** in `~/.openjarvis/memory_facts.jsonl` (at most 1000, the oldest are dropped). Small models sometimes store wrong facts. When you correct yourself ("I sold the Mini, I now drive a green Golf"), the old fact is replaced: one more model call checks which stored facts the new one contradicts and deletes them (best effort; a small model may occasionally delete a merely related fact).
 
 - See what it remembers: `uv run --no-sync jarvis memory list`
 - Forget everything: `uv run --no-sync jarvis memory clear`

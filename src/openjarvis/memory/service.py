@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Persistent memory service: async fact extraction integrated into core.
 
 ``MemoryService`` runs fact extraction on a dedicated background thread so it
@@ -230,6 +231,7 @@ class MemoryService:
         for fact in facts:
             target = quarantined if self._flagged(self._scan(fact)) else clean
             target.append(fact)
+        self._drop_contradicted(clean)
         stored = self._store.add_many_with_trust(clean, source="auto", trust=TRUST_AUTO)
         if quarantined:
             stored += self._store.add_many_with_trust(
@@ -241,6 +243,58 @@ class MemoryService:
             )
         if stored:
             logger.debug("Memory service stored %d new fact(s)", stored)
+
+    def _drop_contradicted(self, new_facts: List[str]) -> None:
+        """Delete stored facts that a new fact contradicts or replaces.
+
+        Best-effort: one extra model call; never raises.
+        """
+        try:
+            remove = getattr(self._store, "remove_texts", None)
+            if remove is None or not new_facts:
+                return
+            old = [f.text for f in self._store.list()][-60:]
+            if not old:
+                return
+            import re
+            from openjarvis.memory import extractor as _ex
+
+            numbered = "\n".join("%d. %s" % (i + 1, t) for i, t in enumerate(old))
+            news = "\n".join("- " + t for t in new_facts)
+            system = (
+                "You compare OLD facts with NEW facts about one user. "
+                "Reply with ONLY the numbers of OLD facts that a NEW fact "
+                "contradicts or replaces (for example a changed car, city or job), "
+                "separated by commas. If no old fact is contradicted or replaced, "
+                "reply NONE. Never list an old fact that is merely related."
+            )
+            user = "OLD FACTS:\n" + numbered + "\n\nNEW FACTS:\n" + news
+            messages = [
+                _ex.Message(role=_ex.Role.SYSTEM, content=system),
+                _ex.Message(role=_ex.Role.USER, content=user),
+            ]
+            result = self._extractor._engine.generate(
+                messages,
+                model=self._extractor._model,
+                temperature=0.0,
+                max_tokens=100,
+            )
+            if isinstance(result, dict):
+                content = result.get("content", "") or ""
+            else:
+                content = str(result)
+            nums = {int(n) for n in re.findall(r"\d+", content)}
+            newset = {t.strip().lower() for t in new_facts}
+            drop = [
+                old[n - 1]
+                for n in sorted(nums)
+                if 1 <= n <= len(old) and old[n - 1].strip().lower() not in newset
+            ]
+            if drop:
+                removed = remove(drop)
+                logger.info("Memory: removed %d contradicted fact(s)", removed)
+        except Exception:  # noqa: BLE001 - never crash the worker
+            logger.debug("Memory contradiction check failed", exc_info=True)
 
     # -- store passthroughs -------------------------------------------------
 

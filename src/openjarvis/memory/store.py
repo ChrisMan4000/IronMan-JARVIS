@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Persistent stores for automatically extracted long-term memory facts.
 
 A *fact* is a short, durable statement worth remembering about the user
@@ -379,6 +380,22 @@ class LocalFactStore(FactStore):
                     self._path.unlink()
                 except OSError:
                     self._flush()
+        return removed
+
+    def remove_texts(self, texts) -> int:
+        """Delete facts whose text matches (case-insensitive). Returns number removed."""
+        wanted = {str(t).strip().lower() for t in texts if str(t).strip()}
+        if not wanted:
+            return 0
+        with self._lock, _cross_process_lock(self._lock_path()):
+            self._sync_from_disk_locked()
+            before = len(self._facts)
+            self._facts = [
+                f for f in self._facts if f.text.strip().lower() not in wanted
+            ]
+            removed = before - len(self._facts)
+            if removed:
+                self._flush()
         return removed
 
     def count(self) -> int:
