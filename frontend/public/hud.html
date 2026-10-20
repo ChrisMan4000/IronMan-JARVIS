@@ -832,6 +832,22 @@ tx('ACTIVITY',nx,y2+h2*0.94,13*u,dim,'center');
 }  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+;try{(function(){
+const HKEY='jarvisHist1';
+if(location.search.indexOf('fresh')>=0){try{localStorage.removeItem(HKEY)}catch(e){}}
+try{const s=JSON.parse(localStorage.getItem(HKEY)||'[]');if(Array.isArray(s)){s.forEach(function(x){if(!x||typeof x.content!=='string'||(x.role!=='user'&&x.role!=='assistant'))return;hist.push({role:x.role,content:x.content});if(x.role==='user')add('user',x.content);else addJ(splitReply(x.content).shown)})}}catch(e){}
+let prev='';
+function saveHist(){try{const a=hist.slice(1).filter(function(x){return typeof x.content==='string'}).slice(-40);const j=JSON.stringify(a);if(j!==prev){localStorage.setItem(HKEY,j);prev=j}}catch(e){}}
+setInterval(saveHist,2000);
+const st=document.createElement('style');
+st.textContent='#hDel{position:fixed;z-index:6;bottom:calc(6vh + 19.5vh - 30px);left:calc(50% + 21vw - 30px);width:26px;height:26px;padding:3px;background:rgba(0,10,20,.55);border:1px solid rgba(25,211,255,.4);border-radius:4px;color:#19d3ff;opacity:.55;cursor:pointer}#hDel:hover{opacity:1;color:#ff9a3d;border-color:#ff9a3d}#hDel.arm{opacity:1;color:#ff4040;border-color:#ff4040}html.cmp #hDel{bottom:calc(7.5vh + 20vh - 30px) !important;left:calc(50% + 15.5vw - 30px) !important}';
+document.head.appendChild(st);
+const bt=document.createElement('button');bt.id='hDel';bt.title='Delete chat history';
+bt.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg>';
+let arm=0;
+bt.onclick=function(){if(!arm){arm=setTimeout(function(){arm=0;bt.classList.remove('arm');bt.title='Delete chat history'},3000);bt.classList.add('arm');bt.title='Click again to delete';return}clearTimeout(arm);arm=0;bt.classList.remove('arm');bt.title='Delete chat history';hist.length=1;while(log.firstChild)log.removeChild(log.firstChild);try{localStorage.removeItem(HKEY)}catch(e){}prev=''};
+document.body.appendChild(bt);
+})()}catch(e){}
 </script>
 <script>
 (function(){

@@ -85,6 +85,7 @@ Tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. This 
 - See what it remembers: `uv run --no-sync jarvis memory list`
 - Forget everything: `uv run --no-sync jarvis memory clear`
 - Do not tell Jarvis passwords or keys: they could end up in that file.
+- HUD chat history: the chat log and the conversation survive Ctrl+F5 (kept in your browser, last 40 messages). The trash-can button in the top-right corner of the chat box deletes it (click twice); `hud.html?fresh` clears it too.
 
 ## Uninstall ("Project Jarvis" gone)
 
