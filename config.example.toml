@@ -43,5 +43,8 @@ voice_id = "am_adam"
 [analytics]
 enabled = false               # no usage data is sent anywhere (upstream PostHog is OFF)
 
+[memory]
+enabled = true                # Jarvis remembers durable facts you tell it. Stored only on this PC (~/.openjarvis/memory_facts.jsonl). Set false to turn off.
+
 [[skills.sources]]
 source = "hermes"

@@ -78,6 +78,14 @@ From then on, starting Jarvis starts LibreHardwareMonitor hidden, and it closes 
 
 **Why the firewall rule?** LibreHardwareMonitor's web server listens on every network interface, without a password (and it writes that setting back on every start). The setup script therefore adds a firewall rule that blocks port 8085 from the network; this PC can still read it. The setup script has not been tested on a freshly wiped PC. The uninstaller removes the task and the rule (run it as administrator for that part).
 
+## Memory: Jarvis remembers things
+
+Tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. This is OpenJarvis's own memory service, switched on by `[memory] enabled = true` in `config.toml` (it is on in `config.example.toml`; set it to `false` to turn it off, then restart the server). After each exchange the loaded model picks out durable facts (one extra model call per exchange) and stores them **only on your PC** in `~/.openjarvis/memory_facts.jsonl` (at most 1000, the oldest are dropped). Small models sometimes store wrong facts.
+
+- See what it remembers: `uv run --no-sync jarvis memory list`
+- Forget everything: `uv run --no-sync jarvis memory clear`
+- Do not tell Jarvis passwords or keys: they could end up in that file.
+
 ## Uninstall ("Project Jarvis" gone)
 
 ```powershell
@@ -115,6 +123,7 @@ Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the worl
 
 - `code_interpreter`, `file_read` and `shell_exec` are **off** by default. Text from a web page, a news item or a document can try to trick a model into using them (prompt injection). Turn them on in `config.toml` only if you understand that.
 - If you use the optional fan monitor: LibreHardwareMonitor's web server (port 8085) has no password and listens on all interfaces. Keep the firewall rule from `tools/setup-fan-monitor.ps1` in place.
+- Memory is on by default: what you tell Jarvis can be stored in `~/.openjarvis/memory_facts.jsonl` (local only). Never tell it secrets, and see the Memory section for how to list or clear it.
 - Never share `hue-key.txt`, `tado-token.json` or your Serply key. The installer keeps them out of this folder.
 
 ## What changed from OpenJarvis?
