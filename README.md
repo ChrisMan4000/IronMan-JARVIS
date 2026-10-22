@@ -27,7 +27,7 @@
 - **Tado heating (optional):** "heating off in the living room".
 - **Live fan speeds (optional):** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. Needs the free LibreHardwareMonitor, see [Optional: live fan speeds](#optional-live-fan-speeds).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
-- **Web search (optional):** needs your own [Serply](https://serply.io) key.
+- **Web search (optional):** needs your own search key, for example [Firecrawl](https://www.firecrawl.dev) (also reads a web page or PDF when you give it a link) or [Serply](https://serply.io).
 - **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin *Big RAG* and some patience.
 - **Privacy first:** upstream analytics (PostHog) are **switched off**. All Jarvis ports listen on `127.0.0.1` only. Keys never go into files in this repo.
 - **English only on purpose.** The voice does not pronounce other languages correctly, so speech is set to English.
@@ -125,7 +125,16 @@ Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the worl
 - `code_interpreter`, `file_read` and `shell_exec` are **off** by default. Text from a web page, a news item or a document can try to trick a model into using them (prompt injection). Turn them on in `config.toml` only if you understand that.
 - If you use the optional fan monitor: LibreHardwareMonitor's web server (port 8085) has no password and listens on all interfaces. Keep the firewall rule from `tools/setup-fan-monitor.ps1` in place.
 - Memory is on by default: what you tell Jarvis can be stored in `~/.openjarvis/memory_facts.jsonl` (local only). Never tell it secrets, and see the Memory section for how to list or clear it.
-- Never share `hue-key.txt`, `tado-token.json` or your Serply key. The installer keeps them out of this folder.
+- Never share `hue-key.txt`, `tado-token.json` or your Serply or Firecrawl key. The installer keeps them out of this folder.
+
+## Web search, accuracy benchmark and other extras
+
+- **Web search with Firecrawl:** set the user environment variables `FIRECRAWL_API_KEY` (your key) and `OPENJARVIS_WEB_SEARCH_ENGINE=firecrawl`, then start Jarvis from a new window (programs only read variables that existed when they started). The HUD adds today's date to the system message so the model does not search for old years. Free search credits are limited.
+- **Taint check:** OpenJarvis blocks `web_search` when the conversation looks like it contains personal data. In this project the e-mail and phone patterns are removed from `src/openjarvis/security/taint.py`, otherwise ordinary chats triggered "taint violation" answers. Trade-off: an e-mail address or phone number in the conversation can now be sent inside a search query. Undo by restoring the two pattern lines.
+- **Smarter memory search (optional):** `[memory] default_backend = "sqlite_dense"` finds notes by meaning (needs the LM Studio embedding model `nomic-embed-text-v1.5`). The optional tools `memory_search`, `memory_index`, `retrieval` and `memory_store` can be added to `enabled` in `config.toml`; `memory_index` reads files from a folder you name, so enable it only if you want that. PDFs need the `pdfplumber` package (the installer adds it).
+- **Accuracy benchmark:** `uv run --no-sync python tools\bench.py` asks 10 read-only questions, checks the real tool calls and writes `bench-result.json`; the HUD shows the score and per-query cost, energy, latency and tokens in SYSTEM DIAGNOSTICS. Edit `tools/bench.json` to match your own data (rooms, documents).
+- **Loop guard fix:** the guard that stops repeated tool calls is now reset at the start of every request, so it no longer blocks tools after many requests.
+- **Future statements in italics:** sentences about the future (forecasts, "tomorrow", "will") are shown in italics with the numbers in bold italics. The HUD detects them with a simple word list, so it can occasionally italicize a sentence that is not about the future.
 
 ## What changed from OpenJarvis?
 

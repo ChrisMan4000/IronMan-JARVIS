@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Storage MCP tools — expose MemoryBackend operations as BaseTool instances.
 
 These tools wrap the ``MemoryBackend`` ABC so that memory operations
@@ -160,7 +161,7 @@ class MemorySearchTool(BaseTool):
         return ToolSpec(
             name="memory_search",
             description=(
-                "Search memory for content relevant to a query."
+                "ALWAYS call this tool when the user asks to search or look something up in memory, notes or indexed documents. Never answer such a question without calling it. Search memory for content relevant to a query."
                 " Returns results with scores and sources."
             ),
             parameters={

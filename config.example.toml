@@ -45,6 +45,7 @@ enabled = false               # no usage data is sent anywhere (upstream PostHog
 
 [memory]
 enabled = true                # Jarvis remembers durable facts you tell it. Stored only on this PC (~/.openjarvis/memory_facts.jsonl). Set false to turn off.
+default_backend = "sqlite_dense"   # meaning-based memory search (uses the LM Studio embedding model nomic-embed-text-v1.5; falls back to plain search without it)
 
 [[skills.sources]]
 source = "hermes"

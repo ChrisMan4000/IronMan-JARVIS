@@ -561,6 +561,9 @@ def serve(
                 db_path=config.memory.db_path,
             )
             console.print("  Memory:    [cyan]active[/cyan]")
+            for _mt in resolved_tools:
+                if hasattr(_mt, "_backend") and _mt._backend is None:
+                    _mt._backend = memory_backend
     except Exception as exc:
         logger.debug("Memory backend init failed: %s", exc)
 

@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Storage primitive — persistent searchable storage."""
 
 from __future__ import annotations
@@ -28,6 +29,11 @@ except ImportError:
 
 try:
     import openjarvis.tools.storage.dense  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    import openjarvis.tools.storage.sqlite_dense  # noqa: F401
 except ImportError:
     pass
 

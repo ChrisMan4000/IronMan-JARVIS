@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """ABC for agent implementations.
 
 Adapted from IPW's ``BaseAgent`` at ``src/agents/base.py``.
@@ -481,6 +482,10 @@ class ToolUsingAgent(BaseAgent):
         executor = getattr(self, "_executor", None)
         if executor is not None:
             executor.begin_session([input])
+        # New run: reset the loop guard (one agent object serves many requests)
+        _lg = getattr(self, "_loop_guard", None)
+        if _lg is not None:
+            _lg.reset()
         super()._emit_turn_start(input)
 
     def _build_messages(

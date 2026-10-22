@@ -1,0 +1,12 @@
+[
+{"q":"Call the memory_search tool with query: Threshold. Tell me the file name it returned.","tool":"memory_search","expect":"Threshold"},
+{"q":"Call the retrieval tool with query: Ephemeral Marvels. Tell me the file name it returned.","tool":"retrieval","expect":"Ephemeral"},
+{"q":"Call the memory_search tool with query: superstorms. Which file mentions it?","tool":"memory_search","expect":"Ephemeral"},
+{"q":"Call the hue_lights tool and list the rooms.","tool":"hue_lights","expect":"Kitchen"},
+{"q":"Call the hue_light_list tool and list the lights.","tool":"hue_light_list","expect":"Desk"},
+{"q":"Use the rss_news tool to get 2 tagesschau headlines.","tool":"rss_news","expect":""},
+{"q":"Use web_search to find the capital of Australia.","tool":"web_search","expect":"Canberra"},
+{"q":"Use the oracle_search tool to search my documents for: freezing room.","tool":"oracle_search","expect":""},
+{"q":"Call the tado_heating tool with action status and list the rooms.","tool":"tado_heating","expect":"Kitchen"},
+{"q":"What is 17 times 23? Answer with the number only.","tool":"","expect":"391"}
+]

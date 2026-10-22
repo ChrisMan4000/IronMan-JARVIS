@@ -27,7 +27,7 @@ class HueLightListTool(BaseTool):
         return ToolSpec(
             name="hue_light_list",
             description=(
-                "Read-only. Lists every single Philips Hue light one by one"
+                "Use this ONLY for one individual light or lamp, never when the user asks about rooms or says hue_lights. Read-only. Lists every single Philips Hue light one by one"
                 " with its id, name, on or off, whether it is reachable and"
                 " its brightness in percent. Use it when the user asks about"
                 " an individual light or lamp, or wants every light listed."

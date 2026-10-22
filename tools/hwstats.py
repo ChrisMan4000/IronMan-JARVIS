@@ -664,6 +664,19 @@ def fans_loop():
 
 
 threading.Thread(target=fans_loop, daemon=True).start()
+def bench_loop():
+    """Reads bench-result.json (written by tools\bench.py) every 10 s into stats["bench"]."""
+    import os as _os
+    p = _os.path.join(_os.path.expanduser("~"), ".openjarvis", "bench-result.json")
+    while True:
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+            stats["bench"] = {"accuracy": d.get("accuracy"), "passed": d.get("passed"), "total": d.get("total"), "time": d.get("time")}
+        except Exception:
+            stats["bench"] = None
+        time.sleep(10)
+threading.Thread(target=bench_loop, daemon=True).start()
 
 
 class H(BaseHTTPRequestHandler):

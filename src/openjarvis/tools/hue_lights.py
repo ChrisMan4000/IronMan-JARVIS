@@ -27,7 +27,7 @@ class HueLightsTool(BaseTool):
         return ToolSpec(
             name="hue_lights",
             description=(
-                "Read-only. Lists the user's Philips Hue rooms and whether"
+                "ALWAYS call this tool, never hue_light_list, when the user asks about rooms, says hue_lights, or asks which rooms or lights are on or off. Read-only. Lists the user's Philips Hue rooms and whether"
                 " their lights are on or off. Use it for questions like"
                 " 'which lights are on?'. It cannot change anything."
             ),

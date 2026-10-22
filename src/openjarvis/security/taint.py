@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Taint tracking — information flow control.
 
 Prevents data leakage through tool chains.
@@ -61,9 +62,7 @@ SINK_POLICY: Dict[str, Set[TaintLabel]] = {
 # Patterns for auto-detecting taint in text
 _PII_PATTERNS = [
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
     re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"),  # credit card
-    re.compile(r"\b\+?1?\s*\(?[2-9]\d{2}\)?\s*[-.\s]?\d{3}\s*[-.\s]?\d{4}\b"),  # phone
 ]
 
 _SECRET_PATTERNS = [
