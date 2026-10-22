@@ -146,7 +146,8 @@ $s  = $ws.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Jarvis.lnk"
 $s.TargetPath = "powershell.exe"
 $s.Arguments = "-ExecutionPolicy Bypass -WindowStyle Minimized -File `"$Repo\start-jarvis.ps1`""
 $s.WorkingDirectory = $Repo
-$s.IconLocation = "powershell.exe,0"
+$ico = Join-Path $Repo "assets\jarvis.ico"
+if (Test-Path $ico) { $s.IconLocation = $ico } else { $s.IconLocation = "powershell.exe,0" }   # J.A.R.V.I.S. icon for the desktop shortcut
 $s.Save()
 
 # ---------- final checks ----------
