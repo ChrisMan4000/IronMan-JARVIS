@@ -64,6 +64,8 @@ powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 4. Open LM Studio once, run `lms bootstrap`, and download a model (see above).
 5. Double-click the **Jarvis** icon on your desktop. Allow the microphone in the browser.
 
+**No Git? Use the installer instead:** download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.com/ChrisMan4000/IronMan-JARVIS/releases) and run it. It unpacks the project to `%LOCALAPPDATA%\IronMan-JARVIS` and starts the same `install-jarvis.ps1` (steps 3-5 above apply). It is a pre-release, not code-signed (Windows SmartScreen will warn: "More info" > "Run anyway") and not yet tested on a freshly wiped PC. LM Studio, uv, Python and the models are downloaded during setup, not packed inside. To uninstall, run `uninstall-jarvis.ps1` first (see "Uninstall"), then remove the app in Windows Settings.
+
 Set your city in `frontend/public/hud.html` (search for `HOME_CFG`). Four values: name, latitude, longitude, time zone. The default is London.
 
 ## Optional: live fan speeds
