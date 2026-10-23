@@ -59,7 +59,7 @@ Write-Host ""; Write-Host "Step 4: packages (a few minutes)" -ForegroundColor Cy
 rustup default stable
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
-uv pip install maxminddb python-tado maturin pdfplumber
+uv pip install maxminddb python-tado maturin pdfplumber psutil
 uv run --no-sync maturin develop -m rust/crates/openjarvis-python/Cargo.toml --release
 if ($LASTEXITCODE -ne 0) { Write-Host "Rust module build failed. Jarvis still starts (you only get a 'No module named openjarvis_rust' warning)." -ForegroundColor Yellow }
 Set-Location "$Repo\frontend"; npm install; Set-Location $Repo
