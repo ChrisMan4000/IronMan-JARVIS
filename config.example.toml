@@ -1,6 +1,6 @@
 # IronMan J.A.R.V.I.S. example settings. install-jarvis.ps1 copies this to
 #   C:\Users\<you>\.openjarvis\config.toml
-# Secrets (Hue key, Tado login, Serply key) are NEVER stored here.
+# Secrets (Hue key, Tado login, Firecrawl key) are NEVER stored here.
 
 [engine]
 default = "lmstudio"

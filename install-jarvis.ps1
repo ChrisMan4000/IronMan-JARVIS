@@ -138,9 +138,9 @@ if ($useTado) {
 
 # ---------- 10. web search key (optional) + desktop shortcut ----------
 Write-Host ""
-$sec = Read-Host "Optional: paste your Serply API key for web search (typed hidden, Enter to skip)" -AsSecureString
+$sec = Read-Host "Optional: paste your Firecrawl API key for web search (firecrawl.dev, typed hidden, Enter to skip)" -AsSecureString
 $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-if ($key) { [Environment]::SetEnvironmentVariable("SERPLY_API_KEY", $key, "User"); Write-Host "key saved as a user environment variable (never in a file)" }
+if ($key) { [Environment]::SetEnvironmentVariable("FIRECRAWL_API_KEY", $key, "User"); [Environment]::SetEnvironmentVariable("OPENJARVIS_WEB_SEARCH_ENGINE", "firecrawl", "User"); Write-Host "key saved as a user environment variable (never in a file)" }
 $ws = New-Object -ComObject WScript.Shell
 $s  = $ws.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Jarvis.lnk")
 $s.TargetPath = "powershell.exe"

@@ -4,8 +4,9 @@ This project is a derivative work of OpenJarvis
 (https://github.com/open-jarvis/OpenJarvis), licensed under the Apache License 2.0
 (see LICENSE). All credit for the OpenJarvis core goes to its authors.
 
-Changes made in this fork (Apache-2.0, section 4b). The base is OpenJarvis commit
-1a9c8cf70fbc24872ba2327115040d4c7a99a11a (2026-10-02).
+Changes made in this fork (Apache-2.0, section 4b). The fork started at OpenJarvis commit
+1a9c8cf70fbc24872ba2327115040d4c7a99a11a (2026-10-02) and was merged with upstream
+commit 4741d5d (2026-10-23).
 
 Modified OpenJarvis files (each carries a "Modified for the IronMan J.A.R.V.I.S. project" line):
   frontend/src/App.tsx

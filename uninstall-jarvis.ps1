@@ -16,7 +16,7 @@ Write-Host "This will remove:" -ForegroundColor Yellow
 Write-Host "  - the project folder  $Repo  ($(SizeGB $Repo) GB)"
 Write-Host "  - your settings, Hue key, Tado login and logs  $Cfg  ($(SizeGB $Cfg) GB)"
 Write-Host "  - the desktop icon 'Jarvis'"
-Write-Host "  - the user settings HUE_BRIDGE_IP and SERPLY_API_KEY"
+Write-Host "  - the user settings HUE_BRIDGE_IP, FIRECRAWL_API_KEY and OPENJARVIS_WEB_SEARCH_ENGINE"
 Write-Host "It will NOT remove Git, uv, Node, Rust, LM Studio or your downloaded models."
 $t = Read-Host "Type UNINSTALL to continue (anything else cancels)"
 if ($t -cne 'UNINSTALL') { Write-Host "Cancelled. Nothing was changed."; exit }
@@ -30,6 +30,8 @@ Write-Host "stopped running Jarvis programs"
 # 2. icon and user settings
 Remove-Item $Lnk -Force -ErrorAction SilentlyContinue
 [Environment]::SetEnvironmentVariable('HUE_BRIDGE_IP', $null, 'User')
+[Environment]::SetEnvironmentVariable('FIRECRAWL_API_KEY', $null, 'User')
+[Environment]::SetEnvironmentVariable('OPENJARVIS_WEB_SEARCH_ENGINE', $null, 'User')
 [Environment]::SetEnvironmentVariable('SERPLY_API_KEY', $null, 'User')
 [Environment]::SetEnvironmentVariable('JARVIS_DOC_ROOT', $null, 'User')
 Write-Host "removed icon and user settings"

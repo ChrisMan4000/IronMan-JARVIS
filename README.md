@@ -27,7 +27,7 @@
 - **Tado heating (optional):** "heating off in the living room".
 - **Live fan speeds (optional):** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. Needs the free LibreHardwareMonitor, see [Optional: live fan speeds](#optional-live-fan-speeds).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
-- **Web search (optional):** needs your own search key, for example [Firecrawl](https://www.firecrawl.dev) (also reads a web page or PDF when you give it a link) or [Serply](https://serply.io).
+- **Web search (optional):** uses [Firecrawl](https://www.firecrawl.dev) and needs your own free API key. It also reads a web page or PDF when you give it a link.
 - **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin *Big RAG* and some patience.
 - **Privacy first:** upstream analytics (PostHog) are **switched off**. All Jarvis ports listen on `127.0.0.1` only. Keys never go into files in this repo.
 - **English only on purpose.** The voice does not pronounce other languages correctly, so speech is set to English.
@@ -120,14 +120,14 @@ See the annotated screenshot at the top. Here is the same information as text:
 
 ## What goes over the internet
 
-Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the world-map shape (jsDelivr), one-time downloads (voice model from Hugging Face, wake word files from GitHub, location database from DB-IP), and only if you enable them: web search (Serply), the news feeds you ask for, and your Hue bridge and Tado account. No usage data is sent anywhere.
+Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the world-map shape (jsDelivr), one-time downloads (voice model from Hugging Face, wake word files from GitHub, location database from DB-IP), and only if you enable them: web search (your query goes to Firecrawl), the news feeds you ask for, and your Hue bridge and Tado account. No usage data is sent anywhere.
 
 ## Safety notes
 
 - `code_interpreter`, `file_read` and `shell_exec` are **off** by default. Text from a web page, a news item or a document can try to trick a model into using them (prompt injection). Turn them on in `config.toml` only if you understand that.
 - If you use the optional fan monitor: LibreHardwareMonitor's web server (port 8085) has no password and listens on all interfaces. Keep the firewall rule from `tools/setup-fan-monitor.ps1` in place.
 - Memory is on by default: what you tell Jarvis can be stored in `~/.openjarvis/memory_facts.jsonl` (local only). Never tell it secrets, and see the Memory section for how to list or clear it.
-- Never share `hue-key.txt`, `tado-token.json` or your Serply or Firecrawl key. The installer keeps them out of this folder.
+- Never share `hue-key.txt`, `tado-token.json` or your Firecrawl key. The installer keeps them out of this folder.
 
 ## Web search, accuracy benchmark and other extras
 
@@ -140,12 +140,11 @@ Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the worl
 
 ## What changed from OpenJarvis?
 
-See [NOTICE](NOTICE) for the full list of modified and added files (Apache-2.0, section 4b). Base version: OpenJarvis commit `1a9c8cf`.
+See [NOTICE](NOTICE) for the full list of modified and added files (Apache-2.0, section 4b). Forked from OpenJarvis commit `1a9c8cf` (2026-10-02) and merged with upstream commit `4741d5d` (2026-10-23).
 
 ## Roadmap
 
 - **Next version: a useful agents setup.** Not the "look, an agent!" kind. The useful kind.
-- Maybe: upgrade to the newest OpenJarvis once I have time to retest everything.
 
 ## License and thanks
 
