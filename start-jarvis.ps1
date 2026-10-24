@@ -28,6 +28,9 @@ function Get-Loaded {
     return @($d | Where-Object { $_.state -eq "loaded" -and ($_.type -eq "llm" -or $_.type -eq "vlm") } | ForEach-Object { $_.id })
   } catch { return @() }
 }
+# Open the LM Studio window (visible, not hidden in the tray). LM Studio is single-instance: if it is already open this just brings it to the front.
+$lmsExe = Join-Path $env:LOCALAPPDATA "Programs\LM Studio\LM Studio.exe"
+if (Test-Path $lmsExe) { Start-Process $lmsExe; Start-Sleep -Seconds 5 }
 if (-not (Test-Lms)) {
   Write-Host "LM Studio server is not running - starting it..." -ForegroundColor Yellow
   lms server start
