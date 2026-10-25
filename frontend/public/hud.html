@@ -437,7 +437,7 @@ addEventListener('resize',resize);resize();
 let u=1;const cl=v=>Math.max(0,Math.min(1,v));
 const arc=(cx,cy,r,a0,a1)=>{g.beginPath();g.arc(cx,cy,r,a0,a1);g.stroke()};
 const ln=(x0,y0,x1,y1)=>{g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,y1);g.stroke()};
-function tx(s,x,y,sz,col,al){if(window.CMP&&sz<10)sz=10;g.font=(sz)+'px Consolas,monospace';g.fillStyle=col;g.textAlign=al||'left';g.fillText(s,x,y)}
+function tx(s,x,y,sz,col,al){if(window.__rec&&!window.__cap)window.__rec.set(Math.round(x)+","+Math.round(y),[String(s),x,y,sz,col,al||"left",g.globalAlpha]);if(window.__cap)return;if(window.CMP&&sz<10)sz=10;g.font=(sz)+'px Consolas,monospace';g.fillStyle=col;g.textAlign=al||'left';g.fillText(s,x,y)}
 function bar(x,y,w,h,v,col){const n=28,sw=w/n;for(let i=0;i<n;i++){g.globalAlpha=i/n<v?0.95:0.15;g.fillStyle=col;g.fillRect(x+i*sw,y,sw-2*u,h)}g.globalAlpha=1}
 function box(x,y,w,h,title,col){g.strokeStyle=col;g.lineWidth=1.5*u;g.globalAlpha=.55;const c=18*u;
   g.beginPath();g.moveTo(x,y+c);g.lineTo(x+c,y);g.lineTo(x+w,y);g.lineTo(x+w,y+h-c);g.lineTo(x+w-c,y+h);g.lineTo(x,y+h);g.closePath();g.stroke();g.globalAlpha=1;
@@ -733,7 +733,7 @@ const pj=(lon,lat)=>[mxm+(lon+180)/360*mwm,mtop+(LAT0-lat)/(LAT0-LAT1)*mh];
 g.strokeStyle=C;g.lineWidth=u;g.globalAlpha=0.08;
 for(let lo=-180;lo<=180;lo+=30){const a=pj(lo,LAT0),b=pj(lo,LAT1);ln(a[0],a[1],b[0],b[1])}
 for(let la=-30;la<=60;la+=30){const a=pj(-180,la),b=pj(180,la);ln(a[0],a[1],b[0],b[1])}
-if(mapOk){const ds=1.7*u,kk=devicePixelRatio||1,cw=Math.ceil((mwm+ds+8)*kk),chh=Math.ceil((mh+ds+8)*kk);
+if(window.__cap){window.__mapd=MAPD}else if(mapOk){const ds=1.7*u,kk=devicePixelRatio||1,cw=Math.ceil((mwm+ds+8)*kk),chh=Math.ceil((mh+ds+8)*kk);
 if(mwm>1&&mh>1&&cw*chh<3e7){
 const key=C+'|'+kk+'|'+mxm.toFixed(2)+'|'+mtop.toFixed(2)+'|'+mwm.toFixed(2)+'|'+mh.toFixed(2)+'|'+ds.toFixed(3)+'|'+MAPD.length;
 if(MC.key!==key){const ox=(Math.floor(mxm*kk)-2)/kk,oy=(Math.floor(mtop*kk)-2)/kk,cc=MC.cv||(MC.cv=document.createElement('canvas'));
@@ -745,7 +745,7 @@ else tx(mapOk===null?'LOADING MAP...':'MAP DATA UNAVAILABLE',mx0+mw/2,mtop+mh/2,
 const home=pj(HOME_CFG.lon,HOME_CFG.lat);
 const MP=window.MP=window.MP||{last:t,ph:0};const md=Math.min(100,t-MP.last)/1000;MP.last=t;
 const nt2=hw.net||{down_mbps:0,up_mbps:0};MP.ph+=md*(0.25+Math.min(2,(nt2.down_mbps+nt2.up_mbps)/25));
-const cs2=(hw.conns||[]).slice(0,40);
+const cs2=window.__cap?[]:(hw.conns||[]).slice(0,40);
 g.save();g.globalCompositeOperation='lighter';
 cs2.forEach((q,i)=>{const e=pj(q.lon,q.lat),dx=e[0]-home[0],dy=e[1]-home[1],dist=Math.hypot(dx,dy);
   const lift=Math.max(0,Math.min(mh*0.6,dist*0.5+12*u,(home[1]+e[1]-2*mtop)-4*u)),qx=(home[0]+e[0])/2,qy=(home[1]+e[1])/2-lift,col=q.n>=3?'#ff9a3d':'#19d3ff';
@@ -854,7 +854,7 @@ document.body.appendChild(bt);
 </script>
 <script>
 (function(){
-const o=document.createElement('div');o.id='bootOv';
+return;const o=document.createElement('div');o.id='bootOv';
 const s=document.createElement('style');
 s.textContent='#bootOv{position:fixed;inset:0;z-index:100;background:#02080c;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Consolas,monospace;color:#19d3ff;transition:opacity .9s;cursor:pointer}'
 +'#bootOv svg{width:30vh;height:30vh;overflow:visible}#bootOv .a,#bootOv .b,#bootOv .c{transform-box:fill-box;transform-origin:center}'
@@ -877,4 +877,4 @@ function end(){if(done)return;done=true;clearInterval(iv);o.style.pointerEvents=
 o.addEventListener('click',end);
 setTimeout(end,2200);
 })();
-</script></body></html>
+</script><script src="hud-boot.js"></script></body></html>
