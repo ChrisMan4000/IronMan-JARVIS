@@ -20,6 +20,7 @@
 ## What you get
 
 - **Full-screen HUD** with live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections and a glowing 3D brain.
+- **Cinematic look:** a startup animation (click to skip) and worn, scratched sci-fi panels with soft colors, inspired by the interface of a certain modern war game. The wear pattern is random on every page load.
 - **Talk to it.** Say "Hey Jarvis" (optional wake word) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
 - **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account.
 - **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning.

@@ -291,7 +291,7 @@ if(t>3.4){var uu=cl((t-3.4)/0.7);x.globalAlpha=(1-uu)*0.9;x.fillStyle='#fff';x.b
 var fs=Math.round(14*u);x.font=fs+'px Consolas,monospace';x.textAlign='center';x.fillStyle=CYAN;
 st.forEach(function(s,i){var tm=1.5+i*0.3;if(t>tm){x.globalAlpha=cl((t-tm)/0.2)*(1-cl((t-3.0)/0.3));x.fillText('> '+s,CX,CY+Rc+90*u+i*fs*1.5)}});
 
-title(cl(t/0.5));boxes3(t);x.globalAlpha=1}
+if(window.WEAR)window.WEAR(x,W,H);title(cl(t/0.5));boxes3(t);x.globalAlpha=1}
 var t0=performance.now(),done=false;
 function end(qk){if(done)return;done=true;rst();o.style.transition='opacity .4s';o.style.pointerEvents='none';o.style.opacity='0';setTimeout(function(){o.remove()},500)}
 function tick(now){if(!o.isConnected)return;var t=(now-t0)/1000;fr(Math.min(t,6.2));if(t>=5.9&&!done)end(false);requestAnimationFrame(tick)}
