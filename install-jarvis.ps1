@@ -141,8 +141,8 @@ if (-not $lmsCmd) {
     Write-Host ("  Your PC: GPU memory {0} GB, RAM {1} GB" -f $vram, $ram)
     $tiers = @(
       @{ id = 'qwen/qwen3-4b-2507';           gb = 2.5;  note = 'small and fast, fine for weak PCs, simpler answers' },
-      @{ id = 'google/gemma-4-12b-qat';       gb = 8;    note = 'good balance for 12-16 GB graphics cards' },
-      @{ id = 'google/gemma-4-26b-a4b-qat';   gb = 15.6; note = 'best quality, the default (needs about 24 GB or more GPU memory)' }
+      @{ id = 'google/gemma-4-12b-qat';       gb = 6.7;  note = 'good balance for 12-16 GB graphics cards' },
+      @{ id = 'google/gemma-4-26b-a4b-qat';   gb = 14.6; note = 'best quality, the default (needs about 24 GB or more GPU memory)' }
     )
     for ($i = 0; $i -lt 3; $i++) {
       $mark = ''; if (($i + 1) -eq $rec) { $mark = '   <-- recommended for your PC' }
