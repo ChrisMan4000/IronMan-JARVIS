@@ -64,6 +64,8 @@ if ($info) {
   }
 } else {
   $model = "google/gemma-4-26b-a4b-qat"
+  $savedModelFile = Join-Path $env:USERPROFILE ".openjarvis\jarvis-model.txt"   # model chosen by install-jarvis.ps1
+  if (Test-Path $savedModelFile) { $sm = (Get-Content $savedModelFile -Raw).Trim(); if ($sm -match '^[A-Za-z0-9._:/@+-]+$') { $model = $sm } }
   $want = Get-SavedCtx $model
   Write-Host "No model loaded - loading $model with context $want..." -ForegroundColor Yellow
   lms load $model -c $want -y

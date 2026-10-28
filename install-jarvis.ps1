@@ -110,6 +110,62 @@ if ($useWake -and -not (Test-Path "$NpuDir\.venv\Scripts\python.exe")) {
   Set-Location $Repo
 }
 
+# ---------- 6b. language model (LM Studio) ----------
+Write-Host ""; Write-Host "Step 6b: language model (LM Studio)" -ForegroundColor Cyan
+$lmsCmd = $null
+if (Have lms) { $lmsCmd = 'lms' } elseif (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe") { $lmsCmd = "$env:USERPROFILE\.lmstudio\bin\lms.exe" }
+function Get-LlmList {
+  # downloaded LM Studio language models (not embedding models): list of objects with modelKey and sizeBytes
+  try { $j = (& $lmsCmd ls --json 2>$null) -join "`n"; return @(($j | ConvertFrom-Json) | Where-Object { $_.type -eq 'llm' -and $_.modelKey }) } catch { return @() }
+}
+if (-not $lmsCmd) {
+  Write-Host "  LM Studio command 'lms' not found. Open LM Studio once, run: lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
+} else {
+  $chosen = $null
+  $have = Get-LlmList
+  if ($have.Count -gt 0) {
+    Write-Host "  Models already in LM Studio:"
+    for ($i = 0; $i -lt $have.Count; $i++) { Write-Host ("   {0}) {1}  ({2:N1} GB)" -f ($i + 1), $have[$i].modelKey, ($have[$i].sizeBytes / 1GB)) }
+    Write-Host "   0) download a new model instead"
+    $n = (Read-Host "  Which model should Jarvis use? (number, Enter = 1)").Trim()
+    if ($n -eq '') { $n = '1' }
+    if ($n -match '^\d+$' -and [int]$n -ge 1 -and [int]$n -le $have.Count) { $chosen = $have[[int]$n - 1].modelKey }
+  }
+  if (-not $chosen) {
+    # recommend a size from the GPU memory (or RAM when there is no NVIDIA GPU)
+    $vram = 0
+    if (Have nvidia-smi) { try { $vram = [math]::Round([double]((nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>$null | Select-Object -First 1).Trim()) / 1024) } catch { $vram = 0 } }
+    $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+    if ($vram -ge 22) { $rec = 3 } elseif ($vram -ge 10) { $rec = 2 } elseif ($vram -eq 0 -and $ram -ge 24) { $rec = 2 } else { $rec = 1 }
+    Write-Host ("  Your PC: GPU memory {0} GB, RAM {1} GB" -f $vram, $ram)
+    $tiers = @(
+      @{ id = 'qwen/qwen3-4b-2507';           gb = 2.5;  note = 'small and fast, fine for weak PCs, simpler answers' },
+      @{ id = 'google/gemma-4-12b-qat';       gb = 8;    note = 'good balance for 12-16 GB graphics cards' },
+      @{ id = 'google/gemma-4-26b-a4b-qat';   gb = 15.6; note = 'best quality, the default (needs about 24 GB or more GPU memory)' }
+    )
+    for ($i = 0; $i -lt 3; $i++) {
+      $mark = ''; if (($i + 1) -eq $rec) { $mark = '   <-- recommended for your PC' }
+      Write-Host ("   {0}) about {1} GB  {2} - {3}{4}" -f ($i + 1), $tiers[$i].gb, $tiers[$i].id, $tiers[$i].note, $mark)
+    }
+    $t = (Read-Host "  Which one should I download? (1-3, Enter = $rec, s = skip)").Trim()
+    if ($t -eq '') { $t = "$rec" }
+    if ($t -match '^[123]$') {
+      $id = $tiers[[int]$t - 1].id
+      Write-Host "  Downloading $id (about $($tiers[[int]$t - 1].gb) GB, can take a while)..." -ForegroundColor Cyan
+      & $lmsCmd get $id -y
+      if ((Get-LlmList | Where-Object { $_.modelKey -eq $id })) { $chosen = $id }
+      else { Write-Host "  Could not confirm the download. Try by hand: lms get $id   (or search in the LM Studio app), then run this script again." -ForegroundColor Yellow }
+    } else { Write-Host "  Skipped. Download a model in LM Studio yourself, or run this script again." }
+  }
+  if ($chosen -and $chosen -match '^[A-Za-z0-9._:/@+-]+$') {
+    Write-Host "  Loading $chosen (context 8192)..." -ForegroundColor Cyan
+    & $lmsCmd load $chosen -c 8192 -y
+    # remember the choice: start-jarvis.ps1 loads this model when none is loaded
+    [System.IO.File]::WriteAllText((Join-Path $Cfg 'jarvis-model.txt'), $chosen, $Utf8)
+    Write-Host "  Model saved: $chosen" -ForegroundColor Green
+  }
+}
+
 # ---------- 7. voice model ----------
 Write-Host ""; Write-Host "Step 7: voice model (Kokoro, a few minutes)" -ForegroundColor Cyan
 uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
@@ -159,6 +215,6 @@ Chk "wake word environment" (Test-Path "$NpuDir\.venv\Scripts\python.exe") "opti
 Write-Host ""
 Write-Host "Still to do by hand:" -ForegroundColor Yellow
 Write-Host " 1. Open LM Studio once, then in PowerShell run: lms bootstrap  (open a NEW PowerShell afterwards)"
-Write-Host " 2. In LM Studio download the model google/gemma-4-26b-a4b-qat (about 16 GB; small PC? take google/gemma-4-e2b instead)"
+Write-Host " 2. Language model: chosen in Step 6b above. Skipped it, or want another? Run this script again."
 Write-Host " 3. Double-click the Jarvis icon on your desktop. In your browser allow the microphone and remember the decision."
 Write-Host "Done." -ForegroundColor Green
