@@ -116,13 +116,14 @@ $lmsCmd = $null
 if (Have lms) { $lmsCmd = 'lms' } elseif (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe") { $lmsCmd = "$env:USERPROFILE\.lmstudio\bin\lms.exe" }
 function Get-LlmList {
   # downloaded LM Studio language models (not embedding models): list of objects with modelKey and sizeBytes
-  try { $j = (& $lmsCmd ls --json 2>$null) -join "`n"; return @(($j | ConvertFrom-Json) | Where-Object { $_.type -eq 'llm' -and $_.modelKey }) } catch { return @() }
+  # Windows PowerShell 5 returns the JSON array as ONE object, so loop over it instead of piping it
+  try { $j = (& $lmsCmd ls --json 2>$null) -join "`n"; $arr = ConvertFrom-Json $j; $out = @(); foreach ($m in $arr) { if ($m.type -eq 'llm' -and $m.modelKey) { $out += $m } }; return $out } catch { return @() }
 }
 if (-not $lmsCmd) {
   Write-Host "  LM Studio command 'lms' not found. Open LM Studio once, run: lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
 } else {
   $chosen = $null
-  $have = Get-LlmList
+  $have = @(Get-LlmList)
   if ($have.Count -gt 0) {
     Write-Host "  Models already in LM Studio:"
     for ($i = 0; $i -lt $have.Count; $i++) { Write-Host ("   {0}) {1}  ({2:N1} GB)" -f ($i + 1), $have[$i].modelKey, ($have[$i].sizeBytes / 1GB)) }
@@ -153,7 +154,7 @@ if (-not $lmsCmd) {
       $id = $tiers[[int]$t - 1].id
       Write-Host "  Downloading $id (about $($tiers[[int]$t - 1].gb) GB, can take a while)..." -ForegroundColor Cyan
       & $lmsCmd get $id -y
-      if ((Get-LlmList | Where-Object { $_.modelKey -eq $id })) { $chosen = $id }
+      if (@(Get-LlmList | Where-Object { $_.modelKey -eq $id }).Count -gt 0) { $chosen = $id }
       else { Write-Host "  Could not confirm the download. Try by hand: lms get $id   (or search in the LM Studio app), then run this script again." -ForegroundColor Yellow }
     } else { Write-Host "  Skipped. Download a model in LM Studio yourself, or run this script again." }
   }
