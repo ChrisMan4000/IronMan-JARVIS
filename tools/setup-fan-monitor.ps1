@@ -26,10 +26,10 @@ $exe = '__EXE__'
 if (-not (Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue)) { Start-Process $exe -WindowStyle Hidden }
 $seen = $false; $down = 0; $start = Get-Date
 while ($true) {
-  Start-Sleep 5
+  Start-Sleep 2
   $up = [bool](Get-NetTCPConnection -State Listen -LocalPort 8000,8765 -ErrorAction SilentlyContinue)
   if ($up) { $seen = $true; $down = 0 } else { $down++ }
-  if ($seen -and $down -ge 6) { break }
+  if ($seen -and $down -ge 3) { break }
   if (-not $seen -and ((Get-Date) - $start).TotalMinutes -gt 5) { break }
 }
 Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue | Stop-Process -Force

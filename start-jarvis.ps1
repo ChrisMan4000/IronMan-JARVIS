@@ -76,9 +76,11 @@ if ($model -notmatch '^[A-Za-z0-9._:/@+-]+$') {
   Read-Host "Press Enter to close"; exit
 }
 
+# --- Step 2b: early warm-up straight to LM Studio (runs in the background)
+Start-Job -ArgumentList $model -ScriptBlock { param($m) try { $b = @{model=$m; max_tokens=1; messages=@(@{role='user'; content='Hi'})} | ConvertTo-Json -Depth 5; Invoke-RestMethod -Method Post -Uri http://localhost:1234/v1/chat/completions -Body $b -ContentType 'application/json' -TimeoutSec 300 | Out-Null } catch {} } | Out-Null
 # --- Step 3: start the helper programs and the Jarvis server, each in its own terminal tab
 # optional fan monitor: only runs if tools\setup-fan-monitor.ps1 was used (starts LibreHardwareMonitor hidden, closes it again after Jarvis stops)
-Start-ScheduledTask -TaskName "LibreHardwareMonitor Hidden" -ErrorAction SilentlyContinue
+Stop-ScheduledTask -TaskName "LibreHardwareMonitor Hidden" -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Start-ScheduledTask -TaskName "LibreHardwareMonitor Hidden" -ErrorAction SilentlyContinue   # stop first: an old watcher would ignore the start
 if (Test-Path "$root\tools\backup-watch.ps1") { Start-Process wt -WindowStyle Minimized -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"Backup Watcher`" --suppressApplicationTitle powershell -ExecutionPolicy Bypass -File `"$root\tools\backup-watch.ps1`"" }  # optional personal backup, not part of the public repo
 Start-Sleep -Seconds 2
 Start-Process wt -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"HWStatsHelper 8765`" --suppressApplicationTitle powershell -NoExit -Command `"uv run --no-sync python tools\hwstats.py`""
@@ -101,5 +103,8 @@ Start-Process "http://localhost:5173/hud.html"
 Start-Sleep -Seconds 3
 foreach ($i in 1..10) { $done = $false; foreach ($ti in 'HUD Vite 5173','Jarvis Server 8000','Wake Word 8766','HWStatsHelper 8765','Backup Watcher') { $h = [W.S]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $ti); if ($h -ne [IntPtr]::Zero) { [void][W.S]::ShowWindow($h, 6); $done = $true } }; if ($done) { break }; Start-Sleep -Seconds 1 }
 Write-Host "All done." -ForegroundColor Green
+# --- Step 6: warm-up (first request is slow)
+try { $wb = @{model=$model; max_tokens=1; messages=@(@{role='user'; content='Hi'})} | ConvertTo-Json -Depth 5; [void](Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/chat/completions -Body $wb -ContentType 'application/json' -TimeoutSec 180); Write-Host "Warm-up done." -ForegroundColor Green } catch { Write-Host "Warm-up skipped." }
+try { $sr = Invoke-WebRequest -Method Post -Uri http://127.0.0.1:8000/v1/speech/synthesize -Body '{"text":"Ready."}' -ContentType 'application/json' -UseBasicParsing -TimeoutSec 180; $wf = Join-Path $env:TEMP 'warm.wav'; [System.IO.File]::WriteAllBytes($wf, $sr.Content); [void](curl.exe -s -X POST http://127.0.0.1:8000/v1/speech/transcribe -F "file=@$wf"); Write-Host "Voice warm-up done." -ForegroundColor Green } catch { Write-Host "Voice warm-up skipped." }
 Start-Sleep -Seconds 2
 exit
