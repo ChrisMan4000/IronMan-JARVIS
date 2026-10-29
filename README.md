@@ -27,6 +27,7 @@
 - **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning.
 - **[Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
 - **[Tado](https://www.tado.com/en) heating (optional):** "heating off in the living room".
+- **Two desktop icons:** **Jarvis** starts everything, **Stop Jarvis** shuts everything down again (servers, LM Studio, the helper tabs). The helper programs run hidden in one terminal tab ("Jarvis Services", logs in `%USERPROFILE%\.openjarvis\logs`).
 - **Live fan speeds:** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. The installer sets up the free [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) for this (Windows asks for administrator permission once), see [Live fan speeds](#live-fan-speeds-the-installer-sets-this-up).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
 - **Web search (optional):** uses the [Firecrawl Web Data API](https://www.firecrawl.dev/) and needs your own free API key. It also reads a web page or PDF when you give it a link.
@@ -112,7 +113,7 @@ cd IronMan-JARVIS
 powershell -ExecutionPolicy Bypass -File .\uninstall-jarvis.ps1
 ```
 
-It shows what it will remove and its size, and you must type `UNINSTALL` to continue. It removes the project folder, your Jarvis settings, keys and logs in `%USERPROFILE%\.openjarvis`, the desktop icon and the Jarvis environment settings. It **never** touches Git, Node, uv, Rust, LM Studio or your downloaded models. If you also use plain OpenJarvis, note that it shares the `.openjarvis` settings folder.
+It shows what it will remove and its size, and you must type `UNINSTALL` to continue. It removes the project folder, your Jarvis settings, keys and logs in `%USERPROFILE%\.openjarvis`, the desktop icons (Jarvis and Stop Jarvis) and the Jarvis environment settings. It **never** touches Git, Node, uv, Rust, LM Studio or your downloaded models. If you also use plain OpenJarvis, note that it shares the `.openjarvis` settings folder.
 
 ## Where does the HUD get its data?
 
