@@ -265,6 +265,8 @@ if ($ragAsked) {
 Write-Host ""; Write-Host "Step 7: voice model (Kokoro, a few minutes)" -ForegroundColor Cyan
 Status 8 "Downloading the voice model (a few minutes)"
 uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
+# the voice needs the small English language model of spaCy; install it now (pinned official release) so the first spoken answer does not download it
+uv pip install "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" 2>&1 | Out-Null
 
 # ---------- 8. Hue (optional) ----------
 Status 9 "Philips Hue and Tado (optional)"
@@ -332,6 +334,13 @@ $s.WorkingDirectory = $Repo
 $ico = Join-Path $Repo "assets\jarvis.ico"
 if (Test-Path $ico) { $s.IconLocation = $ico } else { $s.IconLocation = "powershell.exe,0" }   # J.A.R.V.I.S. icon for the desktop shortcut
 $s.Save()
+$st = $ws.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Stop Jarvis.lnk")   # second icon: stops everything
+$st.TargetPath = "powershell.exe"
+$st.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$Repo\tools\stop-jarvis.ps1`""
+$st.WorkingDirectory = $Repo
+$ico2 = Join-Path $Repo "assets\jarvis-stop.ico"
+if (Test-Path $ico2) { $st.IconLocation = $ico2 } else { $st.IconLocation = "powershell.exe,0" }
+$st.Save()
 
 # ---------- final checks ----------
 Write-Host ""; Write-Host "Checks:" -ForegroundColor Cyan

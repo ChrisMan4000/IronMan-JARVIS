@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Kokoro TTS backend — fully open-source, runs locally.
 
 Requires the kokoro package: pip install kokoro
@@ -167,7 +168,7 @@ class KokoroTTSBackend(TTSBackend):
             try:
                 # KModel is language-blind and is by far the heaviest part of
                 # Kokoro. Reuse one model across every language pipeline.
-                pipeline = KPipeline(lang_code=lang_code, model=self._ensure_model())
+                pipeline = KPipeline(lang_code=lang_code, repo_id="hexgrad/Kokoro-82M", model=self._ensure_model())
             except ImportError as exc:
                 # Kokoro loads language-specific G2P resources at init time and
                 # several languages need extra dependencies that aren't pulled in

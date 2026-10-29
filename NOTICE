@@ -18,8 +18,10 @@ Modified OpenJarvis files (each carries a "Modified for the IronMan J.A.R.V.I.S.
   src/openjarvis/engine/_openai_compat.py
   src/openjarvis/memory/service.py
   src/openjarvis/memory/store.py
+  src/openjarvis/security/__init__.py
   src/openjarvis/security/taint.py
   src/openjarvis/speech/faster_whisper.py
+  src/openjarvis/speech/kokoro_tts.py
   src/openjarvis/tools/__init__.py
   src/openjarvis/tools/_stubs.py
   src/openjarvis/tools/storage/__init__.py

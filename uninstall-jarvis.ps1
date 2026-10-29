@@ -5,6 +5,7 @@
 $Repo = $PSScriptRoot
 $Cfg  = Join-Path $env:USERPROFILE '.openjarvis'
 $Lnk  = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Jarvis.lnk'
+$Lnk2 = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Stop Jarvis.lnk'
 function Ask($q) { $a = Read-Host "$q (y/n)"; return ($a -match '^\s*y') }
 function SizeGB($p) { if (Test-Path $p) { $b = (Get-ChildItem $p -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum; return [math]::Round($b / 1GB, 2) } return 0 }
 
@@ -15,7 +16,7 @@ if (-not ((Test-Path "$Repo\start-jarvis.ps1") -and (Test-Path "$Repo\src\openja
 Write-Host "This will remove:" -ForegroundColor Yellow
 Write-Host "  - the project folder  $Repo  ($(SizeGB $Repo) GB)"
 Write-Host "  - your settings, Hue key, Tado login and logs  $Cfg  ($(SizeGB $Cfg) GB)"
-Write-Host "  - the desktop icon 'Jarvis'"
+Write-Host "  - the desktop icons 'Jarvis' and 'Stop Jarvis'"
 Write-Host "  - the user settings HUE_BRIDGE_IP, FIRECRAWL_API_KEY and OPENJARVIS_WEB_SEARCH_ENGINE"
 Write-Host "It will NOT remove Git, uv, Node, Rust, LM Studio or your downloaded models."
 $t = Read-Host "Type UNINSTALL to continue (anything else cancels)"
@@ -28,7 +29,7 @@ foreach ($port in 8000, 8765, 8766, 5173) {
 Write-Host "stopped running Jarvis programs"
 
 # 2. icon and user settings
-Remove-Item $Lnk -Force -ErrorAction SilentlyContinue
+Remove-Item $Lnk, $Lnk2 -Force -ErrorAction SilentlyContinue
 [Environment]::SetEnvironmentVariable('HUE_BRIDGE_IP', $null, 'User')
 [Environment]::SetEnvironmentVariable('FIRECRAWL_API_KEY', $null, 'User')
 [Environment]::SetEnvironmentVariable('OPENJARVIS_WEB_SEARCH_ENGINE', $null, 'User')

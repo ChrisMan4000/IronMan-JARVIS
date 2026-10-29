@@ -1,3 +1,4 @@
+# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Security guardrails — scanners, engine wrapper, audit, SSRF."""
 
 from __future__ import annotations
@@ -111,7 +112,11 @@ def setup_security(
         except Exception as exc:
             if config.security.profile in {"shared", "server"}:
                 raise RuntimeError("Rate limiter initialization failed") from exc
-            logger.warning("Failed to set up rate limiter: %s", exc)
+            # a missing optional Rust module is expected on some PCs: not worth a warning
+            if isinstance(exc, ImportError):
+                logger.debug("Rate limiter not available: %s", exc)
+            else:
+                logger.warning("Failed to set up rate limiter: %s", exc)
 
     # Audit logger
     audit = None

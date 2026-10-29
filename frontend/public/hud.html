@@ -310,7 +310,7 @@ async function poll(){
   const t=performance.now();
   try{await fetch('/health');lat=Math.round(performance.now()-t);online=true;push(H.lat,lat)}catch(e){online=false}
   const arr=[];
-  let sj=null;for(const u of ['/v1/telemetry/stats','/v1/telemetry/energy']){try{const r=await fetch(u);if(r.ok){const j=await r.json();if(u.endsWith('/stats'))sj=j;flat(j,'',arr,0)}}catch(e){}}if(sj&&sj.total_requests>0){const q=sj.total_requests;arr.unshift(['PER_QUERY.COST_USD',(sj.total_cost||0)/q],['PER_QUERY.ENERGY_J',(sj.total_energy_joules||0)/q],['PER_QUERY.LATENCY_S',(sj.total_latency||0)/q],['PER_QUERY.TOKENS',(sj.total_tokens||0)/q])}if(hw&&hw.bench&&hw.bench.accuracy!=null)arr.splice(Math.min(4,arr.length),0,['BENCH_ACCURACY_PCT',hw.bench.accuracy]);
+  let sj=null;for(const u of ['/v1/telemetry/stats','/v1/telemetry/energy']){try{const r=await fetch(u);if(r.ok){const j=await r.json();if(u.endsWith('/stats'))sj=j;flat(j,'',arr,0)}}catch(e){}}if(sj&&sj.total_requests>0){const q=sj.total_requests;arr.unshift(['PER_QUERY.COST_EUR',(sj.total_cost||0)/q],['PER_QUERY.ENERGY_J',(sj.total_energy_joules||0)/q],['PER_QUERY.LATENCY_S',(sj.total_latency||0)/q],['PER_QUERY.TOKENS',(sj.total_tokens||0)/q])}if(hw&&hw.bench&&hw.bench.accuracy!=null)arr.splice(Math.min(4,arr.length),0,['BENCH_ACCURACY_PCT',hw.bench.accuracy]);
   arr.forEach(([k,v])=>{mx[k]=Math.max(mx[k]||1e-9,Math.abs(v))});metrics=arr.slice(0,40);mx['BENCH_ACCURACY_PCT']=100;
 }
 let hwSkip=0;
@@ -828,7 +828,24 @@ cs2.slice().sort((a,b)=>b.n-a.n).slice(0,6).forEach((q,i)=>{const y=fy+(i+1)*18*
 
   /* R2: data stream + core rings */
   box(R2,top,pw,hcs,'DATA STREAM',C);
-  const k2=Math.floor((hcs-70*u)/(34*u)),off=Math.floor(t/900);
+  const k2=0,off=0;
+if(!window.CSTI){window.CSTI=1;window.CSTFX=0.92;const cstF=()=>fetch('/v1/savings').then(r=>r.json()).then(j=>{window.CST=j}).catch(()=>{});cstF();setInterval(cstF,5000)}
+{const cstD=window.CST;
+if(!cstD||!cstD.total_tokens){tx('AWAITING FIRST INFERENCE',R2+28*u,top+80*u,12*u,dim)}
+else{
+const cstH=Math.min(48*u,(hcs-104*u)/4);const cstY=top+72*u;
+const cstK=cstD.total_tokens>=1000?(cstD.total_tokens/1000).toFixed(1)+'K':cstD.total_tokens;
+tx('LOCAL (YOUR HARDWARE)',R2+28*u,cstY,12*u,'#8fe6b8');
+tx('€'+((cstD.local_cost||0)*window.CSTFX).toFixed(4),R2+pw-24*u,cstY,12*u,'#8fe6b8','right');
+tx(cstD.total_calls+' REQ / '+cstK+' TOK',R2+28*u,cstY+16*u,10*u,dim);
+tx('ELECTRICITY ONLY',R2+pw-24*u,cstY+16*u,10*u,dim,'right');
+(cstD.per_provider||[]).slice(0,3).forEach((p,i)=>{const y=cstY+cstH*(i+1)+4*u;
+tx(String(p.label).toUpperCase().slice(0,22),R2+28*u,y,12*u,C);
+tx('€'+(p.total_cost*window.CSTFX).toFixed(4),R2+pw-24*u,y,12*u,C,'right');
+const sv=(p.total_cost-(cstD.local_cost||0))*window.CSTFX;
+if(sv>0)tx('SAVED €'+sv.toFixed(4),R2+pw-24*u,y+16*u,10*u,'#8fe6b8','right')});
+tx('*ASSUMES SAME TOKENS AS CLOUD MODELS',R2+28*u,top+hcs-16*u,9*u,dim);
+}}
   for(let i=0;i<k2;i++){const q=metrics.length?metrics[(i+off)%metrics.length]:null;if(!q)break;
     const y=top+72*u+i*34*u;g.globalAlpha=1-i/(k2*1.3);tx(q[0].split('.').slice(-2).join('.').slice(0,32),R2+28*u,y,12*u,dim);tx(q[1].toFixed(2),R2+pw-24*u,y,12*u,C,'right');g.globalAlpha=1}
   box(R2,wy,pw,wh,'NEURAL CORE',C);
