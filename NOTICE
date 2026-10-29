@@ -34,3 +34,14 @@ Files added by this project:
   src/openjarvis/tools/storage/sqlite_dense.py  meaning-based memory backend (SQLite + LM Studio embeddings)
   tools/                             local hardware helper, wake word service, helper scripts
   start-jarvis.ps1, install-jarvis.ps1, uninstall-jarvis.ps1, config.example.toml
+  installer/                         Inno Setup recipe, wizard images and helper for the Windows installer (.exe)
+
+Optional third-party tools and services (not included; each has its own terms):
+  OpenJarvis (base project)        https://github.com/open-jarvis/OpenJarvis
+  LM Studio (local models)         https://lmstudio.ai
+  Big RAG plugin (document search) https://lmstudio.ai/mindstudio/big-rag
+  Philips Hue                      https://www.philips-hue.com/en-us/explore-hue
+  Tado                             https://www.tado.com/en
+  Firecrawl Web Data API           https://www.firecrawl.dev/
+  openWakeWord                     https://github.com/dscripka/openWakeWord
+  LibreHardwareMonitor             https://github.com/LibreHardwareMonitor/LibreHardwareMonitor

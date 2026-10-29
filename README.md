@@ -21,15 +21,15 @@
 
 - **Full-screen HUD** with live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections and a glowing 3D brain.
 - **Cinematic look:** a startup animation (click to skip) and worn, scratched sci-fi panels with soft colors, inspired by the interface of a certain modern war game. The wear pattern is random on every page load.
-- **Talk to it.** Say "Hey Jarvis" (optional wake word) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
+- **Talk to it.** Say "Hey Jarvis" (optional wake word, [openWakeWord](https://github.com/dscripka/openWakeWord)) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
 - **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account.
 - **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning.
-- **Philips Hue lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
-- **Tado heating (optional):** "heating off in the living room".
+- **[Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
+- **[Tado](https://www.tado.com/en) heating (optional):** "heating off in the living room".
 - **Live fan speeds (optional):** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. Needs the free LibreHardwareMonitor, see [Optional: live fan speeds](#optional-live-fan-speeds).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
-- **Web search (optional):** uses [Firecrawl](https://www.firecrawl.dev) and needs your own free API key. It also reads a web page or PDF when you give it a link.
-- **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin *Big RAG* and some patience.
+- **Web search (optional):** uses the [Firecrawl Web Data API](https://www.firecrawl.dev/) and needs your own free API key. It also reads a web page or PDF when you give it a link.
+- **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin [*Big RAG*](https://lmstudio.ai/mindstudio/big-rag) and some patience.
 - **Privacy first:** upstream analytics (PostHog) are **switched off**. All Jarvis ports listen on `127.0.0.1` only. Keys never go into files in this repo.
 - **English only on purpose.** The voice does not pronounce other languages correctly, so speech is set to English.
 
@@ -61,12 +61,12 @@ cd IronMan-JARVIS
 powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 ```
 
-3. The installer asks before every optional part (Hue, Tado, wake word, web search key). If it installs programs, it tells you to open a new PowerShell and run it again. Finished parts are skipped.
+3. The installer asks before every optional part ([Philips Hue](https://www.philips-hue.com/en-us/explore-hue), [Tado](https://www.tado.com/en), the wake word, the language model, document search, and the [Firecrawl Web Data](https://www.firecrawl.dev/) API key) and shows a link for each one. If it installs programs, it tells you to open a new PowerShell and run it again. Finished parts are skipped.
 4. Open LM Studio once and run `lms bootstrap`. The installer then asks which model to use: pick one you already have in LM Studio, or let it download a ~2 GB, ~8 GB or ~15 GB model (it recommends one for your graphics card). Run `install-jarvis.ps1` again to change it.
    The installer also offers **document search** (Step 6c, optional): it downloads the embedding model and installs the LM Studio plugin *Big RAG* (see [Optional: document search](#optional-document-search)).
 5. Double-click the **Jarvis** icon on your desktop. Allow the microphone in the browser.
 
-**No Git? Use the installer instead:** download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.com/ChrisMan4000/IronMan-JARVIS/releases) and run it. It unpacks the project to `%LOCALAPPDATA%\IronMan-JARVIS` and starts the same `install-jarvis.ps1` (steps 3-5 above apply). It is a pre-release, not code-signed (Windows SmartScreen will warn: "More info" > "Run anyway") and not yet tested on a freshly wiped PC. LM Studio, uv, Python and the models are downloaded during setup, not packed inside. To uninstall, run `uninstall-jarvis.ps1` first (see "Uninstall"), then remove the app in Windows Settings.
+**No Git? Use the installer instead:** download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.com/ChrisMan4000/IronMan-JARVIS/releases) and run it. It unpacks the project to `%LOCALAPPDATA%\IronMan-JARVIS` and asks the optional questions in the installer window itself, in HUD colors, each with a "learn more" link: [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) (bridge IP), [Tado](https://www.tado.com/en), the wake word ([openWakeWord](https://github.com/dscripka/openWakeWord)), the language model ([LM Studio](https://lmstudio.ai); it shows the models you already have and recommends a size for your PC), document search ([Big RAG](https://lmstudio.ai/mindstudio/big-rag)) and the [Firecrawl Web Data](https://www.firecrawl.dev/) API key. It then runs `install-jarvis.ps1` hidden with your answers and shows the progress (10 steps, text per step; model downloads show no percentage). Details are written to `%USERPROFILE%\.openjarvis\install-log.txt`. You can still run `install-jarvis.ps1` yourself in PowerShell, it then asks the same questions there (steps 3-5 above apply). The window installer is new and untested. It is a pre-release, not code-signed (Windows SmartScreen will warn: "More info" > "Run anyway") and not yet tested on a freshly wiped PC. LM Studio, uv, Python and the models are downloaded during setup, not packed inside. To uninstall, run `uninstall-jarvis.ps1` first (see "Uninstall"), then remove the app in Windows Settings.
 
 Set your city in `frontend/public/hud.html` (search for `HOME_CFG`). Four values: name, latitude, longitude, time zone. The default is London.
 
@@ -133,7 +133,7 @@ See the annotated screenshot at the top. Here is the same information as text:
 
 ## What goes over the internet
 
-Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the world-map shape (jsDelivr), one-time downloads (voice model from Hugging Face, wake word files from GitHub, location database from DB-IP), and only if you enable them: web search (your query goes to Firecrawl), the news feeds you ask for, and your Hue bridge and Tado account. No usage data is sent anywhere.
+Honest list: weather (Open-Meteo, your city's coordinates), CO2 (NOAA), the world-map shape (jsDelivr), one-time downloads (voice model from Hugging Face, wake word files from GitHub, location database from DB-IP), and only if you enable them: web search (your query goes to the [Firecrawl Web Data API](https://www.firecrawl.dev/)), the news feeds you ask for, and your [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) bridge and [Tado](https://www.tado.com/en) account. No usage data is sent anywhere.
 
 ## Safety notes
 
@@ -161,6 +161,6 @@ See [NOTICE](NOTICE) for the full list of modified and added files (Apache-2.0, 
 
 ## License and thanks
 
-Apache License 2.0, same as OpenJarvis (see [LICENSE](LICENSE)). Huge thanks to the OpenJarvis team, LM Studio, Kokoro, Whisper, openWakeWord, Open-Meteo, NOAA and DB-IP. Built with a lot of help from Claude.
+Apache License 2.0, same as OpenJarvis (see [LICENSE](LICENSE)). Huge thanks to the [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) team, [LM Studio](https://lmstudio.ai), Kokoro, Whisper, [openWakeWord](https://github.com/dscripka/openWakeWord), Open-Meteo, NOAA and DB-IP. Built with a lot of help from Claude.
 
 *Fan project, not affiliated with Marvel, Disney or the OpenJarvis authors. "Iron Man" and "J.A.R.V.I.S." are their owners' trademarks and are used here as a homage.*

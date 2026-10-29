@@ -3,21 +3,53 @@
 #   powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 # It asks before every optional part (Hue, Tado, wake word, web search key). Run it again any time; finished parts are skipped.
 # Honest note: written from a working setup, NOT yet tested on a freshly wiped PC. Read the output of each step.
+# The Windows installer (.exe) runs this script with -FromWizard: no questions, the answers come from the parameters below.
+param(
+  [switch]$FromWizard,
+  [switch]$WantHue, [string]$HueIp = '',
+  [switch]$WantTado, [switch]$WantWake, [switch]$WantRag,
+  [int]$ModelTier = 0,          # 1-3 = download that size (see Step 6b), 0 = none
+  [string]$ModelId = '',        # an LM Studio model that is already installed
+  [string]$StatusFile = ''      # the wizard reads progress lines from this file
+)
 $ErrorActionPreference = 'Continue'
 $Repo = $PSScriptRoot
 $Cfg  = Join-Path $env:USERPROFILE '.openjarvis'
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
-function Ask($q) { $a = Read-Host "$q (y/n)"; return ($a -match '^\s*y') }
+function Ask($q) { if ($FromWizard) { return $true }; $a = Read-Host "$q (y/n)"; return ($a -match '^\s*y') }
+function Status($n, $text) {
+  Write-Host "[$n/10] $text" -ForegroundColor Cyan
+  if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "STEP $n|$text`r`n") } catch { } }
+}
+function Signal($word, $text) { if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "$word|$text`r`n") } catch { } } }
+function Pair-Hue($ip) {
+  # asks the Hue bridge for an app key (the round button on the bridge must have been pressed in the last 30 seconds)
+  if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') {
+    [Environment]::SetEnvironmentVariable('HUE_BRIDGE_IP', $ip, 'User')
+    if ($FromWizard -and (Test-Path "$Cfg\hue-key.txt")) { Write-Host "Hue key already saved."; return }
+    if (-not $FromWizard) { Read-Host "Press the round button on top of the Hue bridge, THEN press Enter here" | Out-Null }
+    try {
+      $r = Invoke-RestMethod -Method Post -Uri "http://$ip/api" -Body '{"devicetype":"ironman_jarvis#pc"}' -ContentType 'application/json'
+      if ($r[0].success) { [System.IO.File]::WriteAllText("$Cfg\hue-key.txt", $r[0].success.username, $Utf8); Write-Host "Hue key saved (stays on this PC only)." -ForegroundColor Green }
+      else { Write-Host "Bridge answered: $($r | ConvertTo-Json -Compress)  (did you press the button in time? run this script again)" -ForegroundColor Yellow }
+    } catch { Write-Host "Could not reach the bridge at $ip. Check the address and run this script again." -ForegroundColor Yellow }
+  } else { Write-Host "That does not look like an IP address. Skipped Hue; run this script again." -ForegroundColor Yellow }
+}
 function Have($c) { return [bool](Get-Command $c -ErrorAction SilentlyContinue) }
 function Chk($name, $ok, $hint) {
   if ($ok) { Write-Host "  OK       $name" -ForegroundColor Green }
   else     { Write-Host "  MISSING  $name   ($hint)" -ForegroundColor Yellow }
 }
+New-Item -ItemType Directory -Force $Cfg | Out-Null
+if ($FromWizard) { try { Start-Transcript -Path (Join-Path $Cfg 'install-log.txt') -Append | Out-Null } catch { } }
 Set-Location $Repo
 if (-not (Test-Path "$Repo\start-jarvis.ps1")) { Write-Host "Run this script from the IronMan-JARVIS folder." -ForegroundColor Red; exit }
 
+# Wizard: pair with the Hue bridge FIRST (the button press is only valid for about 30 seconds)
+if ($FromWizard -and $WantHue) { Status 1 "Philips Hue: pairing with the bridge"; Pair-Hue $HueIp }
 # ---------- 1. programs ----------
 Write-Host "Step 1: programs" -ForegroundColor Cyan
+Status 1 "Checking and installing programs (Git, uv, Node.js, Rust, LM Studio)"
 $need = @()
 if (-not (Have git))    { $need += 'Git.Git' }
 if (-not (Have uv))     { $need += 'astral-sh.uv' }
@@ -30,6 +62,7 @@ if ($need.Count -gt 0) {
   Write-Host "Missing programs: $($need -join ', ')" -ForegroundColor Yellow
   if (Ask "Install them now with winget?") {
     foreach ($i in $need) { winget install --id $i -e --accept-package-agreements --accept-source-agreements }
+    if ($FromWizard) { Signal 'RERUN' 'programs installed'; exit 10 }   # the wizard starts this script again in a fresh process
     Write-Host ""
     Write-Host "Close this PowerShell, open a NEW one (so the new programs are found) and run this script again." -ForegroundColor Yellow
     exit
@@ -39,9 +72,13 @@ Write-Host "All programs found." -ForegroundColor Green
 
 # ---------- 2. options ----------
 Write-Host ""; Write-Host "Step 2: options" -ForegroundColor Cyan
-$useHue  = Ask "Use Philips Hue lights?"
-$useTado = Ask "Use Tado heating?"
-$useWake = Ask "Set up the wake word 'Hey Jarvis' (own Python environment, a few minutes)?"
+Status 2 "Writing your settings file"
+if ($FromWizard) { $useHue = [bool]$WantHue; $useTado = [bool]$WantTado; $useWake = [bool]$WantWake }
+else {
+  $useHue  = Ask "Use Philips Hue lights? (https://www.philips-hue.com/en-us/explore-hue)"
+  $useTado = Ask "Use Tado heating? (https://www.tado.com/en)"
+  $useWake = Ask "Set up the wake word 'Hey Jarvis' (openWakeWord, https://github.com/dscripka/openWakeWord ; own Python environment, a few minutes)?"
+}
 
 # ---------- 3. settings file ----------
 New-Item -ItemType Directory -Force $Cfg | Out-Null
@@ -56,6 +93,7 @@ Write-Host "Settings file: $cfgFile (analytics are OFF in it)" -ForegroundColor 
 
 # ---------- 4. Python and web packages ----------
 Write-Host ""; Write-Host "Step 4: packages (a few minutes)" -ForegroundColor Cyan
+Status 3 "Installing Python and web packages (a few minutes)"
 rustup default stable
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
@@ -65,6 +103,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Rust module build failed. Jarvis still st
 Set-Location "$Repo\frontend"; npm install; Set-Location $Repo
 
 # ---------- 5. offline location database for the world map (public download, size-checked) ----------
+Status 4 "Downloading the offline location database"
 if (-not (Test-Path "$Repo\tools\dbip.mmdb")) {
   $ok = $false
   foreach ($m in 0, 1, 2) {
@@ -83,6 +122,7 @@ if (-not (Test-Path "$Repo\tools\dbip.mmdb")) {
 }
 
 # ---------- 6. wake word (optional) ----------
+Status 5 "Wake word (optional)"
 $NpuDir = "$Repo\tools\npu"
 if ($useWake -and -not (Test-Path "$NpuDir\.venv\Scripts\python.exe")) {
   $ProgressPreference = 'SilentlyContinue'
@@ -112,6 +152,7 @@ if ($useWake -and -not (Test-Path "$NpuDir\.venv\Scripts\python.exe")) {
 
 # ---------- 6b. language model (LM Studio) ----------
 Write-Host ""; Write-Host "Step 6b: language model (LM Studio)" -ForegroundColor Cyan
+Status 6 "Language model (LM Studio, a download can take a while)"
 $lmsCmd = $null
 if (Have lms) { $lmsCmd = 'lms' } elseif (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe") { $lmsCmd = "$env:USERPROFILE\.lmstudio\bin\lms.exe" }
 function Get-LlmList {
@@ -119,12 +160,25 @@ function Get-LlmList {
   # Windows PowerShell 5 returns the JSON array as ONE object, so loop over it instead of piping it
   try { $j = (& $lmsCmd ls --json 2>$null) -join "`n"; $arr = ConvertFrom-Json $j; $out = @(); foreach ($m in $arr) { if ($m.type -eq 'llm' -and $m.modelKey) { $out += $m } }; return $out } catch { return @() }
 }
+if (-not $lmsCmd -and $FromWizard) {
+  # a fresh LM Studio creates its command line tool only after it has been started once
+  $lmsExe = Join-Path $env:LOCALAPPDATA "Programs\LM Studio\LM Studio.exe"
+  if (Test-Path $lmsExe) {
+    Write-Host "  Starting LM Studio once so it creates its command line tool (waiting up to 90 s)..." -ForegroundColor Cyan
+    Start-Process $lmsExe
+    $lmsFile = "$env:USERPROFILE\.lmstudio\bin\lms.exe"
+    for ($w = 0; $w -lt 45 -and -not (Test-Path $lmsFile); $w++) { Start-Sleep -Seconds 2 }
+    if (Test-Path $lmsFile) { $lmsCmd = $lmsFile; try { & $lmsFile bootstrap 2>$null | Out-Null } catch { } }
+  }
+}
 if (-not $lmsCmd) {
   Write-Host "  LM Studio command 'lms' not found. Open LM Studio once, run: lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
 } else {
   $chosen = $null
   $have = @(Get-LlmList)
-  if ($have.Count -gt 0) {
+  if ($FromWizard) {
+    if ($ModelId -match '^[A-Za-z0-9._:/@+-]+$') { $chosen = $ModelId }
+  } elseif ($have.Count -gt 0) {
     Write-Host "  Models already in LM Studio:"
     for ($i = 0; $i -lt $have.Count; $i++) { Write-Host ("   {0}) {1}  ({2:N1} GB)" -f ($i + 1), $have[$i].modelKey, ($have[$i].sizeBytes / 1GB)) }
     Write-Host "   0) download a new model instead"
@@ -148,8 +202,8 @@ if (-not $lmsCmd) {
       $mark = ''; if (($i + 1) -eq $rec) { $mark = '   <-- recommended for your PC' }
       Write-Host ("   {0}) about {1} GB  {2} - {3}{4}" -f ($i + 1), $tiers[$i].gb, $tiers[$i].id, $tiers[$i].note, $mark)
     }
-    $t = (Read-Host "  Which one should I download? (1-3, Enter = $rec, s = skip)").Trim()
-    if ($t -eq '') { $t = "$rec" }
+    if ($FromWizard) { if ($ModelTier -ge 1 -and $ModelTier -le 3) { $t = "$ModelTier" } else { $t = 's' } }
+    else { $t = (Read-Host "  Which one should I download? (1-3, Enter = $rec, s = skip)").Trim(); if ($t -eq '') { $t = "$rec" } }
     if ($t -match '^[123]$') {
       $id = $tiers[[int]$t - 1].id
       Write-Host "  Downloading $id (about $($tiers[[int]$t - 1].gb) GB, can take a while)..." -ForegroundColor Cyan
@@ -168,9 +222,13 @@ if (-not $lmsCmd) {
 }
 
 # ---------- 6c. document search: LM Studio plugin Big RAG (optional) ----------
-Write-Host ""; Write-Host "Step 6c: document search (LM Studio plugin Big RAG, optional)" -ForegroundColor Cyan
-$ragAns = (Read-Host "Set up document search over your own files? Indexing is slow and the feature is fussy (y/N)").Trim()
-$ragAsked = ($ragAns -match '^[yY]')
+Write-Host ""; Write-Host "Step 6c: document search (LM Studio plugin Big RAG, optional; https://lmstudio.ai/mindstudio/big-rag)" -ForegroundColor Cyan
+Status 7 "Document search (optional)"
+if ($FromWizard) { $ragAsked = [bool]$WantRag }
+else {
+  $ragAns = (Read-Host "Set up document search over your own files? Indexing is slow and the feature is fussy (y/N)").Trim()
+  $ragAsked = ($ragAns -match '^[yY]')
+}
 if ($ragAsked) {
   if (-not $lmsCmd) {
     Write-Host "  LM Studio command 'lms' not found. Run lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
@@ -188,7 +246,10 @@ if ($ragAsked) {
     if (-not (Test-Path $ragDir)) {
       Write-Host "  Opening the plugin page in LM Studio..." -ForegroundColor Cyan
       Start-Process "lmstudio://plugin?owner=mindstudio&name=big-rag"
-      Read-Host "  In LM Studio click the install button for Big RAG, wait until it is done, THEN press Enter here"
+      if ($FromWizard) {
+        Status 7 "Document search: in LM Studio click install for Big RAG (waiting up to 2 minutes)"
+        for ($w = 0; $w -lt 60 -and -not (Test-Path $ragDir); $w++) { Start-Sleep -Seconds 2 }
+      } else { Read-Host "  In LM Studio click the install button for Big RAG, wait until it is done, THEN press Enter here" }
     }
     if (Test-Path $ragDir) { Write-Host "  Big RAG plugin found." -ForegroundColor Green }
     else { Write-Host "  Could not confirm the plugin folder (the path may differ). Check LM Studio > Plugins for Big RAG." -ForegroundColor Yellow }
@@ -202,34 +263,49 @@ if ($ragAsked) {
 
 # ---------- 7. voice model ----------
 Write-Host ""; Write-Host "Step 7: voice model (Kokoro, a few minutes)" -ForegroundColor Cyan
+Status 8 "Downloading the voice model (a few minutes)"
 uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
 
 # ---------- 8. Hue (optional) ----------
-if ($useHue) {
-  Write-Host ""; Write-Host "Step 8: Philips Hue" -ForegroundColor Cyan
+Status 9 "Philips Hue and Tado (optional)"
+if ($useHue -and -not $FromWizard) {
+  Write-Host ""; Write-Host "Step 8: Philips Hue (https://www.philips-hue.com/en-us/explore-hue)" -ForegroundColor Cyan
   $ip = (Read-Host "IP address of your Hue bridge (Hue app > Settings > Bridge)").Trim()
-  if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') {
-    [Environment]::SetEnvironmentVariable('HUE_BRIDGE_IP', $ip, 'User')
-    Read-Host "Press the round button on top of the Hue bridge, THEN press Enter here"
-    try {
-      $r = Invoke-RestMethod -Method Post -Uri "http://$ip/api" -Body '{"devicetype":"ironman_jarvis#pc"}' -ContentType 'application/json'
-      if ($r[0].success) { [System.IO.File]::WriteAllText("$Cfg\hue-key.txt", $r[0].success.username, $Utf8); Write-Host "Hue key saved (stays on this PC only)." -ForegroundColor Green }
-      else { Write-Host "Bridge answered: $($r | ConvertTo-Json -Compress)  (did you press the button in time? run this script again)" -ForegroundColor Yellow }
-    } catch { Write-Host "Could not reach the bridge at $ip. Check the address and run this script again." -ForegroundColor Yellow }
-  } else { Write-Host "That does not look like an IP address. Skipped Hue; run this script again." -ForegroundColor Yellow }
+  Pair-Hue $ip
 }
 
 # ---------- 9. Tado (optional) ----------
 if ($useTado) {
-  Write-Host ""; Write-Host "Step 9: Tado login" -ForegroundColor Cyan
+  Write-Host ""; Write-Host "Step 9: Tado login (https://www.tado.com/en)" -ForegroundColor Cyan
   Write-Host "A link appears. Open it in your browser and approve the login."
-  uv run --no-sync python tools\tado_login.py
+  if ($FromWizard) {
+    if (Test-Path "$Cfg\tado-token.json") { Write-Host "Tado login already saved." }
+    else {
+      Status 9 "Tado: approve the login in your browser (it opens by itself, waiting up to 5 minutes)"
+      $tOut = Join-Path $env:TEMP 'tado-login-out.txt'
+      Remove-Item $tOut -ErrorAction SilentlyContinue
+      $tp = Start-Process -FilePath uv -ArgumentList 'run','--no-sync','python','-u','tools\tado_login.py' -WorkingDirectory $Repo -RedirectStandardOutput $tOut -NoNewWindow -PassThru
+      $opened = $false
+      for ($w = 0; $w -lt 150 -and -not $tp.HasExited; $w++) {
+        Start-Sleep -Seconds 2
+        if (-not $opened -and (Test-Path $tOut)) {
+          try { $m = [regex]::Match([System.IO.File]::ReadAllText($tOut), 'https://\S+'); if ($m.Success) { Start-Process $m.Value; $opened = $true } } catch { }
+        }
+      }
+      if (-not $tp.HasExited) { Stop-Process -Id $tp.Id -Force; Write-Host "Tado login timed out. Run tools\tado_login.py later (README)." -ForegroundColor Yellow }
+    }
+  } else { uv run --no-sync python tools\tado_login.py }
 }
 
 # ---------- 10. web search key (optional) + desktop shortcut ----------
 Write-Host ""
-$sec = Read-Host "Optional: paste your Firecrawl API key for web search (firecrawl.dev, typed hidden, Enter to skip)" -AsSecureString
-$key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+Status 10 "Web search key and desktop shortcut"
+$key = $null
+if ($FromWizard) { $key = $env:JARVIS_FIRECRAWL_KEY; $env:JARVIS_FIRECRAWL_KEY = $null }   # the wizard passes the key through its own process environment, never on a command line
+else {
+  $sec = Read-Host "Optional: paste your Firecrawl Web Data API key for web search (https://www.firecrawl.dev/, typed hidden, Enter to skip)" -AsSecureString
+  $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+}
 if ($key) { [Environment]::SetEnvironmentVariable("FIRECRAWL_API_KEY", $key, "User"); [Environment]::SetEnvironmentVariable("OPENJARVIS_WEB_SEARCH_ENGINE", "firecrawl", "User"); Write-Host "key saved as a user environment variable (never in a file)" }
 $ws = New-Object -ComObject WScript.Shell
 $s  = $ws.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Jarvis.lnk")
@@ -259,3 +335,5 @@ if ($ragAsked) {
   Write-Host " 4. Optional document search: run this script again and answer y in Step 6c (README, Document search)."
 }
 Write-Host "Done." -ForegroundColor Green
+Signal 'DONE' 'finished'
+if ($FromWizard) { try { Stop-Transcript | Out-Null } catch { } }
