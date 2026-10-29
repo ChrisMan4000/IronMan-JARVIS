@@ -23,7 +23,7 @@ SetupIconFile=..\assets\jarvis.ico
 
 [Messages]
 WelcomeLabel1=IronMan J.A.R.V.I.S.
-WelcomeLabel2=A private AI assistant with a full-screen HUD. The AI runs on your own PC (LM Studio), nothing is sent to a cloud AI.%n%nOn the next pages you choose the optional parts. Each one has a link where you can read more first.%n%nBased on OpenJarvis (https://github.com/open-jarvis/OpenJarvis, Apache-2.0). Not yet tested on a freshly wiped PC.
+WelcomeLabel2=A private AI assistant with a full-screen HUD. The AI runs on your own PC (LM Studio), nothing is sent to a cloud AI.%n%nOn the next pages you choose the optional parts. Each one has a link where you can read more first.%n%nBased on OpenJarvis (https://github.com/open-jarvis/OpenJarvis, Apache-2.0). Vibecoded with the free version of Claude. Not yet tested on a freshly wiped PC.
 FinishedHeadingLabel=Setup finished
 
 [Files]
@@ -42,6 +42,28 @@ const
 
 function SetEnvironmentVariableW(lpName, lpValue: String): LongWord;
   external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+{ small message pump so the wizard window stays responsive while the script runs }
+type
+  TMsg = record
+    hwnd: LongWord; message: LongWord; wParam: Longint; lParam: Longint; time: LongWord; ptx: Longint; pty: Longint;
+  end;
+function PeekMessageW(var lpMsg: TMsg; hWnd: LongWord; wMsgFilterMin, wMsgFilterMax, wRemoveMsg: LongWord): Longint;
+  external 'PeekMessageW@user32.dll stdcall';
+function TranslateMessage(var lpMsg: TMsg): Longint;
+  external 'TranslateMessage@user32.dll stdcall';
+function DispatchMessageW(var lpMsg: TMsg): Longint;
+  external 'DispatchMessageW@user32.dll stdcall';
+
+procedure PumpMessages;
+var Msg: TMsg;
+begin
+  while PeekMessageW(Msg, 0, 0, 0, 1) <> 0 do
+  begin
+    TranslateMessage(Msg);
+    DispatchMessageW(Msg);
+  end;
+end;
 
 var
   HuePage, TadoPage, WakePage, ModelPage, RagPage, KeyPage: TWizardPage;
@@ -419,7 +441,7 @@ begin
     while Code = -999 do
     begin
       Sleep(400);
-      Application.ProcessMessages;
+      PumpMessages;
       Code := ReadStatus;
       Ticks := Ticks + 1;
       if Ticks > 27000 then Code := -2;

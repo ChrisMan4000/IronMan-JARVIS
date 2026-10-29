@@ -14,6 +14,7 @@
 
 - I am **not a developer**. This is my **first GitHub project**.
 - It took **36 hours**, built entirely in the **free Claude web chat** (so: lots of patience, very small steps).
+- In other words: I **vibecoded** this whole project with the free version of Claude. No paid plan, no coding background.
 - It runs great on my PC. On yours? I am as curious as you are. The installer has **not** been tested on a freshly wiped PC.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
