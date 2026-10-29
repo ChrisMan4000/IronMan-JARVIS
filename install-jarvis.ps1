@@ -337,3 +337,4 @@ if ($ragAsked) {
 Write-Host "Done." -ForegroundColor Green
 Signal 'DONE' 'finished'
 if ($FromWizard) { try { Stop-Transcript | Out-Null } catch { } }
+if ($FromWizard) { exit 0 }

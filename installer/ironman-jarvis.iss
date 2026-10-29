@@ -3,7 +3,7 @@
 ; It packs the repo (not .git, not this folder). The questions are asked on wizard pages in HUD colors (each with a "learn more" link),
 ; then install-jarvis.ps1 runs hidden with -FromWizard and the answers as parameters; the wizard shows its progress lines.
 ; The installer is NOT code-signed, so Windows SmartScreen will warn ("More info" > "Run anyway").
-; Needs Inno Setup 6.1 or newer (WrapCallback). Colors in the code are BGR: $FFD319 = HUD cyan #19d3ff, $3D9AFF = HUD orange #ff9a3d.
+; Works with Inno Setup 6 (no callbacks used). Colors in the code are BGR: $FFD319 = HUD cyan #19d3ff, $3D9AFF = HUD orange #ff9a3d.
 [Setup]
 AppName=IronMan J.A.R.V.I.S.
 AppVersion=1.1
@@ -40,10 +40,6 @@ const
   T2Text  = 'About 6.7 GB   google/gemma-4-12b-qat   (good balance for 12-16 GB graphics cards)';
   T3Text  = 'About 14.6 GB   google/gemma-4-26b-a4b-qat   (best quality, needs about 24 GB GPU memory)';
 
-function SetTimer(hWnd: LongWord; nIDEvent, uElapse: LongWord; lpTimerFunc: LongWord): LongWord;
-  external 'SetTimer@user32.dll stdcall';
-function KillTimer(hWnd: LongWord; uIDEvent: LongWord): LongWord;
-  external 'KillTimer@user32.dll stdcall';
 function SetEnvironmentVariableW(lpName, lpValue: String): LongWord;
   external 'SetEnvironmentVariableW@kernel32.dll stdcall';
 
@@ -358,13 +354,18 @@ end;
 
 { ---------- running the setup script with live progress ---------- }
 
-procedure TimerProc(H, Msg, IdEvent, Time: LongWord);
-var Lines: TArrayOfString; I, P, N: Integer; L: String;
+{ reads the status file, updates the bar and text, returns the script's exit code once an EXIT line exists, else -999 }
+function ReadStatus: Integer;
+var Lines: TArrayOfString; I, P, N: Integer; L: String; Shown: Boolean;
 begin
+  Result := -999;
+  Shown := False;
   if LoadStringsFromFile(StatusPath, Lines) then
     for I := GetArrayLength(Lines) - 1 downto 0 do
     begin
       L := Lines[I];
+      if (Result = -999) and (Pos('EXIT|', L) = 1) then Result := StrToIntDef(Copy(L, 6, 20), -1);
+      if Shown then Continue;
       if Pos('STEP ', L) = 1 then
       begin
         P := Pos('|', L);
@@ -374,20 +375,20 @@ begin
           WizardForm.ProgressGauge.Position := N;
           WizardForm.StatusLabel.Caption := 'Step ' + IntToStr(N) + ' of 10: ' + Copy(L, P + 1, 200);
         end;
-        Break;
+        Shown := True;
       end;
     end;
 end;
 
 procedure RunSetup;
-var Opts, Params: String; Run, Code: Integer; TimerId: LongWord;
+var Opts, Params: String; Run, Code, Rc: Integer; Started: Cardinal;
 begin
   Opts := '';
-  if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp "' + Trim(HueIpEdit.Text) + '"';
+  if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp ''' + Trim(HueIpEdit.Text) + '''';
   if TadoCheck.Checked then Opts := Opts + ' -WantTado';
   if WakeCheck.Checked then Opts := Opts + ' -WantWake';
   if RagCheck.Checked then Opts := Opts + ' -WantRag';
-  if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Opts := Opts + ' -ModelId "' + ModelKeys[ModelCombo.ItemIndex] + '"'
+  if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Opts := Opts + ' -ModelId ''' + ModelKeys[ModelCombo.ItemIndex] + ''''
   else if RbT1.Checked then Opts := Opts + ' -ModelTier 1'
   else if RbT2.Checked then Opts := Opts + ' -ModelTier 2'
   else if RbT3.Checked then Opts := Opts + ' -ModelTier 3';
@@ -401,24 +402,30 @@ begin
   WizardForm.ProgressGauge.Max := 10;
   WizardForm.ProgressGauge.Position := 0;
   WizardForm.StatusLabel.Caption := 'Starting the setup script...';
-  TimerId := SetTimer(0, 0, 700, WrapCallback(@TimerProc, 4));
   Code := 0;
-  try
-    for Run := 1 to 3 do
+  for Run := 1 to 3 do
+  begin
+    DeleteFile(StatusPath);
+    { the command runs the script, then writes its exit code as an EXIT line (single quotes inside, no $ expansion by Inno) }
+    Params := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& ''' + ExpandConstant('{app}\install-jarvis.ps1') + ''' -FromWizard -StatusFile ''' + StatusPath + '''' + Opts + '; Add-Content -LiteralPath ''' + StatusPath + ''' (''EXIT|'' + $LASTEXITCODE)"';
+    if not Exec('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewNoWait, Rc) then
     begin
-      DeleteFile(StatusPath);
-      Params := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-jarvis.ps1') + '" -FromWizard -StatusFile "' + StatusPath + '"' + Opts;
-      if not Exec('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) then
-      begin
-        Code := -1;
-        Break;
-      end;
-      { exit code 10 = programs were just installed; start the script again in a fresh process so it finds them }
-      if Code <> 10 then Break;
-      WizardForm.StatusLabel.Caption := 'Programs installed. Continuing in a fresh process...';
+      Code := -1;
+      Break;
     end;
-  finally
-    KillTimer(0, TimerId);
+    { poll the status file until the EXIT line appears (at most 3 hours) }
+    Started := GetTickCount;
+    Code := ReadStatus;
+    while Code = -999 do
+    begin
+      Sleep(400);
+      Application.ProcessMessages;
+      Code := ReadStatus;
+      if GetTickCount - Started > 10800000 then Code := -2;
+    end;
+    { exit code 10 = programs were just installed; start the script again in a fresh process so it finds them }
+    if Code <> 10 then Break;
+    WizardForm.StatusLabel.Caption := 'Programs installed. Continuing in a fresh process...';
   end;
   SetupCode := Code;
   WizardForm.ProgressGauge.Position := 10;
