@@ -381,7 +381,7 @@ begin
 end;
 
 procedure RunSetup;
-var Opts, Params: String; Run, Code, Rc: Integer; Started: Cardinal;
+var Opts, Params: String; Run, Code, Rc, Ticks: Integer;
 begin
   Opts := '';
   if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp ''' + Trim(HueIpEdit.Text) + '''';
@@ -414,14 +414,15 @@ begin
       Break;
     end;
     { poll the status file until the EXIT line appears (at most 3 hours) }
-    Started := GetTickCount;
+    Ticks := 0;
     Code := ReadStatus;
     while Code = -999 do
     begin
       Sleep(400);
       Application.ProcessMessages;
       Code := ReadStatus;
-      if GetTickCount - Started > 10800000 then Code := -2;
+      Ticks := Ticks + 1;
+      if Ticks > 27000 then Code := -2;
     end;
     { exit code 10 = programs were just installed; start the script again in a fresh process so it finds them }
     if Code <> 10 then Break;
