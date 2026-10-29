@@ -447,6 +447,7 @@ begin
     S := S + Space + 'LM Studio: already installed' + NewLine
   else
     S := S + Space + 'LM Studio: will be installed' + NewLine;
+  S := S + Space + 'Fan monitor (LibreHardwareMonitor): installed for the HUD fan panel, Windows asks for administrator permission once' + NewLine;
   S := S + NewLine + 'Other missing programs (Git, uv, Node.js, Rust, Windows Terminal) are installed with winget; Windows may ask for permission.';
   Result := S;
 end;

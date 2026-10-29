@@ -297,6 +297,23 @@ if ($useTado) {
   } else { uv run --no-sync python tools\tado_login.py }
 }
 
+# ---------- 9b. fan monitor (LibreHardwareMonitor) for the HUD fan panel; needs administrator rights once ----------
+Write-Host ""; Write-Host "Fan monitor (LibreHardwareMonitor)" -ForegroundColor Cyan
+Status 10 "Fan monitor (Windows asks for administrator permission once)"
+if (Get-ScheduledTask -TaskName 'LibreHardwareMonitor Hidden' -ErrorAction SilentlyContinue) {
+  Write-Host "  Fan monitor task already exists, skipped." -ForegroundColor Green
+} else {
+  $fanRes = Join-Path $env:TEMP 'jarvis-fan-result.txt'
+  Remove-Item $fanRes -ErrorAction SilentlyContinue
+  try {
+    Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -ResultFile "{1}"' -f (Join-Path $Repo 'tools\install-fan-monitor.ps1'), $fanRes)
+    $fr = if (Test-Path $fanRes) { (Get-Content $fanRes -Raw).Trim() } else { 'FAIL: no answer' }
+  } catch { $fr = 'FAIL: administrator permission was not given' }
+  if ($fr -eq 'OK') { Write-Host "  Fan monitor installed and answering on port 8085." -ForegroundColor Green }
+  elseif ($fr -eq 'NOWEB') { Write-Host "  Fan monitor installed, but its web server did not answer. Open LibreHardwareMonitor once (as administrator), Options > Remote Web Server > Run, turn Run On Windows Startup off." -ForegroundColor Yellow }
+  else { Write-Host "  Fan monitor not installed ($fr). The HUD works without it; see README, live fan speeds." -ForegroundColor Yellow }
+}
+
 # ---------- 10. web search key (optional) + desktop shortcut ----------
 Write-Host ""
 Status 10 "Web search key and desktop shortcut"

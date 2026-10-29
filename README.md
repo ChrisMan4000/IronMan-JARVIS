@@ -27,7 +27,7 @@
 - **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning.
 - **[Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
 - **[Tado](https://www.tado.com/en) heating (optional):** "heating off in the living room".
-- **Live fan speeds (optional):** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. Needs the free LibreHardwareMonitor, see [Optional: live fan speeds](#optional-live-fan-speeds).
+- **Live fan speeds:** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. The installer sets up the free [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) for this (Windows asks for administrator permission once), see [Live fan speeds](#live-fan-speeds-the-installer-sets-this-up).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
 - **Web search (optional):** uses the [Firecrawl Web Data API](https://www.firecrawl.dev/) and needs your own free API key. It also reads a web page or PDF when you give it a link.
 - **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin [*Big RAG*](https://lmstudio.ai/mindstudio/big-rag) and some patience.
@@ -71,7 +71,9 @@ powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 
 Set your city in `frontend/public/hud.html` (search for `HOME_CFG`). Four values: name, latitude, longitude, time zone. The default is London.
 
-## Optional: live fan speeds
+## Live fan speeds (the installer sets this up)
+
+The installer downloads and sets up the free LibreHardwareMonitor for you (Windows asks for administrator permission once). If you install by hand, or it failed, do this:
 
 The HUD can show real fan speeds (CPU fan, water pump, case fans) next to the GPU fan. Windows has no simple built-in way to read them, so this uses the free [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases). Which fans show up depends on your mainboard. Without it, the panel just says `LIBREHARDWAREMONITOR OFFLINE` and everything else works.
 
