@@ -167,6 +167,39 @@ if (-not $lmsCmd) {
   }
 }
 
+# ---------- 6c. document search: LM Studio plugin Big RAG (optional) ----------
+Write-Host ""; Write-Host "Step 6c: document search (LM Studio plugin Big RAG, optional)" -ForegroundColor Cyan
+$ragAns = (Read-Host "Set up document search over your own files? Indexing is slow and the feature is fussy (y/N)").Trim()
+$ragAsked = ($ragAns -match '^[yY]')
+if ($ragAsked) {
+  if (-not $lmsCmd) {
+    Write-Host "  LM Studio command 'lms' not found. Run lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
+  } else {
+    # embedding model: needed by the plugin and by the oracle_search tool (small download)
+    Write-Host "  Downloading the embedding model (nomic-embed-text, small)..." -ForegroundColor Cyan
+    try { & $lmsCmd get nomic-ai/nomic-embed-text-v1.5-GGUF -y } catch { Write-Host "  Embedding model download failed. Get it later in LM Studio: nomic-ai/nomic-embed-text-v1.5-GGUF" -ForegroundColor Yellow }
+    # plugin: first try the command line, then the lmstudio:// link
+    $ragDir = Join-Path $env:USERPROFILE ".lmstudio\extensions\plugins\mindstudio\big-rag"
+    if (-not (Test-Path $ragDir)) {
+      Write-Host "  Installing plugin mindstudio/big-rag..." -ForegroundColor Cyan
+      try { & $lmsCmd get mindstudio/big-rag -y } catch { }
+      Start-Sleep -Seconds 3
+    }
+    if (-not (Test-Path $ragDir)) {
+      Write-Host "  Opening the plugin page in LM Studio..." -ForegroundColor Cyan
+      Start-Process "lmstudio://plugin?owner=mindstudio&name=big-rag"
+      Read-Host "  In LM Studio click the install button for Big RAG, wait until it is done, THEN press Enter here"
+    }
+    if (Test-Path $ragDir) { Write-Host "  Big RAG plugin found." -ForegroundColor Green }
+    else { Write-Host "  Could not confirm the plugin folder (the path may differ). Check LM Studio > Plugins for Big RAG." -ForegroundColor Yellow }
+    # documents folder (same default as the helper: JARVIS_DOC_ROOT or Documents\ORACLE)
+    $ragDocs = $env:JARVIS_DOC_ROOT
+    if (-not $ragDocs) { $ragDocs = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ORACLE' }
+    if (-not (Test-Path $ragDocs)) { New-Item -ItemType Directory -Path $ragDocs -Force | Out-Null }
+    Write-Host "  Put your documents in: $ragDocs" -ForegroundColor Green
+  }
+}
+
 # ---------- 7. voice model ----------
 Write-Host ""; Write-Host "Step 7: voice model (Kokoro, a few minutes)" -ForegroundColor Cyan
 uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
@@ -218,4 +251,11 @@ Write-Host "Still to do by hand:" -ForegroundColor Yellow
 Write-Host " 1. Open LM Studio once, then in PowerShell run: lms bootstrap  (open a NEW PowerShell afterwards)"
 Write-Host " 2. Language model: chosen in Step 6b above. Skipped it, or want another? Run this script again."
 Write-Host " 3. Double-click the Jarvis icon on your desktop. In your browser allow the microphone and remember the decision."
+if ($ragAsked) {
+  Write-Host " 4. Document search (Big RAG): in LM Studio open a chat, enable the Big RAG plugin and set: documents folder (see Step 6c),"
+  Write-Host "    index folder (for example C:\AI\Big-RAG), embedding model nomic-ai/nomic-embed-text-v1.5-GGUF. Send one message to start indexing (slow)."
+  Write-Host "    Then in the Jarvis folder run: uv run --no-sync python tools\ragcache.py   (see README, Document search)"
+} else {
+  Write-Host " 4. Optional document search: run this script again and answer y in Step 6c (README, Document search)."
+}
 Write-Host "Done." -ForegroundColor Green

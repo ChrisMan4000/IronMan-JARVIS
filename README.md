@@ -63,6 +63,7 @@ powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 
 3. The installer asks before every optional part (Hue, Tado, wake word, web search key). If it installs programs, it tells you to open a new PowerShell and run it again. Finished parts are skipped.
 4. Open LM Studio once and run `lms bootstrap`. The installer then asks which model to use: pick one you already have in LM Studio, or let it download a ~2 GB, ~8 GB or ~15 GB model (it recommends one for your graphics card). Run `install-jarvis.ps1` again to change it.
+   The installer also offers **document search** (Step 6c, optional): it downloads the embedding model and installs the LM Studio plugin *Big RAG* (see [Optional: document search](#optional-document-search)).
 5. Double-click the **Jarvis** icon on your desktop. Allow the microphone in the browser.
 
 **No Git? Use the installer instead:** download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.com/ChrisMan4000/IronMan-JARVIS/releases) and run it. It unpacks the project to `%LOCALAPPDATA%\IronMan-JARVIS` and starts the same `install-jarvis.ps1` (steps 3-5 above apply). It is a pre-release, not code-signed (Windows SmartScreen will warn: "More info" > "Run anyway") and not yet tested on a freshly wiped PC. LM Studio, uv, Python and the models are downloaded during setup, not packed inside. To uninstall, run `uninstall-jarvis.ps1` first (see "Uninstall"), then remove the app in Windows Settings.
@@ -80,6 +81,17 @@ The HUD can show real fan speeds (CPU fan, water pump, case fans) next to the GP
 From then on, starting Jarvis starts LibreHardwareMonitor hidden, and it closes itself about 30 seconds after Jarvis has stopped. Its tray icon can be hidden in Windows Settings > Personalization > Taskbar > Other system tray icons.
 
 **Why the firewall rule?** LibreHardwareMonitor's web server listens on every network interface, without a password (and it writes that setting back on every start). The setup script therefore adds a firewall rule that blocks port 8085 from the network; this PC can still read it. The setup script has not been tested on a freshly wiped PC. The uninstaller removes the task and the rule (run it as administrator for that part).
+
+## Optional: document search
+
+Ask Jarvis about your own PDF, Word, Excel and text files and get sources with links. It uses the LM Studio plugin *Big RAG* (`mindstudio/big-rag`) to build the index and the `oracle_search` tool to read it. Indexing thousands of files takes hours; it is fussy, so treat it as experimental.
+
+1. Answer **y** to Step 6c of `install-jarvis.ps1`. It downloads the embedding model `nomic-ai/nomic-embed-text-v1.5-GGUF`, installs the plugin (command line first, then the `lmstudio://` link; click install in LM Studio if asked) and creates the documents folder (`JARVIS_DOC_ROOT`, default `Documents\ORACLE`).
+2. Put your documents in that folder.
+3. In LM Studio open a chat, enable the Big RAG plugin and set: documents folder, an index folder (for example `C:\AI\Big-RAG`), embedding model `nomic-ai/nomic-embed-text-v1.5-GGUF`. Send one message; the first run indexes everything (slow). New files are only added when this runs again.
+4. In the Jarvis folder run `uv run --no-sync python tools\ragcache.py` (converts the index for Jarvis; rerun it after every re-index).
+
+The plugin only works inside LM Studio's own chat; Jarvis reads its index files directly. Not tested on a freshly wiped PC. Without the plugin everything else works.
 
 ## Memory: Jarvis remembers things
 

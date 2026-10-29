@@ -18,7 +18,7 @@ default_agent = "simple"      # start-jarvis.ps1 starts the server with --agent 
 # Add them to the list yourself only if you understand that risk.
 enabled = [
   "web_search",
-  "oracle_search",
+  "oracle_search",  # document search: needs the LM Studio plugin Big RAG (installer Step 6c, README)
   "rss_news",
   "hue_lights",
   "hue_set",
