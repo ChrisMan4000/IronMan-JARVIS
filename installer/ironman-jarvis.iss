@@ -30,6 +30,10 @@ FinishedHeadingLabel=Setup finished
 Source: "..\*"; DestDir: "{app}"; Excludes: "installer\*,.git\*"; Flags: recursesubdirs createallsubdirs
 Source: "list-llms.ps1"; Flags: dontcopy
 
+[UninstallDelete]
+; the setup script creates the Python environment, node_modules, caches and logs inside the folder: remove all of it
+Type: filesandordirs; Name: "{app}"
+
 [Code]
 const
   CBg     = $18120B;   { #0b1218 }
@@ -558,6 +562,30 @@ begin
 end;
 
 { ---------- uninstaller in HUD colors (the confirmation boxes stay Windows style) ---------- }
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var Rc: Integer; Names: TArrayOfString; I: Integer; Desk: String;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    { 1. stop everything that runs from the folder (otherwise Windows keeps its files locked); LM Studio is left running }
+    if FileExists(ExpandConstant('{app}\tools\stop-jarvis.ps1')) then
+      Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\stop-jarvis.ps1') + '" -KeepLmStudio', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+    { 2. the two desktop icons made by the setup script }
+    Desk := ExpandConstant('{userdesktop}');
+    DeleteFile(Desk + '\Jarvis.lnk');
+    DeleteFile(Desk + '\Stop Jarvis.lnk');
+    { 3. the user settings made by the setup script }
+    SetArrayLength(Names, 5);
+    Names[0] := 'HUE_BRIDGE_IP'; Names[1] := 'FIRECRAWL_API_KEY'; Names[2] := 'OPENJARVIS_WEB_SEARCH_ENGINE';
+    Names[3] := 'JARVIS_DOC_ROOT'; Names[4] := 'SERPLY_API_KEY';
+    for I := 0 to 4 do RegDeleteValue(HKEY_CURRENT_USER, 'Environment', Names[I]);
+    { 4. settings, keys and logs: ask (they hold the Hue key, the Tado login and your saved chat/memory data) }
+    if DirExists(ExpandConstant('{%USERPROFILE}\.openjarvis')) then
+      if SuppressibleMsgBox('Also delete your Jarvis settings, keys and logs?' + #13#10 + ExpandConstant('{%USERPROFILE}\.openjarvis') + #13#10#13#10 + 'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then
+        DelTree(ExpandConstant('{%USERPROFILE}\.openjarvis'), True, True, True);
+  end;
+end;
 
 procedure InitializeUninstallProgressForm;
 begin
