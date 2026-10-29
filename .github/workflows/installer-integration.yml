@@ -7,8 +7,7 @@ on:
       - 'src/openjarvis/cli/**'
       - 'tests/install/**'
       - '.github/workflows/installer-integration.yml'
-  schedule:
-    - cron: '0 6 * * *'
+  # nightly schedule removed in this fork (it tests the Linux/macOS installer, not the Windows one)
 
 jobs:
   container-matrix:
