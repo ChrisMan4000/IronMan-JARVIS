@@ -580,6 +580,10 @@ begin
     Names[0] := 'HUE_BRIDGE_IP'; Names[1] := 'FIRECRAWL_API_KEY'; Names[2] := 'OPENJARVIS_WEB_SEARCH_ENGINE';
     Names[3] := 'JARVIS_DOC_ROOT'; Names[4] := 'SERPLY_API_KEY';
     for I := 0 to 4 do RegDeleteValue(HKEY_CURRENT_USER, 'Environment', Names[I]);
+    { 3b. the fan monitor, only if our installer put it there (marker file); Windows asks for administrator permission }
+    if FileExists(ExpandConstant('{pf}\LibreHardwareMonitor\installed-by-ironman-jarvis.txt')) and FileExists(ExpandConstant('{app}\tools\remove-fan-monitor.ps1')) then
+      if SuppressibleMsgBox('Also remove the fan monitor (LibreHardwareMonitor) that this setup installed?' + #13#10 + 'Windows will ask for administrator permission.', mbConfirmation, MB_YESNO, IDYES) = IDYES then
+        ShellExec('runas', 'powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\remove-fan-monitor.ps1') + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
     { 4. settings, keys and logs: ask (they hold the Hue key, the Tado login and your saved chat/memory data) }
     if DirExists(ExpandConstant('{%USERPROFILE}\.openjarvis')) then
       if SuppressibleMsgBox('Also delete your Jarvis settings, keys and logs?' + #13#10 + ExpandConstant('{%USERPROFILE}\.openjarvis') + #13#10#13#10 + 'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then

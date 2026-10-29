@@ -30,6 +30,8 @@ try {
     Copy-Item (Join-Path $found.DirectoryName '*') $Folder -Recurse -Force
     Get-ChildItem $Folder -Recurse -File | Unblock-File -ErrorAction SilentlyContinue
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    # marker: tells remove-fan-monitor.ps1 (and the uninstaller) that this copy came from our installer, so it may delete it
+    [System.IO.File]::WriteAllText((Join-Path $Folder 'installed-by-ironman-jarvis.txt'), 'Installed by the IronMan J.A.R.V.I.S. installer. Safe to remove with it.')
   }
   if (-not (Test-Path $exe)) { Done 'FAIL: LibreHardwareMonitor.exe missing' }
   $cfg = Join-Path $Folder 'LibreHardwareMonitor.config'
