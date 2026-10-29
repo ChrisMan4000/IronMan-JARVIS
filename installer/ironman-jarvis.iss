@@ -17,8 +17,8 @@ OutputBaseFilename=IronMan-JARVIS-Installer
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-WizardImageFile=wizard-side.bmp
-WizardSmallImageFile=wizard-small.bmp
+WizardImageFile=wizard-side.bmp,wizard-side-150.bmp,wizard-side-200.bmp
+WizardSmallImageFile=wizard-small.bmp,wizard-small-200.bmp
 SetupIconFile=..\assets\jarvis.ico
 
 [Messages]
@@ -73,6 +73,10 @@ var
   ModelCombo: TNewComboBox;
   ModelInfo: TNewStaticText;
   ModelKeys: TArrayOfString;
+  Lbls: array of TNewStaticText;
+  CheckList: array of TNewCheckBox;
+  RadioList: array of TNewRadioButton;
+  LmFound: Boolean;
   ModelsDetected: Boolean;
   StatusPath: String;
   SetupCode: Integer;
@@ -157,30 +161,76 @@ begin
   Result.OnClick := @LinkClick;
 end;
 
+procedure CheckLabelClick(Sender: TObject); forward;
+procedure RadioLabelClick(Sender: TObject); forward;
+
+{ Windows draws the text of check boxes and radio buttons itself and ignores the color, so the real control has no text
+  and a colored label next to it carries the text (clicking the label works like clicking the box). }
+function AddLabelFor(Page: TWizardPage; Y: Integer; const Txt: String; AColor: TColor): TNewStaticText;
+var N: Integer;
+begin
+  Result := TNewStaticText.Create(Page);
+  Result.Parent := Page.Surface;
+  Result.Left := ScaleX(22);
+  Result.Top := Y + ScaleY(2);
+  Result.Width := Page.SurfaceWidth - ScaleX(22);
+  Result.AutoSize := True;
+  Result.WordWrap := True;
+  Result.Caption := Txt;
+  Result.Font.Color := AColor;
+  Result.Cursor := crHand;
+  N := GetArrayLength(Lbls);
+  SetArrayLength(Lbls, N + 1);
+  Lbls[N] := Result;
+end;
+
 function AddCheck(Page: TWizardPage; var Y: Integer; const Txt: String): TNewCheckBox;
+var L: TNewStaticText; N: Integer;
 begin
   Result := TNewCheckBox.Create(Page);
   Result.Parent := Page.Surface;
   Result.Left := 0;
   Result.Top := Y;
-  Result.Width := Page.SurfaceWidth;
+  Result.Width := ScaleX(18);
   Result.Height := ScaleY(20);
-  Result.Caption := Txt;
-  Result.Font.Color := COrange;
+  Result.Caption := '';
+  L := AddLabelFor(Page, Y, Txt, COrange);
+  N := GetArrayLength(CheckList);
+  SetArrayLength(CheckList, N + 1);
+  CheckList[N] := Result;
+  L.Tag := N;
+  L.OnClick := @CheckLabelClick;
   Y := Y + ScaleY(26);
 end;
 
 function AddRadio(Page: TWizardPage; var Y: Integer; const Txt: String): TNewRadioButton;
+var L: TNewStaticText; N: Integer;
 begin
   Result := TNewRadioButton.Create(Page);
   Result.Parent := Page.Surface;
   Result.Left := 0;
   Result.Top := Y;
-  Result.Width := Page.SurfaceWidth;
+  Result.Width := ScaleX(18);
   Result.Height := ScaleY(20);
-  Result.Caption := Txt;
-  Result.Font.Color := CText;
-  Y := Y + ScaleY(24);
+  Result.Caption := '';
+  L := AddLabelFor(Page, Y, Txt, CText);
+  N := GetArrayLength(RadioList);
+  SetArrayLength(RadioList, N + 1);
+  RadioList[N] := Result;
+  L.Tag := N;
+  Result.Tag := GetArrayLength(Lbls) - 1;   { index of this radio's label }
+  L.OnClick := @RadioLabelClick;
+  Y := Y + L.Height + ScaleY(6);
+end;
+
+procedure SetRadioText(R: TNewRadioButton; const Txt: String);
+begin
+  Lbls[R.Tag].Caption := Txt;
+end;
+
+procedure SetRadioLook(R: TNewRadioButton);
+begin
+  if R.Enabled then Lbls[R.Tag].Font.Color := CText else Lbls[R.Tag].Font.Color := $707070;
 end;
 
 procedure ThemeWizard;
@@ -214,6 +264,25 @@ end;
 procedure ModelRadioClick(Sender: TObject);
 begin
   ModelCombo.Enabled := RbExist.Checked and RbExist.Enabled;
+end;
+
+procedure CheckLabelClick(Sender: TObject);
+var C: TNewCheckBox;
+begin
+  C := CheckList[TNewStaticText(Sender).Tag];
+  C.Checked := not C.Checked;
+  HueClick(nil);
+end;
+
+procedure RadioLabelClick(Sender: TObject);
+var R: TNewRadioButton;
+begin
+  R := RadioList[TNewStaticText(Sender).Tag];
+  if R.Enabled then
+  begin
+    R.Checked := True;
+    ModelRadioClick(nil);
+  end;
 end;
 
 { ---------- pages ---------- }
@@ -259,7 +328,7 @@ begin
   ModelPage := NewPage(WakePage.ID, 'Language model', 'The AI that answers you. It runs in LM Studio on your PC.');
   Y := 0;
   AddLink(ModelPage, Y, 'LM Studio', 'https://lmstudio.ai');
-  ModelInfo := AddText(ModelPage, Y, 'Looking at your PC...', COrange, False);
+  ModelInfo := AddText(ModelPage, Y, 'Looking at your PC...' + #13#10 + ' ', COrange, False);
   RbExist := AddRadio(ModelPage, Y, 'Use a model that is already in LM Studio:');
   ModelCombo := TNewComboBox.Create(ModelPage);
   ModelCombo.Parent := ModelPage.Surface;
@@ -272,6 +341,7 @@ begin
   RbT3 := AddRadio(ModelPage, Y, T3Text);
   RbSkip := AddRadio(ModelPage, Y, 'Skip (I will download a model in LM Studio myself)');
   RbExist.Enabled := False;
+  SetRadioLook(RbExist);
   RbT1.Checked := True;
   RbExist.OnClick := @ModelRadioClick; RbT1.OnClick := @ModelRadioClick; RbT2.OnClick := @ModelRadioClick;
   RbT3.OnClick := @ModelRadioClick; RbSkip.OnClick := @ModelRadioClick;
@@ -299,7 +369,7 @@ begin
 end;
 
 procedure DetectModels;
-var Lines: TArrayOfString; I, N, Rc, Tier: Integer; L, F, Gpu, Ram, Tmp, Mark: String;
+var Lines: TArrayOfString; I, N, Rc, Tier: Integer; L, F, Gpu, Ram, Tmp, Mark, M: String;
 begin
   ModelsDetected := True;
   Tier := 1; Gpu := '0'; Ram := '?';
@@ -329,15 +399,18 @@ begin
         end;
       end;
     end;
-  ModelInfo.Caption := 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended size is marked.';
+  LmFound := FileExists(ExpandConstant('{localappdata}\Programs\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{pf}\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{%USERPROFILE}\.lmstudio\bin\lms.exe'));
+  if LmFound then M := 'LM Studio: found on this PC.' else M := 'LM Studio: not found. The setup installs it for you (winget).';
+  ModelInfo.Caption := M + #13#10 + 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended size is marked.';
   Mark := '   <-- recommended';
-  if Tier = 1 then RbT1.Caption := T1Text + Mark;
-  if Tier = 2 then RbT2.Caption := T2Text + Mark;
-  if Tier = 3 then RbT3.Caption := T3Text + Mark;
+  if Tier = 1 then SetRadioText(RbT1, T1Text + Mark);
+  if Tier = 2 then SetRadioText(RbT2, T2Text + Mark);
+  if Tier = 3 then SetRadioText(RbT3, T3Text + Mark);
   RbT1.Checked := Tier = 1; RbT2.Checked := Tier = 2; RbT3.Checked := Tier = 3;
   if ModelCombo.Items.Count > 0 then
   begin
     RbExist.Enabled := True;
+    SetRadioLook(RbExist);
     ModelCombo.ItemIndex := 0;
     RbExist.Checked := True;
   end;
@@ -370,7 +443,11 @@ begin
   S := S + Space + 'Language model: ' + M + NewLine;
   if RagCheck.Checked then S := S + Space + 'Document search (Big RAG)' + NewLine;
   if Trim(KeyEdit.Text) <> '' then S := S + Space + 'Web search key (Firecrawl): entered' + NewLine;
-  S := S + NewLine + 'Missing programs (Git, uv, Node.js, Rust, Windows Terminal, LM Studio) are installed with winget; Windows may ask for permission.';
+  if FileExists(ExpandConstant('{localappdata}\Programs\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{pf}\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{%USERPROFILE}\.lmstudio\bin\lms.exe')) then
+    S := S + Space + 'LM Studio: already installed' + NewLine
+  else
+    S := S + Space + 'LM Studio: will be installed' + NewLine;
+  S := S + NewLine + 'Other missing programs (Git, uv, Node.js, Rust, Windows Terminal) are installed with winget; Windows may ask for permission.';
   Result := S;
 end;
 
@@ -477,4 +554,16 @@ begin
       S := S + '4. Tado login did not finish? Run tools\tado_login.py in the Jarvis folder.' + #13#10;
     WizardForm.FinishedLabel.Caption := S;
   end;
+end;
+
+{ ---------- uninstaller in HUD colors (the confirmation boxes stay Windows style) ---------- }
+
+procedure InitializeUninstallProgressForm;
+begin
+  UninstallProgressForm.Color := CBg;
+  UninstallProgressForm.MainPanel.Color := CBg;
+  UninstallProgressForm.InnerPage.Color := CBg;
+  UninstallProgressForm.PageNameLabel.Font.Color := CCyan;
+  UninstallProgressForm.PageDescriptionLabel.Font.Color := CText;
+  UninstallProgressForm.StatusLabel.Font.Color := COrange;
 end;

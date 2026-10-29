@@ -29,8 +29,8 @@ function Get-Loaded {
   } catch { return @() }
 }
 # Open the LM Studio window (visible, not hidden in the tray). LM Studio is single-instance: if it is already open this just brings it to the front.
-$lmsExe = Join-Path $env:LOCALAPPDATA "Programs\LM Studio\LM Studio.exe"
-if (Test-Path $lmsExe) { Start-Process $lmsExe -RedirectStandardOutput "$env:TEMP\lmstudio-out.log" -RedirectStandardError "$env:TEMP\lmstudio-err.log"; Start-Sleep -Seconds 5 }
+$lmsExe = @("$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe", "$env:ProgramFiles\LM Studio\LM Studio.exe", "${env:ProgramFiles(x86)}\LM Studio\LM Studio.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($lmsExe) { Write-Host "Opening LM Studio: $lmsExe"; Start-Process $lmsExe -RedirectStandardOutput "$env:TEMP\lmstudio-out.log" -RedirectStandardError "$env:TEMP\lmstudio-err.log"; Start-Sleep -Seconds 5 } else { Write-Host "LM Studio.exe not found in the usual folders - starting only its server." -ForegroundColor Yellow }
 if (-not (Test-Lms)) {
   Write-Host "LM Studio server is not running - starting it..." -ForegroundColor Yellow
   lms server start
@@ -41,7 +41,7 @@ $ReloadOnContextMismatch = $true
 function Get-SavedCtx($id) {
   $c = 8192
   try {
-    $s = Get-Content "$env:USERPROFILE\.openjarvis\hud-model-settings.json" -Raw | ConvertFrom-Json
+    $s = Get-Content "$env:USERPROFILE\.openjarvis\hud-model-settings.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
     $pr = $s.PSObject.Properties[$id]
     if ($pr -and $pr.Value.context) { $c = [int]$pr.Value.context }
   } catch {}
@@ -66,9 +66,26 @@ if ($info) {
   $model = "google/gemma-4-26b-a4b-qat"
   $savedModelFile = Join-Path $env:USERPROFILE ".openjarvis\jarvis-model.txt"   # model chosen by install-jarvis.ps1
   if (Test-Path $savedModelFile) { $sm = (Get-Content $savedModelFile -Raw).Trim(); if ($sm -match '^[A-Za-z0-9._:/@+-]+$') { $model = $sm } }
-  $want = Get-SavedCtx $model
-  Write-Host "No model loaded - loading $model with context $want..." -ForegroundColor Yellow
-  lms load $model -c $want -y
+  # try the saved/default model first, then every other LLM in LM Studio, until one really loads (some models cannot load on some PCs)
+  $cands = @($model)
+  try {
+    $arr = ConvertFrom-Json ((lms ls --json 2>$null) -join "`n")
+    foreach ($m in $arr) { if ($m.type -eq 'llm' -and $m.modelKey -and ($cands -notcontains $m.modelKey) -and $m.modelKey -match '^[A-Za-z0-9._:/@+-]+$') { $cands += $m.modelKey } }
+  } catch {}
+  $loadedOk = $false
+  foreach ($c in $cands) {
+    $want = Get-SavedCtx $c
+    Write-Host "No model loaded - loading $c with context $want..." -ForegroundColor Yellow
+    lms load $c -c $want -y
+    $chk = $null
+    try { $chk = (Invoke-RestMethod "http://localhost:1234/api/v0/models" -TimeoutSec 5).data | Where-Object { $_.id -eq $c -and $_.state -eq "loaded" } | Select-Object -First 1 } catch {}
+    if ($chk) { $model = $c; $loadedOk = $true; break }
+    Write-Host "Could not load $c - trying the next model..." -ForegroundColor Yellow
+  }
+  if (-not $loadedOk) {
+    Write-Host "No language model could be loaded. Open LM Studio, download a model that runs on your PC, then start Jarvis again." -ForegroundColor Red
+    Read-Host "Press Enter to close"; exit
+  }
 }
 # Safety: the model id ends up inside a command line, so only plain characters are allowed
 if ($model -notmatch '^[A-Za-z0-9._:/@+-]+$') {
