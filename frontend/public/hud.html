@@ -300,7 +300,7 @@ document.addEventListener('keydown',e=>{if(e.key==='F6'){e.preventDefault();if(o
 let wakeLast=null;
 setInterval(async()=>{try{const j=await(await fetch('http://127.0.0.1:8766')).json();if(wakeLast===null||j.wake_count<wakeLast){wakeLast=j.wake_count;return}if(j.wake_count>wakeLast){wakeLast=j.wake_count;if(!on){on=true;ctx=ctx||new AudioContext();listen()}}}catch(e){}},700);
 /* ---------- live data ---------- */
-let hwModel=null,metrics=[],mx={},lat=0,online=false,wx=null,hw={cpu_load:0,gpu:null},hwOk=false,t00=Date.now(),fps=60,lastT=0;
+let NOG=false,hwModel=null,metrics=[],mx={},lat=0,online=false,wx=null,hw={cpu_load:0,gpu:null},hwOk=false,t00=Date.now(),fps=60,lastT=0;
 const H={cl:[],gl:[],gt:[],pw:[],lat:[],nd:[],nu:[]};
 const push=(a,v)=>{a.push(v);if(a.length>150)a.shift()};
 function flat(o,p,out,d){if(d>3)return;for(const k in o){const v=o[k];
@@ -534,7 +534,7 @@ const tr=state==='thinking'?5:state==='speaking'?2.4:state==='listening'?1.7:0.9
 B.rate+=(tr+level*2-B.rate)*0.04;B.ph+=dt*B.rate*2;
 const br=0.5+0.5*Math.sin(B.ph),S=1+0.05*br+level*0.06,RS=R*S,sp=0.6+B.rate*0.4;
 Rc=RS*2.1;rot=t/6000*sp;window.RING={x:cx,y:cy,r:RS*2.1+20*u};
-const gq=hw.gpu,NOG=hwOk&&!hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
+NOG=hwOk&&!hw.gpu;const gq=hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
 const P=(r,a)=>[cx+cs(a)*r,cy+sn(a)*r];
 const A=(r,a0,a1,w,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;arc(cx,cy,r,a0,a1)};
 const T=(r,n,len,a0,w,every,len2,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;
