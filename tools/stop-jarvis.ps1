@@ -19,8 +19,13 @@ if (-not $KeepLmStudio) {
   Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force
 }
 # 4. close only the Jarvis terminal window (by its tab title); other terminal windows are left alone
-Add-Type -Namespace W2 -Name S -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t); [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);'
-foreach ($tt in 'Jarvis Server 8000','Jarvis Services') { $h = [W2.S]::FindWindow([NullString]::Value, $tt); if ($h -ne [IntPtr]::Zero) { [void][W2.S]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) } }
+Add-Type -Namespace W2 -Name S -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t); [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l); [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);'
+$wins = @()
+foreach ($tt in 'Jarvis Server 8000','Jarvis Services') { $h = [W2.S]::FindWindow([NullString]::Value, $tt); if ($h -ne [IntPtr]::Zero) { $wins += $h } }
+# the window the launcher remembered (its title may have changed after the programs in it were killed)
+$hf = Join-Path $env:USERPROFILE '.openjarvis\terminal-hwnd.txt'
+if (Test-Path $hf) { foreach ($l in (Get-Content $hf -ErrorAction SilentlyContinue)) { if ($l -match '^\d+$') { $h = [IntPtr][int64]$l; if ([W2.S]::IsWindow($h)) { $wins += $h } } }; Remove-Item $hf -ErrorAction SilentlyContinue }
+foreach ($h in ($wins | Sort-Object -Unique)) { [void][W2.S]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
 Start-Sleep 3
 $left = @(Get-NetTCPConnection -LocalPort 5173,8000,8765,8766,1234 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalPort })
 if ($left.Count -eq 0) { Write-Host "Jarvis stopped." } else { Write-Host ("Still listening: " + ($left -join ',')) }

@@ -123,7 +123,10 @@ Start-Process "http://localhost:5173/hud.html"
 
 # --- Step 5: minimise the terminal windows
 Start-Sleep -Seconds 3
-foreach ($i in 1..10) { $done = $false; foreach ($ti in 'Jarvis Services','Jarvis Server 8000') { $h = [W.S]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $ti); if ($h -ne [IntPtr]::Zero) { [void][W.S]::ShowWindow($h, 6); $done = $true } }; if ($done) { break }; Start-Sleep -Seconds 1 }
+$hl = @()
+foreach ($i in 1..10) { $done = $false; foreach ($ti in 'Jarvis Services','Jarvis Server 8000') { $h = [W.S]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $ti); if ($h -ne [IntPtr]::Zero) { [void][W.S]::ShowWindow($h, 6); $done = $true; $hl += [string]$h.ToInt64() } }; if ($done) { break }; Start-Sleep -Seconds 1 }
+# remember the terminal window, so Stop Jarvis can close it even when its title has changed
+try { [System.IO.File]::WriteAllLines((Join-Path $env:USERPROFILE '.openjarvis\terminal-hwnd.txt'), [string[]]@($hl | Select-Object -Unique)) } catch { }
 Write-Host "All done." -ForegroundColor Green
 # --- Step 6: warm-up (first request is slow): runs hidden in the background, so this window can close right away
 Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$root\tools\warmup.ps1`" -Model `"$model`""
