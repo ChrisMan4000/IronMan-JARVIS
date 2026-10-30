@@ -114,7 +114,7 @@ function addJ(text){text=futureMark(text);
   while((m=RE.exec(text))){
     if(m.index>last)putText(d,text.slice(last,m.index));
     const v=+(m[0].match(/\d{1,3}(?:\.\d+)?/)[0]),s=document.createElement('span');
-    s.textContent=m[0];s.style.fontWeight='bold';
+    let ct=m[0].replace(/^NN/i,'');if(!/confiden/i.test(ct))ct=ct.replace(/\s*%/,'%')+' confidence';s.textContent=ct;s.style.fontWeight='bold';
     s.style.color=v>=80?'#8fe6b8':v>=50?'#ff9a3d':'#ff4d4d';
     d.appendChild(s);last=m.index+m[0].length;
   }
@@ -411,7 +411,7 @@ function mdlFill(){
   mlist.innerHTML='';
   MDL.models.slice().sort((a,b)=>((b.state==='loaded')-(a.state==='loaded'))||a.id.localeCompare(b.id)).forEach(m=>{
     const d=document.createElement('div');if(m.state==='loaded')d.className='cur';
-    d.textContent=(m.state==='loaded'?'\u25CF ':'\u00A0\u00A0')+m.id+'    ctx '+m.context+' / max '+mdlFmt(m.max);
+    d.textContent=(m.state==='loaded'?'\u25CF ':'\u00A0\u00A0')+m.id+'    ctx '+m.context+' / '+(m.size_gb?m.size_gb+' GB':'max '+mdlFmt(m.max));
     d.onclick=()=>{MDL.open=false;mlist.style.display='none';mdlLoad(m.id)};mlist.appendChild(d)});
 }
 async function mdlPoll(){if(document.hidden&&!MDL.loading)return;try{const j=await(await fetch(HBASE+'list')).json();MDL.models=j.models||[];MDL.loading=j.loading||null;MDL.error=j.error||null;mdlRender();if(MDL.open)mdlFill()}catch(e){}}

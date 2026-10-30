@@ -443,6 +443,21 @@ def put_setting(model, **kw):
         return cur
 
 
+_sizes = {"t": 0, "m": {}}
+
+
+def model_sizes():
+    """modelKey -> size in GB from 'lms ls --json' (refreshed every 2 minutes)."""
+    if time.time() - _sizes["t"] > 120:
+        _sizes["t"] = time.time()
+        try:
+            out = subprocess.run(["lms", "ls", "--json"], capture_output=True, text=True, timeout=15, creationflags=0x08000000).stdout
+            _sizes["m"] = {m["modelKey"]: round(m["sizeBytes"] / 1e9, 1) for m in json.loads(out) if m.get("modelKey") and m.get("sizeBytes")}
+        except Exception:
+            pass
+    return _sizes["m"]
+
+
 def list_models():
     """All LLMs known to LM Studio with state, context and saved settings."""
     data = json.load(urllib.request.urlopen("http://localhost:1234/api/v0/models", timeout=5)).get("data", [])
@@ -450,7 +465,7 @@ def list_models():
     for m in data:
         if m.get("type") not in ("llm", "vlm"):
             continue
-        row = {"id": m["id"], "state": m.get("state"), "max": m.get("max_context_length"),
+        row = {"id": m["id"], "state": m.get("state"), "max": m.get("max_context_length"), "size_gb": model_sizes().get(m["id"]),
                "loaded_ctx": m.get("loaded_context_length")}
         row.update(get_setting(m["id"]))
         _c = read_caps().get(m["id"])

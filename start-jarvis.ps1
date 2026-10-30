@@ -30,7 +30,7 @@ function Get-Loaded {
 }
 # Open the LM Studio window (visible, not hidden in the tray). LM Studio is single-instance: if it is already open this just brings it to the front.
 $lmsExe = @("$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe", "$env:ProgramFiles\LM Studio\LM Studio.exe", "${env:ProgramFiles(x86)}\LM Studio\LM Studio.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($lmsExe) { Write-Host "Opening LM Studio: $lmsExe"; Start-Process $lmsExe -RedirectStandardOutput "$env:TEMP\lmstudio-out.log" -RedirectStandardError "$env:TEMP\lmstudio-err.log"; Start-Sleep -Seconds 5 } else { Write-Host "LM Studio.exe not found in the usual folders - starting only its server." -ForegroundColor Yellow }
+if ($lmsExe) { Write-Host "Opening LM Studio: $lmsExe"; Start-Process $lmsExe -WindowStyle Normal; Start-Sleep -Seconds 5 } else { Write-Host "The LM Studio app was not found (only its hidden server can start). Run the Jarvis installer again to install LM Studio." -ForegroundColor Yellow }
 if (-not (Test-Lms)) {
   Write-Host "LM Studio server is not running - starting it..." -ForegroundColor Yellow
   lms server start
@@ -119,8 +119,7 @@ Start-Process "http://localhost:5173/hud.html"
 Start-Sleep -Seconds 3
 foreach ($i in 1..10) { $done = $false; foreach ($ti in 'Jarvis Services','Jarvis Server 8000') { $h = [W.S]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $ti); if ($h -ne [IntPtr]::Zero) { [void][W.S]::ShowWindow($h, 6); $done = $true } }; if ($done) { break }; Start-Sleep -Seconds 1 }
 Write-Host "All done." -ForegroundColor Green
-# --- Step 6: warm-up (first request is slow)
-try { $wb = @{model=$model; max_tokens=1; messages=@(@{role='user'; content='Hi'})} | ConvertTo-Json -Depth 5; [void](Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/chat/completions -Body $wb -ContentType 'application/json' -TimeoutSec 180); Write-Host "Warm-up done." -ForegroundColor Green } catch { Write-Host "Warm-up skipped." }
-try { $sr = Invoke-WebRequest -Method Post -Uri http://127.0.0.1:8000/v1/speech/synthesize -Body '{"text":"Ready."}' -ContentType 'application/json' -UseBasicParsing -TimeoutSec 180; $wf = Join-Path $env:TEMP 'warm.wav'; [System.IO.File]::WriteAllBytes($wf, $sr.Content); [void](curl.exe -s -X POST http://127.0.0.1:8000/v1/speech/transcribe -F "file=@$wf"); Write-Host "Voice warm-up done." -ForegroundColor Green } catch { Write-Host "Voice warm-up skipped." }
+# --- Step 6: warm-up (first request is slow): runs hidden in the background, so this window can close right away
+Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$root\tools\warmup.ps1`" -Model `"$model`""
 Start-Sleep -Seconds 2
 exit

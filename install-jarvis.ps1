@@ -56,7 +56,8 @@ if (-not (Have uv))     { $need += 'astral-sh.uv' }
 if (-not (Have node))   { $need += 'OpenJS.NodeJS' }
 if (-not (Have rustup)) { $need += 'Rustlang.Rustup' }
 if (-not (Have wt))     { $need += 'Microsoft.WindowsTerminal' }
-$lmsOk = (Have lms) -or (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe")
+# the APP must exist: a leftover ~\.lmstudio folder (models, lms.exe) from an uninstalled LM Studio does not count
+$lmsOk = @("$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe", "$env:ProgramFiles\LM Studio\LM Studio.exe", "${env:ProgramFiles(x86)}\LM Studio\LM Studio.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $lmsOk)        { $need += 'ElementLabs.LMStudio' }
 if ($need.Count -gt 0) {
   Write-Host "Missing programs: $($need -join ', ')" -ForegroundColor Yellow
@@ -291,7 +292,7 @@ if ($useTado) {
       for ($w = 0; $w -lt 150 -and -not $tp.HasExited; $w++) {
         Start-Sleep -Seconds 2
         if (-not $opened -and (Test-Path $tOut)) {
-          try { $m = [regex]::Match([System.IO.File]::ReadAllText($tOut), 'https://\S+'); if ($m.Success) { Start-Process $m.Value; $opened = $true } } catch { }
+          try { $m = [regex]::Match([System.IO.File]::ReadAllText($tOut), 'approve:\s*(https://\S+)'); if ($m.Success) { $tu = $m.Groups[1].Value.TrimEnd('.', ',', ')'); Write-Host "  Tado login page: $tu"; Start-Process $tu; $opened = $true } } catch { }
         }
       }
       if (-not $tp.HasExited) { Stop-Process -Id $tp.Id -Force; Write-Host "Tado login timed out. Run tools\tado_login.py later (README)." -ForegroundColor Yellow }

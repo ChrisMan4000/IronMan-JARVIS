@@ -129,6 +129,12 @@ begin
   end;
 end;
 
+{ the LM Studio APP must exist; a leftover .lmstudio folder (models, lms.exe) from an uninstalled app does not count }
+function LmStudioInstalled: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{localappdata}\Programs\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{pf}\LM Studio\LM Studio.exe'));
+end;
+
 procedure LinkClick(Sender: TObject);
 var ErrorCode: Integer;
 begin
@@ -403,7 +409,7 @@ begin
         end;
       end;
     end;
-  LmFound := FileExists(ExpandConstant('{localappdata}\Programs\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{pf}\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{%USERPROFILE}\.lmstudio\bin\lms.exe'));
+  LmFound := LmStudioInstalled;
   if LmFound then M := 'LM Studio: found on this PC.' else M := 'LM Studio: not found. The setup installs it for you (winget).';
   ModelInfo.Caption := M + #13#10 + 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended size is marked.';
   Mark := '   <-- recommended';
@@ -447,7 +453,7 @@ begin
   S := S + Space + 'Language model: ' + M + NewLine;
   if RagCheck.Checked then S := S + Space + 'Document search (Big RAG)' + NewLine;
   if Trim(KeyEdit.Text) <> '' then S := S + Space + 'Web search key (Firecrawl): entered' + NewLine;
-  if FileExists(ExpandConstant('{localappdata}\Programs\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{pf}\LM Studio\LM Studio.exe')) or FileExists(ExpandConstant('{%USERPROFILE}\.lmstudio\bin\lms.exe')) then
+  if LmStudioInstalled then
     S := S + Space + 'LM Studio: already installed' + NewLine
   else
     S := S + Space + 'LM Studio: will be installed' + NewLine;

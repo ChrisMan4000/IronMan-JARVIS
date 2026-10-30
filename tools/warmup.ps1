@@ -1,0 +1,4 @@
+# Warm-up requests (the first request to the model, the voice synthesis and the speech recognition are slow). Started hidden by start-jarvis.ps1 so the launcher can close at once.
+param([string]$Model)
+try { $wb = @{model=$Model; max_tokens=1; messages=@(@{role='user'; content='Hi'})} | ConvertTo-Json -Depth 5; [void](Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/chat/completions -Body $wb -ContentType 'application/json' -TimeoutSec 180) } catch { }
+try { $sr = Invoke-WebRequest -Method Post -Uri http://127.0.0.1:8000/v1/speech/synthesize -Body '{"text":"Ready."}' -ContentType 'application/json' -UseBasicParsing -TimeoutSec 180; $wf = Join-Path $env:TEMP 'warm.wav'; [System.IO.File]::WriteAllBytes($wf, $sr.Content); [void](curl.exe -s -X POST http://127.0.0.1:8000/v1/speech/transcribe -F "file=@$wf") } catch { }
