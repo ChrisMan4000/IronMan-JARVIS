@@ -13,25 +13,26 @@
 ## The honest part
 
 - I am **not a developer**. This is my **first GitHub project**.
-- It took **36 hours**, built entirely in the **free Claude web chat** (so: lots of patience, very small steps).
+- It took **36 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
 - In other words: I **vibecoded** this whole project with the free version of Claude. No paid plan, no coding background.
 - It runs great on my PC. On yours? I am as curious as you are. The installer has **not** been tested on a freshly wiped PC.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
 ## What you get
 
+The full list of OpenJarvis's own features is here: <https://openjarvis.stanford.edu/#features>. What follows is what this fork adds.
+
 - **Full-screen HUD** with live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections and a glowing 3D brain.
-- **Cinematic look:** a startup animation (click to skip) and worn, scratched sci-fi panels with soft colors, inspired by the interface of a certain modern war game. The wear pattern is random on every page load.
 - **Talk to it.** Say "Hey Jarvis" (optional wake word, [openWakeWord](https://github.com/dscripka/openWakeWord)) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
 - **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account.
-- **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning.
+- **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning. The HUD also follows LM Studio by itself: when you load or change a model in LM Studio, the HUD updates to the model that is loaded.
 - **[Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
 - **[Tado](https://www.tado.com/en) heating (optional):** "heating off in the living room".
 - **Two desktop icons:** **Jarvis** starts everything, **Stop Jarvis** shuts everything down again (servers, LM Studio, the helper tabs). The helper programs run hidden in one terminal tab ("Jarvis Services", logs in `%USERPROFILE%\.openjarvis\logs`).
-- **Live fan speeds:** the HUD shows the real RPM of your CPU fan, water pump and case fans next to the GPU fan. The installer sets up the free [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) for this (Windows asks for administrator permission once), see [Live fan speeds](#live-fan-speeds-the-installer-sets-this-up).
 - **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
 - **Web search (optional):** uses the [Firecrawl Web Data API](https://www.firecrawl.dev/) and needs your own free API key. It also reads a web page or PDF when you give it a link.
-- **Document search (experimental, fussy):** ask questions about your own files and get sources with links. Needs the LM Studio plugin [*Big RAG*](https://lmstudio.ai/mindstudio/big-rag) and some patience.
+- **Memory:** tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. Stored locally on your PC, you can list or clear it any time (see [Memory](#memory-jarvis-remembers-things)).
+- **Document search (optional):** ask questions about your own files and get sources with links. Needs the LM Studio plugin [*Big RAG*](https://lmstudio.ai/mindstudio/big-rag).
 - **Privacy first:** upstream analytics (PostHog) are **switched off**. All Jarvis ports listen on `127.0.0.1` only. Keys never go into files in this repo.
 - **English only on purpose.** The voice does not pronounce other languages correctly, so speech is set to English.
 
@@ -54,6 +55,13 @@
 
 ## Install
 
+### Recommended: the installer (.exe)
+
+Download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.com/ChrisMan4000/IronMan-JARVIS/releases) and run it. It unpacks the project to `%LOCALAPPDATA%\IronMan-JARVIS` and asks the optional questions in the installer window itself, in HUD colors, each with a "learn more" link: [Philips Hue Smart Lights](https://www.philips-hue.com/en-us/explore-hue) (bridge IP), [Tado Smart Heating](https://www.tado.com/en), the wake word ([openWakeWord](https://github.com/dscripka/openWakeWord)), the language model ([LM Studio](https://lmstudio.ai); it shows the models you already have and recommends a size for your PC), document search ([Big RAG](https://lmstudio.ai/mindstudio/big-rag)) and the [Firecrawl Web Data](https://www.firecrawl.dev/) API key. It then runs `install-jarvis.ps1` hidden with your answers and shows the progress (10 steps, with the model download percentage; loading a big model can take a very long time). Details are written to `%USERPROFILE%\.openjarvis\install-log.txt`. You can still run `install-jarvis.ps1` yourself in PowerShell, it then asks the same questions there (the advanced steps below apply). It installs the fan monitor ([LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)), opens your default browser for the [Tado Smart Heating](https://www.tado.com/en) login, keeps your settings and keys when you reinstall, and adds a **Stop Jarvis** desktop icon. The uninstaller removes everything the installer created (including `%LOCALAPPDATA%\IronMan-JARVIS` and the fan monitor). Tested on a Surface (Windows 11 ARM64, Firefox). It is a pre-release, not code-signed (Windows SmartScreen will warn: "More info" > "Run anyway") and not yet tested on a freshly wiped PC. LM Studio, uv, Python and the models are downloaded during setup, not packed inside. To uninstall, run `uninstall-jarvis.ps1` first (see "Uninstall"), then remove the app in Windows Settings.
+
+### Advanced: install with Git
+
+
 1. Install Git if you do not have it: `winget install --id Git.Git -e`
 2. Open a **normal** (not admin) PowerShell and run:
 
@@ -68,23 +76,8 @@ powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
    The installer also offers **document search** (Step 6c, optional): it downloads the embedding model and installs the LM Studio plugin *Big RAG* (see [Optional: document search](#optional-document-search)).
 5. Double-click the **Jarvis** icon on your desktop. Allow the microphone in the browser.
 
-**No Git? Use the installer instead:** download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.com/ChrisMan4000/IronMan-JARVIS/releases) and run it. It unpacks the project to `%LOCALAPPDATA%\IronMan-JARVIS` and asks the optional questions in the installer window itself, in HUD colors, each with a "learn more" link: [Philips Hue Smart Lights](https://www.philips-hue.com/en-us/explore-hue) (bridge IP), [Tado Smart Heating](https://www.tado.com/en), the wake word ([openWakeWord](https://github.com/dscripka/openWakeWord)), the language model ([LM Studio](https://lmstudio.ai); it shows the models you already have and recommends a size for your PC), document search ([Big RAG](https://lmstudio.ai/mindstudio/big-rag)) and the [Firecrawl Web Data](https://www.firecrawl.dev/) API key. It then runs `install-jarvis.ps1` hidden with your answers and shows the progress (10 steps, with the model download percentage; loading a big model can take a very long time). Details are written to `%USERPROFILE%\.openjarvis\install-log.txt`. You can still run `install-jarvis.ps1` yourself in PowerShell, it then asks the same questions there (steps 3-5 above apply). It installs the fan monitor ([LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)), opens your default browser for the [Tado Smart Heating](https://www.tado.com/en) login, keeps your settings and keys when you reinstall, and adds a **Stop Jarvis** desktop icon. The uninstaller removes everything the installer created (including `%LOCALAPPDATA%\IronMan-JARVIS` and the fan monitor). Tested on a Surface (Windows 11 ARM64, Firefox). It is a pre-release, not code-signed (Windows SmartScreen will warn: "More info" > "Run anyway") and not yet tested on a freshly wiped PC. LM Studio, uv, Python and the models are downloaded during setup, not packed inside. To uninstall, run `uninstall-jarvis.ps1` first (see "Uninstall"), then remove the app in Windows Settings.
 
 Set your city in `frontend/public/hud.html` (search for `HOME_CFG`). Four values: name, latitude, longitude, time zone. The default is London.
-
-## Live fan speeds (the installer sets this up)
-
-The installer downloads and sets up the free LibreHardwareMonitor for you (Windows asks for administrator permission once). If you install by hand, or it failed, do this:
-
-The HUD can show real fan speeds (CPU fan, water pump, case fans) next to the GPU fan. Windows has no simple built-in way to read them, so this uses the free [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases). Which fans show up depends on your mainboard. Without it, the panel just says `LIBREHARDWAREMONITOR OFFLINE` and everything else works.
-
-1. Download LibreHardwareMonitor and unzip it into `C:\Program Files\LibreHardwareMonitor`.
-2. Start it once by hand (as administrator). In its **Options** menu turn on **Remote Web Server > Run** (port 8085) and make sure **Run On Windows Startup** is **off**. Then close it.
-3. Open a PowerShell **as administrator** in this folder and run: `powershell -ExecutionPolicy Bypass -File .\tools\setup-fan-monitor.ps1`
-
-From then on, starting Jarvis starts LibreHardwareMonitor hidden, and it closes itself about 30 seconds after Jarvis has stopped. Its tray icon can be hidden in Windows Settings > Personalization > Taskbar > Other system tray icons.
-
-**Why the firewall rule?** LibreHardwareMonitor's web server listens on every network interface, without a password (and it writes that setting back on every start). The setup script therefore adds a firewall rule that blocks port 8085 from the network; this PC can still read it. The setup script has not been tested on a freshly wiped PC. The uninstaller removes the task and the rule (run it as administrator for that part).
 
 ## Optional: document search
 
