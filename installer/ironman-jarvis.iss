@@ -12,7 +12,7 @@ AppPublisherURL=https://github.com/ChrisMan4000/IronMan-JARVIS
 DefaultDirName={localappdata}\IronMan-JARVIS
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
-OutputDir=.
+OutputDir=..
 OutputBaseFilename=IronMan-JARVIS-Installer
 Compression=lzma2
 SolidCompression=yes
@@ -27,7 +27,7 @@ WelcomeLabel2=A private AI assistant with a full-screen HUD. The AI runs on your
 FinishedHeadingLabel=Setup finished
 
 [Files]
-Source: "..\*"; DestDir: "{app}"; Excludes: "installer\*,.git\*"; Flags: recursesubdirs createallsubdirs
+Source: "..\*"; DestDir: "{app}"; Excludes: "installer\*,.git\*,IronMan-JARVIS-Installer.exe"; Flags: recursesubdirs createallsubdirs
 Source: "list-llms.ps1"; Flags: dontcopy
 
 [UninstallDelete]
