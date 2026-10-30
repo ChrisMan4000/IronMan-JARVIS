@@ -77,8 +77,8 @@ Write-Host ""; Write-Host "Step 2: options" -ForegroundColor Cyan
 Status 2 "Writing your settings file"
 if ($FromWizard) { $useHue = [bool]$WantHue; $useTado = [bool]$WantTado; $useWake = [bool]$WantWake }
 else {
-  $useHue  = Ask "Use Philips Hue lights? (https://www.philips-hue.com/en-us/explore-hue)"
-  $useTado = Ask "Use Tado heating? (https://www.tado.com/en)"
+  $useHue  = Ask "Use Philips Hue Smart Lights? (https://www.philips-hue.com/en-us/explore-hue)"
+  $useTado = Ask "Use Tado Smart Heating? (https://www.tado.com/en)"
   $useWake = Ask "Set up the wake word 'Hey Jarvis' (openWakeWord, https://github.com/dscripka/openWakeWord ; own Python environment, a few minutes)?"
 }
 
@@ -305,20 +305,20 @@ if ($useTado) {
   if ($FromWizard) {
     if (Test-Path "$Cfg\tado-token.json") { Write-Host "Tado login already saved." }
     else {
-      Status 9 "Tado: approve the login in your browser (it opens by itself, waiting up to 5 minutes)"
+      Status 9 "Tado: approve the login in your browser (it opens by itself, waiting up to 2 minutes)"
       $tOut = Join-Path $env:TEMP 'tado-login-out.txt'
       Remove-Item $tOut -ErrorAction SilentlyContinue
       $tErr = Join-Path $env:TEMP 'tado-login-err.txt'; Remove-Item $tErr -ErrorAction SilentlyContinue
       $tp = Start-Process -FilePath uv -ArgumentList 'run','--no-sync','python','-u','tools\tado_login.py' -WorkingDirectory $Repo -RedirectStandardOutput $tOut -RedirectStandardError $tErr -NoNewWindow -PassThru
       $opened = $false
-      for ($w = 0; $w -lt 150 -and -not $tp.HasExited; $w++) {
+      for ($w = 0; $w -lt 60 -and -not $tp.HasExited; $w++) {
         Start-Sleep -Seconds 2
         if (-not $opened) {
           try {
             $all = ''; foreach ($f in $tOut, $tErr) { if (Test-Path $f) { $all += [System.IO.File]::ReadAllText($f) + "`n" } }
             $m = [regex]::Match($all, 'https://[^\s"''<>]*user_code[^\s"''<>]*')
             if (-not $m.Success) { $m = [regex]::Match($all, 'https://[^\s"''<>]*tado[^\s"''<>]*') }
-            if ($m.Success) { $tu = $m.Value.TrimEnd('.', ',', ')'); Write-Host "  Tado login page: $tu"; Start-Process $tu; $opened = $true }
+            if ($m.Success) { $tu = $m.Value.TrimEnd('.', ',', ')'); Write-Host "  Tado login page: $tu"; try { Start-Process $tu } catch { Start-Process cmd.exe -ArgumentList '/c','start','',$tu -WindowStyle Hidden }; $opened = $true }
           } catch { Write-Host "  Tado link: $($_.Exception.Message)" }
         }
       }

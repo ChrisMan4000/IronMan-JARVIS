@@ -323,11 +323,11 @@ begin
   SetupCode := 0;
 
   { Philips Hue }
-  HuePage := NewPage(wpSelectDir, 'Philips Hue lights (optional)', 'Switch your lights on and off by voice or text.');
+  HuePage := NewPage(wpSelectDir, 'Philips Hue Smart Lights (optional)', 'Switch your lights on and off by voice or text.');
   Y := 0;
   AddText(HuePage, Y, 'Lets Jarvis switch your Philips Hue lights on and off ("turn off the kitchen lights"). Every change is read back from the bridge. Needs a Hue bridge in your home network.', CText, False);
-  AddLink(HuePage, Y, 'Philips Hue', 'https://www.philips-hue.com/en-us/explore-hue');
-  HueCheck := AddCheck(HuePage, Y, 'Use Philips Hue lights');
+  AddLink(HuePage, Y, 'Philips Hue Smart Lights', 'https://www.philips-hue.com/en-us/explore-hue');
+  HueCheck := AddCheck(HuePage, Y, 'Use Philips Hue Smart Lights');
   HueCheck.OnClick := @HueClick;
   AddText(HuePage, Y, 'IP address of your Hue bridge (Hue app > Settings > Bridge):', CText, False);
   HueIpEdit := TNewEdit.Create(HuePage);
@@ -338,11 +338,11 @@ begin
   AddText(HuePage, Y, 'When the installation starts, a message asks you to press the round button on top of the bridge.', COrange, False);
 
   { Tado }
-  TadoPage := NewPage(HuePage.ID, 'Tado heating (optional)', 'Control your Tado radiator valves.');
+  TadoPage := NewPage(HuePage.ID, 'Tado Smart Heating (optional)', 'Control your Tado radiator valves.');
   Y := 0;
   AddText(TadoPage, Y, 'Lets Jarvis set or switch off your Tado heating ("heating off in the living room"). Needs a Tado account. Your browser opens once so you can approve the login.', CText, False);
-  AddLink(TadoPage, Y, 'Tado', 'https://www.tado.com/en');
-  TadoCheck := AddCheck(TadoPage, Y, 'Use Tado heating');
+  AddLink(TadoPage, Y, 'Tado Smart Heating', 'https://www.tado.com/en');
+  TadoCheck := AddCheck(TadoPage, Y, 'Use Tado Smart Heating');
 
   { wake word }
   WakePage := NewPage(TadoPage.ID, 'Wake word (optional)', 'Say "Hey Jarvis" to start talking.');
@@ -472,8 +472,8 @@ function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoType
 var S, M: String;
 begin
   S := MemoDirInfo + NewLine + NewLine + 'Your choices:' + NewLine;
-  if HueCheck.Checked then S := S + Space + 'Philips Hue (bridge ' + Trim(HueIpEdit.Text) + ')' + NewLine;
-  if TadoCheck.Checked then S := S + Space + 'Tado heating' + NewLine;
+  if HueCheck.Checked then S := S + Space + 'Philips Hue Smart Lights (bridge ' + Trim(HueIpEdit.Text) + ')' + NewLine;
+  if TadoCheck.Checked then S := S + Space + 'Tado Smart Heating' + NewLine;
   if WakeCheck.Checked then S := S + Space + 'Wake word "Hey Jarvis"' + NewLine;
   if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
   else if RbT1.Checked then M := 'download about 2.5 GB'
@@ -522,7 +522,7 @@ begin
 end;
 
 procedure RunSetup;
-var Opts, Params: String; Run, Code, Rc, Ticks: Integer;
+var Opts, Params: String; Run, Code, Rc, Ticks: Integer; Lines: TArrayOfString;
 begin
   Opts := '';
   if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp ''' + Trim(HueIpEdit.Text) + '''';
@@ -548,7 +548,7 @@ begin
   begin
     DeleteFile(StatusPath);
     { the command runs the script, then writes its exit code as an EXIT line (single quotes inside, no $ expansion by Inno) }
-    Params := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& ''' + ExpandConstant('{app}\install-jarvis.ps1') + ''' -FromWizard -StatusFile ''' + StatusPath + '''' + Opts + '; Add-Content -LiteralPath ''' + StatusPath + ''' (''EXIT|'' + $LASTEXITCODE)"';
+    Params := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "$PID | Set-Content -LiteralPath ''' + StatusPath + '.pid''; & ''' + ExpandConstant('{app}\install-jarvis.ps1') + ''' -FromWizard -StatusFile ''' + StatusPath + '''' + Opts + '; Add-Content -LiteralPath ''' + StatusPath + ''' (''EXIT|'' + $LASTEXITCODE)"';
     if not Exec('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewNoWait, Rc) then
     begin
       Code := -1;
@@ -565,6 +565,9 @@ begin
       Ticks := Ticks + 1;
       if Ticks > 27000 then Code := -2;
     end;
+    { make sure no setup process lingers (a window left open at the end): end the script's process tree }
+    if LoadStringsFromFile(StatusPath + '.pid', Lines) and (GetArrayLength(Lines) > 0) then
+      Exec('taskkill.exe', '/PID ' + Trim(Lines[0]) + ' /T /F', '', SW_HIDE, ewWaitUntilTerminated, Rc);
     { exit code 10 = programs were just installed; start the script again in a fresh process so it finds them }
     if Code <> 10 then Break;
     WizardForm.StatusLabel.Caption := 'Programs installed. Continuing in a fresh process...';

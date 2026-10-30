@@ -534,7 +534,7 @@ const tr=state==='thinking'?5:state==='speaking'?2.4:state==='listening'?1.7:0.9
 B.rate+=(tr+level*2-B.rate)*0.04;B.ph+=dt*B.rate*2;
 const br=0.5+0.5*Math.sin(B.ph),S=1+0.05*br+level*0.06,RS=R*S,sp=0.6+B.rate*0.4;
 Rc=RS*2.1;rot=t/6000*sp;window.RING={x:cx,y:cy,r:RS*2.1+20*u};
-const gq=hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
+const gq=hw.gpu,NOG=hwOk&&!hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
 const P=(r,a)=>[cx+cs(a)*r,cy+sn(a)*r];
 const A=(r,a0,a1,w,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;arc(cx,cy,r,a0,a1)};
 const T=(r,n,len,a0,w,every,len2,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;
@@ -564,9 +564,9 @@ if(!cmp&&wl>200*u){
   tx('CORE DIAGNOSTICS // BREATH '+(B.rate/PI).toFixed(2)+' Hz',x0,y0-16*u,14*u,C);
   const rowsL=[
     ['CPU LOAD %',ser(H.cl,100),'#7fdcff',cpuL.toFixed(0)+'%'],
-    ['GPU LOAD %',ser(H.gl,100),'#2b9bff',gq?gq.load.toFixed(0)+'%':'--'],
+    ...(NOG?[]:[['GPU LOAD %',ser(H.gl,100),'#2b9bff',gq?gq.load.toFixed(0)+'%':'--'],
     ['GPU POWER W',ser(H.pw,575),'#ff9a3d',gq?gq.power.toFixed(0)+' W':'--'],
-    ['GPU TEMP C',ser(H.gt,100),'#ff9a3d',gq?gq.temp.toFixed(0)+' C':'--'],
+    ['GPU TEMP C',ser(H.gt,100),'#ff9a3d',gq?gq.temp.toFixed(0)+' C':'--']]),
     ['LINK LATENCY',ser(H.lat,Math.max(50,...H.lat)),'#8fe6b8',lat+' ms'],
     ['SYNAPSE (SIM)',(i)=>nz(i,2)*(0.35+level*1.4),C,'']];
   rowsL.forEach((r,k)=>{const y=y0+k*rh;tx(r[0],x0,y+12*u,11*u,dim);tx(r[3],x0+wl,y+12*u,12*u,r[2],'right');
@@ -608,8 +608,8 @@ for(let sd=0;sd<2;sd++)for(let k=0;k<4;k++){const r0=RS*(1.45+k*0.12);g.lineWidt
 g.setLineDash([]);
 
 /* GPU / VRAM / CPU dials (bottom) */
-[['GPU',gq?gq.load/100:0,'#ff9a3d'],['VRAM',gq?gq.mem_used/gq.mem_total:0,'#ff4d4d'],['CPU',cpuL/100,'#ffd24a']].forEach((o,k)=>{
-  const p=P(RS*1.64,PI/2+(k-1)*0.3);g.shadowColor=o[2];g.shadowBlur=8*u;g.strokeStyle=o[2];g.lineWidth=5*u;
+(NOG?[['CPU',cpuL/100,'#ffd24a']]:[['GPU',gq?gq.load/100:0,'#ff9a3d'],['VRAM',gq?gq.mem_used/gq.mem_total:0,'#ff4d4d'],['CPU',cpuL/100,'#ffd24a']]).forEach((o,k,ar)=>{
+  const p=P(RS*1.64,PI/2+(k-(ar.length-1)/2)*0.3);g.shadowColor=o[2];g.shadowBlur=8*u;g.strokeStyle=o[2];g.lineWidth=5*u;
   g.globalAlpha=0.25;g.beginPath();g.arc(p[0],p[1],15*u,0,PI*2);g.stroke();
   g.globalAlpha=1;g.beginPath();g.arc(p[0],p[1],15*u,-PI/2,-PI/2+PI*2*cl(o[1]));g.stroke();
   g.fillStyle=o[2];g.globalAlpha=0.6+0.4*sn(t/300+k);g.beginPath();g.arc(p[0],p[1],5*u,0,PI*2);g.fill();g.globalAlpha=1;
@@ -704,24 +704,24 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   tx('HDG '+String(Math.floor(((-rot*180/PI)%360+360)%360)).padStart(3,'0'),cx,cy-Rc-52*u,15*u,C,'center');
 
   /* L1: hardware */
-  box(L1,top,pw,h1,'HARDWARE // NVIDIA RTX 5090 + CPU',C);
+  box(L1,top,pw,h1,NOG?'HARDWARE // CPU':'HARDWARE // NVIDIA RTX 5090 + CPU',C);
   const gp=hw.gpu||(hwOk?{name:'NO NVIDIA GPU',load:0,temp:0,mem_used:0,mem_total:1,power:0,fan:0}:null),ix=L1+28*u,iw=pw-56*u;
   tx('LOADED MODEL',ix,top+66*u,13*u,dim);
   tx((window.CMP?'ORCHESTRATOR  //  ':'AGENT  ORCHESTRATOR  //  ENGINE  LM STUDIO  //  ')+((hw.model_gb!=null)?hw.model_gb.toFixed(1)+' GB':'N/A'),ix,top+120*u,13*u,dim);
   const gr=Math.min(iw/7.5,70*u),gy=top+290*u;
   if(hwOk&&gp){
-    gauge(ix+iw*0.5,gy,gr,gp.load/100,'GPU LOAD',gp.load.toFixed(0)+'%',C);
-    gauge(ix+iw*0.83,gy,gr,gp.temp/100,'GPU TEMP',gp.temp.toFixed(0)+'\u00B0C',tcol(gp.temp,'#8fe6d4'));
-    gauge(ix+iw*0.17,gy,gr,hw.cpu_load/100,'CPU LOAD',hw.cpu_load.toFixed(0)+'%',tcol(hw.cpu_load,'#7fdcff'));
-    const vy=top+395*u;tx('VRAM',ix,vy,13*u,dim);tx((gp.mem_used/1024).toFixed(1)+' / '+(gp.mem_total/1024).toFixed(1)+' GB',ix+iw,vy,13*u,C,'right');
+    if(!NOG){gauge(ix+iw*0.5,gy,gr,gp.load/100,'GPU LOAD',gp.load.toFixed(0)+'%',C);
+    gauge(ix+iw*0.83,gy,gr,gp.temp/100,'GPU TEMP',gp.temp.toFixed(0)+'\u00B0C',tcol(gp.temp,'#8fe6d4'))}
+    gauge(ix+iw*(NOG?0.5:0.17),gy,gr,hw.cpu_load/100,'CPU LOAD',hw.cpu_load.toFixed(0)+'%',tcol(hw.cpu_load,'#7fdcff'));
+    const vy=top+395*u;if(!NOG){tx('VRAM',ix,vy,13*u,dim);tx((gp.mem_used/1024).toFixed(1)+' / '+(gp.mem_total/1024).toFixed(1)+' GB',ix+iw,vy,13*u,C,'right');
     bar(ix,vy+8*u,iw,10*u,gp.mem_used/gp.mem_total,'#ff9a3d');
     tx('GPU POWER',ix,vy+44*u,13*u,dim);tx(gp.power.toFixed(0)+' W',ix+iw,vy+44*u,13*u,C,'right');bar(ix,vy+52*u,iw,10*u,gp.power/575,'#2b9bff');
-    tx('GPU FAN',ix,vy+88*u,13*u,dim);tx((hw.gpu&&hw.gpu.fan!=null)?hw.gpu.fan.toFixed(0)+'%':'N/A',ix+iw,vy+88*u,13*u,'#8aa','right');bar(ix,vy+96*u,iw,10*u,(hw.gpu&&hw.gpu.fan!=null)?hw.gpu.fan/100:0,'#8fe6d4');
-    const sy=vy+112*u,sh=(top+h1-sy-20*u)/4.4;
-    spark(H.gl,ix,sy+sh*1.1,iw,sh,C,100,'GPU LOAD %',gp.load.toFixed(0));
+    tx('GPU FAN',ix,vy+88*u,13*u,dim);tx((hw.gpu&&hw.gpu.fan!=null)?hw.gpu.fan.toFixed(0)+'%':'N/A',ix+iw,vy+88*u,13*u,'#8aa','right');bar(ix,vy+96*u,iw,10*u,(hw.gpu&&hw.gpu.fan!=null)?hw.gpu.fan/100:0,'#8fe6d4');}
+    const sy=NOG?gy+gr+50*u:vy+112*u,sh=(top+h1-sy-20*u)/(NOG?2.4:4.4);
+    if(!NOG)spark(H.gl,ix,sy+sh*1.1,iw,sh,C,100,'GPU LOAD %',gp.load.toFixed(0));
     spark(H.cl,ix,sy,iw,sh,'#7fdcff',100,'CPU LOAD %',hw.cpu_load.toFixed(0));
-    spark(H.pw,ix,sy+sh*2.2,iw,sh,'#ff9a3d',575,'GPU POWER W',gp.power.toFixed(0));
-    {const ny0=sy+sh*3.3,nh=sh,nt=hw.net||{down_pct:0,up_pct:0,down_mbps:0,up_mbps:0,link_mbps:250};
+    if(!NOG)spark(H.pw,ix,sy+sh*2.2,iw,sh,'#ff9a3d',575,'GPU POWER W',gp.power.toFixed(0));
+    {const ny0=sy+sh*(NOG?1.2:3.3),nh=sh,nt=hw.net||{down_pct:0,up_pct:0,down_mbps:0,up_mbps:0,link_mbps:250};
     const mx2=Math.max(5,...H.nd,...H.nu)*1.25;
     g.fillStyle='rgba(255,255,255,.04)';g.fillRect(ix,ny0,iw,nh);
     tx(window.CMP?'NETWORK %':'NETWORK % OF '+nt.link_mbps+' MBPS',ix+6*u,ny0+14*u,12*u,'rgba(180,230,255,.7)');
