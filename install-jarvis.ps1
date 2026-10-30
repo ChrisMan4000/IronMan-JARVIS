@@ -26,6 +26,7 @@ function Pair-Hue($ip) {
   # asks the Hue bridge for an app key (the round button on the bridge must have been pressed in the last 30 seconds)
   if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') {
     [Environment]::SetEnvironmentVariable('HUE_BRIDGE_IP', $ip, 'User')
+    try { [System.IO.File]::WriteAllText("$Cfg\hue-ip.txt", $ip, $Utf8) } catch { }   # the installer wizard pre-fills the address from this after a reinstall
     if ($FromWizard -and (Test-Path "$Cfg\hue-key.txt")) { Write-Host "Hue key already saved."; return }
     if (-not $FromWizard) { Read-Host "Press the round button on top of the Hue bridge, THEN press Enter here" | Out-Null }
     try {
@@ -99,8 +100,12 @@ rustup default stable
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
 uv pip install maxminddb python-tado maturin pdfplumber psutil
-uv run --no-sync maturin develop -m rust/crates/openjarvis-python/Cargo.toml --release
-if ($LASTEXITCODE -ne 0) { Write-Host "Rust module build failed. Jarvis still starts (you only get a 'No module named openjarvis_rust' warning)." -ForegroundColor Yellow }
+# optional speed-up module (Rust). Not built on ARM PCs (Windows blocks the build there); Jarvis works the same without it.
+if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional Rust module is skipped." }
+else {
+  uv run --no-sync maturin develop -m rust/crates/openjarvis-python/Cargo.toml --release
+  if ($LASTEXITCODE -ne 0) { Write-Host "Optional Rust module not built. Jarvis works the same without it." -ForegroundColor Yellow }
+}
 Set-Location "$Repo\frontend"; npm install; Set-Location $Repo
 
 # ---------- 5. offline location database for the world map (public download, size-checked) ----------
@@ -209,7 +214,15 @@ if (-not $lmsCmd) {
     if ($t -match '^[123]$') {
       $id = $tiers[[int]$t - 1].id
       Write-Host "  Downloading $id (about $($tiers[[int]$t - 1].gb) GB, can take a while)..." -ForegroundColor Cyan
-      & $lmsCmd get $id -y 2>&1 | ForEach-Object { Write-Host "    $_" }
+      if ($FromWizard) {
+        Status 6 "Downloading $id (about $($tiers[[int]$t - 1].gb) GB). This can take a very long time, please wait"
+        $script:lastP = ''; $script:lastT = Get-Date
+        & $lmsCmd get $id -y 2>&1 | ForEach-Object {
+          $s = "$_"; $pm = [regex]::Matches($s, '(\d{1,3}(?:\.\d+)?)\s?%')
+          if ($pm.Count -gt 0) { $p = $pm[$pm.Count - 1].Groups[1].Value; if ($p -ne $script:lastP -and ((Get-Date) - $script:lastT).TotalSeconds -ge 2) { Status 6 "Downloading ${id}: $p% (this can take a very long time, please wait)"; $script:lastP = $p; $script:lastT = Get-Date } }
+          else { Write-Host "    $s" }
+        }
+      } else { & $lmsCmd get $id -y }
       Write-Host "  lms get finished with code $LASTEXITCODE"
       if (@(Get-LlmList | Where-Object { $_.modelKey -eq $id }).Count -gt 0) { $chosen = $id }
       else { Write-Host "  Could not confirm the download. Try by hand: lms get $id   (or search in the LM Studio app), then run this script again." -ForegroundColor Yellow }
@@ -217,6 +230,7 @@ if (-not $lmsCmd) {
   }
   if ($chosen -and $chosen -match '^[A-Za-z0-9._:/@+-]+$') {
     Write-Host "  Loading $chosen (context 8192)..." -ForegroundColor Cyan
+    Status 6 "Loading $chosen into memory (this can take a few minutes, please wait)"
     & $lmsCmd load $chosen -c 8192 -y
     # remember the choice: start-jarvis.ps1 loads this model when none is loaded
     [System.IO.File]::WriteAllText((Join-Path $Cfg 'jarvis-model.txt'), $chosen, $Utf8)
@@ -238,7 +252,12 @@ if ($ragAsked) {
   } else {
     # embedding model: needed by the plugin and by the oracle_search tool (small download)
     Write-Host "  Downloading the embedding model (nomic-embed-text, small)..." -ForegroundColor Cyan
-    try { & $lmsCmd get nomic-ai/nomic-embed-text-v1.5-GGUF -y } catch { Write-Host "  Embedding model download failed. Get it later in LM Studio: nomic-ai/nomic-embed-text-v1.5-GGUF" -ForegroundColor Yellow }
+    $embOk = $false
+    foreach ($eid in 'nomic-ai/nomic-embed-text-v1.5', 'nomic-embed-text-v1.5', 'nomic-ai/nomic-embed-text-v1.5-GGUF') {
+      try { & $lmsCmd get $eid -y 2>&1 | ForEach-Object { Write-Host "    $_" } } catch { }
+      try { if (@((ConvertFrom-Json ((& $lmsCmd ls --json 2>$null) -join "`n")) | Where-Object { "$($_.modelKey)" -match 'nomic-embed' }).Count -gt 0) { $embOk = $true; break } } catch { }
+    }
+    if (-not $embOk) { Write-Host "  Embedding model not found after download. Get it later in LM Studio: search for nomic-embed-text-v1.5" -ForegroundColor Yellow }
     # plugin: first try the command line, then the lmstudio:// link
     $ragDir = Join-Path $env:USERPROFILE ".lmstudio\extensions\plugins\mindstudio\big-rag"
     if (-not (Test-Path $ragDir)) {
@@ -289,14 +308,21 @@ if ($useTado) {
       Status 9 "Tado: approve the login in your browser (it opens by itself, waiting up to 5 minutes)"
       $tOut = Join-Path $env:TEMP 'tado-login-out.txt'
       Remove-Item $tOut -ErrorAction SilentlyContinue
-      $tp = Start-Process -FilePath uv -ArgumentList 'run','--no-sync','python','-u','tools\tado_login.py' -WorkingDirectory $Repo -RedirectStandardOutput $tOut -NoNewWindow -PassThru
+      $tErr = Join-Path $env:TEMP 'tado-login-err.txt'; Remove-Item $tErr -ErrorAction SilentlyContinue
+      $tp = Start-Process -FilePath uv -ArgumentList 'run','--no-sync','python','-u','tools\tado_login.py' -WorkingDirectory $Repo -RedirectStandardOutput $tOut -RedirectStandardError $tErr -NoNewWindow -PassThru
       $opened = $false
       for ($w = 0; $w -lt 150 -and -not $tp.HasExited; $w++) {
         Start-Sleep -Seconds 2
-        if (-not $opened -and (Test-Path $tOut)) {
-          try { $m = [regex]::Match([System.IO.File]::ReadAllText($tOut), 'approve:\s*(https://\S+)'); if ($m.Success) { $tu = $m.Groups[1].Value.TrimEnd('.', ',', ')'); Write-Host "  Tado login page: $tu"; Start-Process $tu; $opened = $true } } catch { }
+        if (-not $opened) {
+          try {
+            $all = ''; foreach ($f in $tOut, $tErr) { if (Test-Path $f) { $all += [System.IO.File]::ReadAllText($f) + "`n" } }
+            $m = [regex]::Match($all, 'https://[^\s"''<>]*user_code[^\s"''<>]*')
+            if (-not $m.Success) { $m = [regex]::Match($all, 'https://[^\s"''<>]*tado[^\s"''<>]*') }
+            if ($m.Success) { $tu = $m.Value.TrimEnd('.', ',', ')'); Write-Host "  Tado login page: $tu"; Start-Process $tu; $opened = $true }
+          } catch { Write-Host "  Tado link: $($_.Exception.Message)" }
         }
       }
+      foreach ($f in $tOut, $tErr) { if (Test-Path $f) { Write-Host "  [tado output] $((Get-Content $f -Raw) -replace '\s+',' ')" } }   # kept in the install log for troubleshooting
       if (-not $tp.HasExited) { Stop-Process -Id $tp.Id -Force; Write-Host "Tado login timed out. Run tools\tado_login.py later (README)." -ForegroundColor Yellow }
     }
   } else { uv run --no-sync python tools\tado_login.py }

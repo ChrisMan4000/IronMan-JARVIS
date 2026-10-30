@@ -44,6 +44,9 @@ const
   T2Text  = 'About 6.7 GB   google/gemma-4-12b-qat   (good balance for 12-16 GB graphics cards)';
   T3Text  = 'About 14.6 GB   google/gemma-4-26b-a4b-qat   (best quality, needs about 24 GB GPU memory)';
 
+function DwmSetWindowAttribute(hwnd: HWND; dwAttribute: DWORD; var pvAttribute: DWORD; cbAttribute: DWORD): Longint;
+  external 'DwmSetWindowAttribute@dwmapi.dll stdcall delayload';
+
 function SetEnvironmentVariableW(lpName, lpValue: String): LongWord;
   external 'SetEnvironmentVariableW@kernel32.dll stdcall';
 
@@ -243,8 +246,22 @@ begin
   if R.Enabled then Lbls[R.Tag].Font.Color := CText else Lbls[R.Tag].Font.Color := $707070;
 end;
 
+{ Windows 11: title bar and window border in the HUD background color (older Windows keeps its normal frame) }
+procedure ThemeFrame(Wnd: HWND);
+var V: DWORD;
+begin
+  try
+    V := 1; DwmSetWindowAttribute(Wnd, 20, V, 4);       { dark mode frame }
+    V := CBg; DwmSetWindowAttribute(Wnd, 35, V, 4);     { title bar color }
+    V := CBg; DwmSetWindowAttribute(Wnd, 34, V, 4);     { border color }
+    V := CCyan; DwmSetWindowAttribute(Wnd, 36, V, 4);   { title text color }
+  except
+  end;
+end;
+
 procedure ThemeWizard;
 begin
+  ThemeFrame(WizardForm.Handle);
   WizardForm.Color := CBg;
   WizardForm.MainPanel.Color := CBg;
   WizardForm.InnerPage.Color := CBg;
@@ -298,7 +315,7 @@ end;
 { ---------- pages ---------- }
 
 procedure InitializeWizard;
-var Y: Integer; Saved: String;
+var Y: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
   StatusPath := ExpandConstant('{tmp}\jarvis-status.txt');
@@ -380,7 +397,9 @@ begin
     AddText(KeyPage, Y, 'A key is already saved on this PC. Leave the box empty to keep it.', COrange, False);
 
   { an earlier install left its settings (kept at uninstall): pre-fill the answers }
-  if RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'HUE_BRIDGE_IP', Saved) and ValidIp(Saved) and FileExists(ExpandConstant('{%USERPROFILE}\.openjarvis\hue-key.txt')) then
+  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'HUE_BRIDGE_IP', Saved) then Saved := '';
+  if (Saved = '') and LoadStringFromFile(ExpandConstant('{%USERPROFILE}\.openjarvis\hue-ip.txt'), Ip8) then Saved := Trim(String(Ip8));
+  if ValidIp(Saved) and FileExists(ExpandConstant('{%USERPROFILE}\.openjarvis\hue-key.txt')) then
   begin
     HueCheck.Checked := True;
     HueIpEdit.Text := Saved;
@@ -469,6 +488,7 @@ begin
   else
     S := S + Space + 'LM Studio: will be installed' + NewLine;
   S := S + Space + 'Fan monitor (LibreHardwareMonitor): installed for the HUD fan panel, Windows asks for administrator permission once' + NewLine;
+  if (not RbSkip.Checked) and (not RbExist.Checked) then S := S + Space + '(a model download of several GB can take a very long time; the setup waits for it)' + NewLine;
   S := S + NewLine + 'Other missing programs (Git, uv, Node.js, Rust, Windows Terminal) are installed with winget; Windows may ask for permission.';
   Result := S;
 end;
@@ -612,6 +632,7 @@ end;
 
 procedure InitializeUninstallProgressForm;
 begin
+  ThemeFrame(UninstallProgressForm.Handle);
   UninstallProgressForm.Color := CBg;
   UninstallProgressForm.MainPanel.Color := CBg;
   UninstallProgressForm.InnerPage.Color := CBg;

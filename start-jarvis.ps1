@@ -2,6 +2,9 @@
 # LM Studio -> model -> Backup Watcher, helper (8765), wake word (8766), server (8000) -> HUD (5173) -> browser.
 # Reviewed 2026-10-14: the model id is checked before it is put into a command line.
 $root = $PSScriptRoot   # the folder this script lives in
+# Settings the installer saved as Windows user variables (web search key, Hue address ...) are only seen by programs started AFTER they were set;
+# a desktop icon starts this script from Explorer, which still has the old list. Read them again so the server always gets them.
+foreach ($n in 'FIRECRAWL_API_KEY','OPENJARVIS_WEB_SEARCH_ENGINE','HUE_BRIDGE_IP','JARVIS_DOC_ROOT') { $v = [Environment]::GetEnvironmentVariable($n, 'User'); if ($v) { Set-Item -Path "Env:$n" -Value $v } }
 
 # Wait-For: asks a web address every 2 seconds until it answers (or the time runs out)
 
