@@ -654,6 +654,23 @@ def serve_news(h):
     send(h, 200, out)
 
 
+def serve_search(h):
+    """/search?q=<text> -> web_search tool result (HUD fallback when the model skipped the tool)."""
+    if not need_trusted(h):
+        return
+    q = query(h).get("q", "").strip()[:200]
+    try:
+        if not q:
+            out = {"ok": False, "text": "empty query"}
+        else:
+            from openjarvis.tools.web_search import WebSearchTool
+            r = WebSearchTool().execute(query=q, max_results=5)
+            out = {"ok": bool(r.success), "text": str(r.content)[:6000]}
+    except Exception as e:
+        out = {"ok": False, "text": "search error: " + type(e).__name__}
+    send(h, 200, out)
+
+
 # ---------------------------------------------------------------- HTTP server
 # Fan speeds from LibreHardwareMonitor (local web server, port 8085). Read-only, fixed local address.
 def _walk_fans(node, out):
@@ -707,6 +724,8 @@ class H(BaseHTTPRequestHandler):
             return serve_hue(self)
         if path == "/news":
             return serve_news(self)
+        if path == "/search":
+            return serve_search(self)
         if path.startswith("/m/"):
             return serve_model_api(self)
         if path == "/count":
