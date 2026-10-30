@@ -170,6 +170,7 @@ if (-not $lmsCmd -and $FromWizard) {
     $lmsFile = "$env:USERPROFILE\.lmstudio\bin\lms.exe"
     for ($w = 0; $w -lt 45 -and -not (Test-Path $lmsFile); $w++) { Start-Sleep -Seconds 2 }
     if (Test-Path $lmsFile) { $lmsCmd = $lmsFile; try { & $lmsFile bootstrap 2>$null | Out-Null } catch { } }
+    Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force   # was started hidden only to create lms.exe; start-jarvis.ps1 opens the real window later
   }
 }
 if (-not $lmsCmd) {
@@ -208,7 +209,8 @@ if (-not $lmsCmd) {
     if ($t -match '^[123]$') {
       $id = $tiers[[int]$t - 1].id
       Write-Host "  Downloading $id (about $($tiers[[int]$t - 1].gb) GB, can take a while)..." -ForegroundColor Cyan
-      & $lmsCmd get $id -y
+      & $lmsCmd get $id -y 2>&1 | ForEach-Object { Write-Host "    $_" }
+      Write-Host "  lms get finished with code $LASTEXITCODE"
       if (@(Get-LlmList | Where-Object { $_.modelKey -eq $id }).Count -gt 0) { $chosen = $id }
       else { Write-Host "  Could not confirm the download. Try by hand: lms get $id   (or search in the LM Studio app), then run this script again." -ForegroundColor Yellow }
     } else { Write-Host "  Skipped. Download a model in LM Studio yourself, or run this script again." }

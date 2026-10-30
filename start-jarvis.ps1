@@ -30,7 +30,13 @@ function Get-Loaded {
 }
 # Open the LM Studio window (visible, not hidden in the tray). LM Studio is single-instance: if it is already open this just brings it to the front.
 $lmsExe = @("$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe", "$env:ProgramFiles\LM Studio\LM Studio.exe", "${env:ProgramFiles(x86)}\LM Studio\LM Studio.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($lmsExe) { Write-Host "Opening LM Studio: $lmsExe"; Start-Process $lmsExe -WindowStyle Normal; Start-Sleep -Seconds 5 } else { Write-Host "The LM Studio app was not found (only its hidden server can start). Run the Jarvis installer again to install LM Studio." -ForegroundColor Yellow }
+if ($lmsExe) {
+  Write-Host "Opening LM Studio: $lmsExe"
+  # an LM Studio that was started hidden (tray only) is closed first, otherwise starting it again shows no window
+  $hid = @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })
+  if (-not $hid.Count -and (Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)) { Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 3 }
+  Start-Process $lmsExe -WindowStyle Normal; Start-Sleep -Seconds 5
+} else { Write-Host "The LM Studio app was not found (only its hidden server can start). Run the Jarvis installer again to install LM Studio." -ForegroundColor Yellow }
 if (-not (Test-Lms)) {
   Write-Host "LM Studio server is not running - starting it..." -ForegroundColor Yellow
   lms server start
