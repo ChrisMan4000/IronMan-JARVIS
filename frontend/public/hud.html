@@ -27,7 +27,7 @@ html.phn #mname{position:fixed !important;left:50% !important;top:76px !importan
 html.phn #mset,html.phn #mstat{display:none !important}
 html.phn #mlist{position:fixed !important;left:50% !important;top:118px !important;transform:translateX(-50%);width:min(88vw,380px) !important;max-height:50vh !important;overflow:auto !important;font-size:14px !important;z-index:20 !important}
 html.phn #log,html.phn #bar{animation:phnIn 1s ease 2s both}
-html.phn body #hDel{left:auto !important;right:12px !important;bottom:auto !important;top:10px !important}
+html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24vh - 32px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24dvh - 32px) !important}
 @keyframes phnIn{from{opacity:0}}
 </style><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
 <canvas id="cv"></canvas><canvas id="pcv"></canvas><div id="log"></div>
