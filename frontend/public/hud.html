@@ -494,7 +494,7 @@ function plot(d,x,y,w,h,col,t){g.strokeStyle=col;g.lineWidth=1.8*u;g.beginPath()
     const yy=y+h/2-Math.max(-1,Math.min(1,v))*h/2;i?g.lineTo(x+i,yy):g.moveTo(x+i,yy)}g.stroke()}
 const tcol=(t,c)=>t>80?'#ff4d4d':t>65?'#ff9a3d':c;
 
-const MAX_FPS=30;let lastDraw=0;
+const MAX_FPS=60;let lastDraw=0;
 let WOT=null,WOK='';
 function wearOv(){const W=innerWidth,Hh=innerHeight,k=W+'x'+Hh;
 if(WOK!==k){WOK=k;const cv=document.createElement('canvas');cv.width=W;cv.height=Hh;const o=cv.getContext('2d'),r=Math.random,uu=Hh/1440;
