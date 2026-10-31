@@ -90,6 +90,18 @@ Ask Jarvis about your own PDF, Word, Excel and text files and get sources with l
 
 The plugin only works inside LM Studio's own chat; Jarvis reads its index files directly. Not tested on a freshly wiped PC. Without the plugin everything else works.
 
+## Optional: use the HUD from your phone or another PC (home network only)
+
+The HUD has a phone layout (small brain, short intro, chat box, model chooser, search indicators) that switches on automatically on a narrow, tall screen. To reach it from another device, `tools\gateway.py` can run a small HTTPS server with a password in front of Jarvis. It is **off until you set it up** and nothing is shared with the internet.
+
+1. Install `mkcert` (`winget install FiloSottile.mkcert`), run `mkcert -install`, then create a certificate for your PC's LAN address in the folder `%USERPROFILE%\.openjarvis\gateway`: `mkcert -cert-file cert.pem -key-file key.pem <your-PC-IP> localhost`. Never share `key.pem` or mkcert's `rootCA-key.pem`.
+2. Set a password: `uv run --no-sync python tools\gateway.py --set-password`.
+3. Allow the port for your home network only (administrator PowerShell): `netsh advfirewall firewall add rule name="Jarvis Gateway 8443 LAN" dir=in action=allow protocol=TCP localport=8443 remoteip=localsubnet profile=private`.
+4. Start Jarvis as usual (the gateway starts with the other services once a password exists). Open `https://<your-PC-IP>:8443/hud.html` and log in.
+5. iPhone: install mkcert's `rootCA.pem` (public file, send it as `.crt`), then Settings > General > About > Certificate Trust Settings > switch it on. iOS Firefox also needs Settings > Firefox > Local Network. HTTPS is required for the microphone.
+
+Browsers must allow cookies for the login. Five wrong passwords lock that device for 5 minutes. Not tested on every phone size.
+
 ## Memory: Jarvis remembers things
 
 Tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. This is OpenJarvis's own memory service, switched on by `[memory] enabled = true` in `config.toml` (it is on in `config.example.toml`; set it to `false` to turn it off, then restart the server). After each exchange the loaded model picks out durable facts (one extra model call per exchange) and stores them **only on your PC** in `~/.openjarvis/memory_facts.jsonl` (at most 1000, the oldest are dropped). Small models sometimes store wrong facts. When you correct yourself ("I sold the Mini, I now drive a green Golf"), the old fact is replaced: one more model call checks which stored facts the new one contradicts and deletes them (best effort; a small model may occasionally delete a merely related fact).

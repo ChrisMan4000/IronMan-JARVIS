@@ -13,11 +13,12 @@ $svc += @{n='helper-8765'; f='uv'; a='run --no-sync python tools\hwstats.py'; d=
 $wakePy = "$root\tools\npu\.venv\Scripts\python.exe"
 if (Test-Path $wakePy) { $svc += @{n='wake-8766'; f=$wakePy; a='wake_service.py'; d="$root\tools\npu"} }
 $svc += @{n='vite-5173'; f='cmd.exe'; a='/c npm run dev'; d="$root\frontend"}
+if (Test-Path (Join-Path $env:USERPROFILE '.openjarvis\gateway\auth.json')) { $svc += @{n='gateway-8443'; f='uv'; a='run --no-sync python tools\gateway.py'; d=$root} }   # optional LAN/phone gateway (see tools\gateway.py), only after a password was set
 $run = @{}
 function Stop-All {
   $ids = @()
-  $ids += Get-NetTCPConnection -LocalPort 5173,8765,8766 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }
-  $ids += Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'backup-watch\.ps1|hwstats\.py|wake_service\.py' -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }
+  $ids += Get-NetTCPConnection -LocalPort 5173,8765,8766,8443 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }
+  $ids += Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'backup-watch\.ps1|hwstats\.py|wake_service\.py|gateway\.py' -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }
   foreach ($i in ($ids | Sort-Object -Unique)) { taskkill /PID $i /T /F 2>&1 | Out-Null }
 }
 Stop-All

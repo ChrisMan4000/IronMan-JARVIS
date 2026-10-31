@@ -1,12 +1,12 @@
 # Stop Jarvis: stops the supervisor, services, server and LM Studio. The browser is left open. The fan monitor (if installed) stops itself about 6 s later.
 param([switch]$KeepLmStudio)   # -KeepLmStudio: leave LM Studio and its model alone (used by the uninstaller)
 Write-Host "Stopping Jarvis..."
-$pat = 'services\.ps1|backup-watch\.ps1|hwstats\.py|wake_service\.py|jarvis serve'
+$pat = 'services\.ps1|backup-watch\.ps1|hwstats\.py|wake_service\.py|gateway\.py|jarvis serve'
 # 1. supervisor first, so it cannot restart anything
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'services\.ps1' -and $_.ProcessId -ne $PID } | ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>&1 | Out-Null }
 # 2. by port (real python/node/uv children) and by command line (also closes the tabs)
 $ids = @()
-$ids += Get-NetTCPConnection -LocalPort 5173,8000,8765,8766 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }
+$ids += Get-NetTCPConnection -LocalPort 5173,8000,8765,8766,8443 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }
 $ids += Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match $pat -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }
 foreach ($i in ($ids | Sort-Object -Unique)) { taskkill /PID $i /T /F 2>&1 | Out-Null }
 # 2a. delete the stale server PID record (a reused PID blocks the next start)
@@ -27,6 +27,6 @@ $hf = Join-Path $env:USERPROFILE '.openjarvis\terminal-hwnd.txt'
 if (Test-Path $hf) { foreach ($l in (Get-Content $hf -ErrorAction SilentlyContinue)) { if ($l -match '^\d+$') { $h = [IntPtr][int64]$l; if ([W2.S]::IsWindow($h)) { $wins += $h } } }; Remove-Item $hf -ErrorAction SilentlyContinue }
 foreach ($h in ($wins | Sort-Object -Unique)) { [void][W2.S]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
 Start-Sleep 3
-$left = @(Get-NetTCPConnection -LocalPort 5173,8000,8765,8766,1234 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalPort })
+$left = @(Get-NetTCPConnection -LocalPort 5173,8000,8765,8766,8443,1234 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalPort })
 if ($left.Count -eq 0) { Write-Host "Jarvis stopped." } else { Write-Host ("Still listening: " + ($left -join ',')) }
 Start-Sleep 3
