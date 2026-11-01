@@ -1,6 +1,6 @@
 # IronMan J.A.R.V.I.S. – An IronMan-Style Web-Interface with all the Bells & Whistles
 
-*Tony Stark had a billion dollars and a genius brain. I had a free Claude web chat and 36 hours.*
+*Tony Stark had a billion dollars and a genius brain. I had a free Claude web chat and 72 hours.*
 
 ![The IronMan J.A.R.V.I.S. HUD](docs/images/hud-screenshot.png)
 <sub>The HUD at 5120x1440. Click the image to see it full size.</sub>
@@ -15,7 +15,7 @@
 - I am **not a developer**. This is my **first GitHub project**.
 - It took **72 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
 - In other words: I **vibecoded** this whole project with the free version of Claude. No paid plan, no coding background.
-- It runs great on my PC (Nvidia RTX 5090, Intel i9 ultra, 64GB RAM and SSD on Win11). On yours? I am as curious as you are.
+- It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). On yours? I am as curious as you are.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
 ## ✨ What you get
@@ -23,7 +23,7 @@
 The full list of OpenJarvis's own features is here: <https://openjarvis.stanford.edu/#features>. What follows is what this fork adds.
 
 - 🖥️ **Full-screen HUD** with live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections and a glowing 3D brain.
-- 🎙️ **Talk to it.** Say "Hey Jarvis" (optional wake word, [openWakeWord](https://github.com/dscripka/openWakeWord)) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Fast-Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro/Chatterbox). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
+- 🎙️ **Talk to it.** Say "Hey Jarvis" (optional wake word, [openWakeWord](https://github.com/dscripka/openWakeWord)) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (faster-whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro/Chatterbox). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
 - 🏠 **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account, private and free.
 - 🎛️ **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning. The HUD also follows LM Studio by itself: when you load or change a model in LM Studio, the HUD updates to the model that is loaded.
 - 💡 **[Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
