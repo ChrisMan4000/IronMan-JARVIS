@@ -13,9 +13,9 @@
 ## The honest part
 
 - I am **not a developer**. This is my **first GitHub project**.
-- It took **36 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
+- It took **72 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
 - In other words: I **vibecoded** this whole project with the free version of Claude. No paid plan, no coding background.
-- It runs great on my PC. On yours? I am as curious as you are. The installer has **not** been tested on a freshly wiped PC.
+- It runs great on my PC (Nvidia RTX 5090, Intel i9 ultra, 64GB RAM and SSD on Win11). On yours? I am as curious as you are.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
 ## What you get
@@ -23,33 +23,34 @@
 The full list of OpenJarvis's own features is here: <https://openjarvis.stanford.edu/#features>. What follows is what this fork adds.
 
 - **Full-screen HUD** with live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections and a glowing 3D brain.
-- **Talk to it.** Say "Hey Jarvis" (optional wake word, [openWakeWord](https://github.com/dscripka/openWakeWord)) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
-- **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account.
+- **Talk to it.** Say "Hey Jarvis" (optional wake word, [openWakeWord](https://github.com/dscripka/openWakeWord)) or press **F6**. Say "Thanks!" or press **Esc** to stop listening. It listens (Fast-Whisper), thinks (your local model in LM Studio) and answers out loud (Kokoro/Chatterbox). Press **Esc** while it talks and it shuts up. (Saying "stop" works too, but not reliably: speaker echo confuses the microphone. A headset helps.)
+- **Everything local.** The AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account, private and free.
 - **Model control inside the HUD:** switch the LM Studio model, set the context size, toggle reasoning. The HUD also follows LM Studio by itself: when you load or change a model in LM Studio, the HUD updates to the model that is loaded.
 - **[Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights (optional):** "turn off the kitchen lights". Every change is read back from the bridge, so Jarvis cannot just claim it worked.
 - **[Tado](https://www.tado.com/en) heating (optional):** "heating off in the living room".
 - **Two desktop icons:** **Jarvis** starts everything, **Stop Jarvis** shuts everything down again (servers, LM Studio, the helper tabs). The helper programs run hidden in one terminal tab ("Jarvis Services", logs in `%USERPROFILE%\.openjarvis\logs`).
-- **News headlines:** "BBC news" or "Hacker News headlines" with clickable links.
+- **News headlines:** "BBC news" or "Hacker News headlines" with clickable links (which you can customize in Jarvis Web Interface Settings).
 - **Web search (optional):** uses the [Firecrawl Web Data API](https://www.firecrawl.dev/) and needs your own free API key. It also reads a web page or PDF when you give it a link.
 - **Memory:** tell Jarvis "my car is a blue Beetle" and it still knows in the next chat. Stored locally on your PC, you can list or clear it any time (see [Memory](#memory-jarvis-remembers-things)).
 - **Document search (optional):** ask questions about your own files and get sources with links. Needs the LM Studio plugin [*Big RAG*](https://lmstudio.ai/mindstudio/big-rag).
 - **Privacy first:** upstream analytics (PostHog) are **switched off**. All Jarvis ports listen on `127.0.0.1` only. Keys never go into files in this repo.
 - **English only on purpose.** The voice does not pronounce other languages correctly, so speech is set to English.
+- **HUD always shows a 'x% Confidence'** to ensure you know, how much you can trust the answer. Predictions are in _italic_. There's are lights in the top left corner to tell you if web or doc search has been used and reference or links to source articles are always shown as click-able links.
 
 ## What you need
 
 | | |
 |---|---|
 | OS | **Windows 11** and **Windows PowerShell 5** (the blue one that comes with Windows, not PowerShell 7) |
-| GPU | NVIDIA recommended (gauges need `nvidia-smi`). Built on an RTX 5090. Without an NVIDIA GPU the HUD still runs and hides the GPU gauges (tested on a Snapdragon X Elite Surface). Small models can skip the web search tool; the HUD then runs the search itself for weather, news and similar questions. |
+| GPU | NVIDIA recommended (gauges need `nvidia-smi`). Built on an RTX 5090. Without an NVIDIA GPU the HUD still runs and hides the GPU gauges. Small models can skip the web search tool; the HUD then runs the search itself for weather, news and similar questions. |
 | RAM | 64 GB on my PC. 16 GB works with a small model. |
-| Screen | Designed for 5120x1440 ultrawide. Smaller screens get a compact layout (tested at 1366x768). |
+| Screen | Designed for 5120x1440 ultrawide and it's repsonsive. Smaller screens get a compact layout. |
 | Browser | Firefox (what I use). Allow the microphone. |
 | Programs | Git, uv, Node.js, Rust, Windows Terminal, LM Studio. The installer offers to install any that are missing. |
 
 ## Disk space: plan for about 25 GB free
 
-- **3.2 GB** the project folder after install (measured on my PC)
+- **3.2 GB** the project folder after install
 - **about 16 GB** the default model `google/gemma-4-26b-a4b-qat` (small PC? take `google/gemma-4-e2b`, about 4.4 GB)
 - **a few hundred MB** voice model and wake word files
 
