@@ -73,12 +73,12 @@ begin
 end;
 
 var
-  HuePage, TadoPage, WakePage, ModelPage, RagPage, KeyPage: TWizardPage;
-  HueCheck, TadoCheck, WakeCheck, RagCheck: TNewCheckBox;
+  HuePage, TadoPage, WakePage, ModelPage, VoicePage, RagPage, KeyPage: TWizardPage;
+  HueCheck, TadoCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
   HueIpEdit, KeyEdit: TNewEdit;
-  RbExist, RbT1, RbT2, RbT3, RbSkip: TNewRadioButton;
+  RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
   ModelCombo: TNewComboBox;
-  ModelInfo: TNewStaticText;
+  ModelInfo, VoiceInfo: TNewStaticText;
   ModelKeys: TArrayOfString;
   Lbls: array of TNewStaticText;
   CheckList: array of TNewCheckBox;
