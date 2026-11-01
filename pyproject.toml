@@ -228,11 +228,12 @@ openjarvis-eval = "openjarvis.evals.cli:main"
 [tool.hatch.version]
 source = "vcs"
 
+# IronMan-JARVIS: release tags such as v1.0-installer must not be read as a version ("*installer*" excluded below).
 [tool.hatch.version.raw-options]
 tag_regex = '^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$'
 git_describe_command = [
     "git", "describe", "--dirty", "--tags", "--long",
-    "--match", "v[0-9]*", "--exclude", "*dev*", "--exclude", "*rc*", "--exclude", "desktop-*",
+    "--match", "v[0-9]*", "--exclude", "*dev*", "--exclude", "*rc*", "--exclude", "*installer*", "--exclude", "desktop-*",
 ]
 # Builds without a git checkout (e.g. the `COPY src/ src/` Docker stages, which
 # never include .git) can't run `git describe`. Without a fallback that would

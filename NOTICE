@@ -10,6 +10,7 @@ commit 4741d5d (2026-10-23).
 The changes in this fork were vibecoded with the free version of Claude (Anthropic).
 
 Modified OpenJarvis files (each carries a "Modified for the IronMan J.A.R.V.I.S. project" line):
+  pyproject.toml (version lookup ignores release tags like v1.0-installer)
   frontend/src/App.tsx
   frontend/src/components/Chat/InputArea.tsx
   frontend/src/hooks/useSpeech.ts

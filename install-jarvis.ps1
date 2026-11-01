@@ -14,6 +14,8 @@ param(
 )
 $ErrorActionPreference = 'Continue'
 $Repo = $PSScriptRoot
+# a clone inside C:\Windows (an administrator window starts in system32) breaks installs and cannot be written to normally
+if ($Repo -like "$env:windir*") { Write-Host "ERROR: this folder is inside C:\Windows. Open a NORMAL (not administrator) PowerShell, run: cd $env:USERPROFILE ; then clone and run the script again." -ForegroundColor Red; exit 1 }
 $Cfg  = Join-Path $env:USERPROFILE '.openjarvis'
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 function Ask($q) { if ($FromWizard) { return $true }; $a = Read-Host "$q (y/n)"; return ($a -match '^\s*y') }
@@ -97,9 +99,15 @@ Write-Host "Settings file: $cfgFile (analytics are OFF in it)" -ForegroundColor 
 Write-Host ""; Write-Host "Step 4: packages (a few minutes)" -ForegroundColor Cyan
 Status 3 "Installing Python and web packages (a few minutes)"
 rustup default stable
+# a release tag like v1.0-installer breaks the version lookup (hatch-vcs); a fixed build version avoids that for every clone
+$env:SETUPTOOLS_SCM_PRETEND_VERSION = "1.0.0"
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "ERROR: the Python packages could not be installed (uv sync failed). See the red text above. Nothing else was set up." -ForegroundColor Red
+  Signal FAIL uv sync failed; exit 1
+}
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
-uv pip install maxminddb python-tado maturin pdfplumber psutil
+uv pip install maxminddb python-tado maturin pdfplumber psutil huggingface_hub
 # optional speed-up module (Rust). Not built on ARM PCs (Windows blocks the build there); Jarvis works the same without it.
 if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional Rust module is skipped." }
 else {
@@ -287,6 +295,7 @@ if ($ragAsked) {
 Write-Host ""; Write-Host "Step 7: voice model (Kokoro, a few minutes)" -ForegroundColor Cyan
 Status 8 "Downloading the voice model (a few minutes)"
 uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
+if ($LASTEXITCODE -ne 0) { Write-Host "Voice model download failed. Jarvis still works; the first spoken answer will try again." -ForegroundColor Yellow }
 # the voice needs the small English language model of spaCy; install it now (pinned official release) so the first spoken answer does not download it
 uv pip install "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" 2>&1 | Out-Null
 
