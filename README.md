@@ -70,6 +70,9 @@ Download `IronMan-JARVIS-Installer.exe` from the [Releases page](https://github.
 1. Install Git if you do not have it: `winget install --id Git.Git -e`
 2. Open a **normal** (not administrator) PowerShell, go to your home folder (`cd $env:USERPROFILE`) and run:
 
+   > ⚠️ **Do not use an administrator window.** It starts in `C:\Windows\system32`, where the clone ends up in the wrong place and later steps fail (permission errors, `Stop Jarvis` cannot close programs started as administrator). If you see "access denied" or a path with `system32`, close the window, open a normal PowerShell, `cd $env:USERPROFILE` and start again. Only the fan monitor asks for administrator rights by itself (one UAC prompt).
+
+
 ```powershell
 git clone -b ironman https://github.com/ChrisMan4000/IronMan-JARVIS.git
 cd IronMan-JARVIS
