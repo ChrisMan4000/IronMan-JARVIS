@@ -5,7 +5,7 @@ $lines = @()
 $vram = 0
 try { if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) { $vram = [math]::Round([double]((nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>$null | Select-Object -First 1).Trim()) / 1024) } } catch { $vram = 0 }
 $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
-if ($vram -ge 22) { $rec = 3 } elseif ($vram -ge 10) { $rec = 2 } elseif ($vram -eq 0 -and $ram -ge 24) { $rec = 2 } else { $rec = 1 }
+if ($vram -ge 22) { $rec = 3 } elseif ($vram -ge 10) { $rec = 2 } else { $rec = 1 }
 $lines += "REC|$rec|$vram|$ram"
 $lms = $null
 if (Get-Command lms -ErrorAction SilentlyContinue) { $lms = 'lms' } elseif (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe") { $lms = "$env:USERPROFILE\.lmstudio\bin\lms.exe" }

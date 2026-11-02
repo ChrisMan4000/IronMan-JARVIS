@@ -193,6 +193,24 @@ if (-not $lmsCmd -and $FromWizard) {
 if (-not $lmsCmd) {
   Write-Host "  LM Studio command 'lms' not found. Open LM Studio once, run: lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
 } else {
+  # ARM PCs (Snapdragon): LM Studio picks the x86 Vulkan engine, which runs emulated and is very slow (3.7 tokens/s reading the prompt on a Surface).
+  # Select its ARM64 CPU engine instead (the file below is what LM Studio's runtime setting writes). LM Studio must be closed while it is written.
+  if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') {
+    try {
+      $bk = Join-Path $env:USERPROFILE '.lmstudio\extensions\backends'
+      $vers = @(Get-ChildItem $bk -Directory -Filter 'llama.cpp-win-arm64-*' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name -replace '^llama\.cpp-win-arm64-', '' })
+      $ver = $null; if ($vers -contains '2.54.0') { $ver = '2.54.0' } elseif ($vers.Count -gt 0) { $ver = ($vers | Sort-Object { [version]$_ } | Select-Object -First 1) }   # 2.54.0 is the one that worked on a Surface; the newest ARM engine failed its hardware survey there
+      if ($ver) {
+        Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 2
+        $pf = Join-Path $env:USERPROFILE '.lmstudio\.internal\backend-preferences-v2.json'
+        $o = [ordered]@{ formatDefaults = [ordered]@{}; versions = [ordered]@{} }
+        if (Test-Path $pf) { try { $j = Get-Content $pf -Raw | ConvertFrom-Json; if ($j.formatDefaults) { $j.formatDefaults.PSObject.Properties | ForEach-Object { $o.formatDefaults[$_.Name] = $_.Value } }; if ($j.versions) { $j.versions.PSObject.Properties | ForEach-Object { $o.versions[$_.Name] = $_.Value } } } catch { } }
+        $o.formatDefaults['gguf'] = 'llama.cpp-win-arm64'; $o.versions['llama.cpp-win-arm64'] = $ver
+        [System.IO.File]::WriteAllText($pf, ($o | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "  ARM PC: LM Studio engine set to llama.cpp-win-arm64 $ver (much faster than the emulated x86 engine)." -ForegroundColor Green
+      }
+    } catch { Write-Host "  Could not select the ARM engine: $($_.Exception.Message). In LM Studio: Runtime > GGUF > CPU llama.cpp (Windows ARM)." -ForegroundColor Yellow }
+  }
   $chosen = $null
   $have = @(Get-LlmList)
   # optional: a newer model found online (Hugging Face), downloaded and tested for tool calls; on failure the normal choice below is used
@@ -254,10 +272,10 @@ if (-not $lmsCmd) {
     $vram = 0
     if (Have nvidia-smi) { try { $vram = [math]::Round([double]((nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>$null | Select-Object -First 1).Trim()) / 1024) } catch { $vram = 0 } }
     $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
-    if ($vram -ge 22) { $rec = 3 } elseif ($vram -ge 10) { $rec = 2 } elseif ($vram -eq 0 -and $ram -ge 24) { $rec = 2 } else { $rec = 1 }
+    if ($vram -ge 22) { $rec = 3 } elseif ($vram -ge 10) { $rec = 2 } else { $rec = 1 }   # no NVIDIA card: the small model (bigger ones are far too slow on the processor)
     Write-Host ("  Your PC: GPU memory {0} GB, RAM {1} GB" -f $vram, $ram)
     $tiers = @(
-      @{ id = 'qwen/qwen3-4b-2507';           gb = 2.5;  note = 'small and fast, fine for weak PCs, simpler answers' },
+      @{ id = 'lmstudio-community/Qwen3.5-2B-GGUF'; gb = 1.5;  note = 'small and fast, for PCs without a graphics card (answers in about 10 s on a Snapdragon laptop)' },
       @{ id = 'google/gemma-4-12b-qat';       gb = 6.7;  note = 'good balance for 12-16 GB graphics cards' },
       @{ id = 'google/gemma-4-26b-a4b-qat';   gb = 14.6; note = 'best quality, the default (needs about 24 GB or more GPU memory)' }
     )
@@ -269,6 +287,7 @@ if (-not $lmsCmd) {
     else { $t = (Read-Host "  Which one should I download? (1-3, Enter = $rec, s = skip)").Trim(); if ($t -eq '') { $t = "$rec" } }
     if ($t -match '^[123]$') {
       $id = $tiers[[int]$t - 1].id
+      $beforeKeys = @(Get-LlmList | ForEach-Object { $_.modelKey })
       Write-Host "  Downloading $id (about $($tiers[[int]$t - 1].gb) GB, can take a while)..." -ForegroundColor Cyan
       if ($FromWizard) {
         Status 6 "Downloading $id (about $($tiers[[int]$t - 1].gb) GB). This can take a very long time, please wait"
@@ -280,7 +299,8 @@ if (-not $lmsCmd) {
         }
       } else { & $lmsCmd get $id -y }
       Write-Host "  lms get finished with code $LASTEXITCODE"
-      if (@(Get-LlmList | Where-Object { $_.modelKey -eq $id }).Count -gt 0) { $chosen = $id }
+      $newK = @(Get-LlmList | Where-Object { $_.modelKey -eq $id -or ($beforeKeys -notcontains $_.modelKey) } | Select-Object -First 1)   # a Hugging Face id gets another model key in LM Studio: find the new one
+      if ($newK.Count -gt 0) { $chosen = $newK[0].modelKey }
       else { Write-Host "  Could not confirm the download. Try by hand: lms get $id   (or search in the LM Studio app), then run this script again." -ForegroundColor Yellow }
     } else { Write-Host "  Skipped. Download a model in LM Studio yourself, or run this script again." }
   }

@@ -35,7 +35,7 @@ $VoiceWhisperOptions = @(
 
 # $llm = size in GB of the language model that will share the graphics card (-1 = guess from the card size)
 function Get-VoiceRec($hw, [double]$llm) {
-  if ($llm -lt 0) { if ($hw.Vram -ge 22) { $llm = 14.6 } elseif ($hw.Vram -ge 10) { $llm = 6.7 } else { $llm = 2.5 } }
+  if ($llm -lt 0) { if ($hw.Vram -ge 22) { $llm = 14.6 } elseif ($hw.Vram -ge 10) { $llm = 6.7 } else { $llm = 1.5 } }
   # the language model needs its file size plus about 1.5 GB for the context (26B model: file 14.6 GB, measured 15.9 GB)
   $free = [double]$hw.Vram - ($llm + 1.5)
   $chat = ($hw.Nvidia -and ($free -ge 9))                   # Chatterbox about 4 GB + Whisper small or more + safety margin

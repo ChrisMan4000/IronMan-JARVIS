@@ -44,7 +44,7 @@ const
   CCyan   = $FFD319;   { #19d3ff }
   COrange = $3D9AFF;   { #ff9a3d }
   CText   = $F5E9BF;   { #bfe9f5 }
-  T1Text  = 'About 2.5 GB   qwen/qwen3-4b-2507   (small and fast, simpler answers)';
+  T1Text  = 'About 1.5 GB   lmstudio-community/Qwen3.5-2B-GGUF   (small and fast, for PCs without a graphics card)';
   T2Text  = 'About 6.7 GB   google/gemma-4-12b-qat   (good balance for 12-16 GB graphics cards)';
   T3Text  = 'About 14.6 GB   google/gemma-4-26b-a4b-qat   (best quality, needs about 24 GB GPU memory)';
   K1Text  = 'Kokoro   (one size only, 82 million parameters; light, runs on any PC, about 0.3 GB)';
@@ -543,7 +543,7 @@ begin
       begin
         Delete(L, 1, 4);
         Tier := StrToIntDef(NextField(L), 1);
-        if Tier = 3 then RecId := 'google/gemma-4-26b-a4b-qat' else if Tier = 2 then RecId := 'google/gemma-4-12b-qat' else RecId := 'qwen/qwen3-4b-2507';
+        if Tier = 3 then RecId := 'google/gemma-4-26b-a4b-qat' else if Tier = 2 then RecId := 'google/gemma-4-12b-qat' else RecId := 'qwen3.5-2b';
         Gpu := NextField(L);
         Ram := NextField(L);
       end
@@ -557,7 +557,7 @@ begin
           ModelKeys[N] := F;
           SetArrayLength(ModelGBs, N + 1);
           ModelGBs[N] := L;
-          if F = RecId then begin RecIdx := N; ModelCombo.Items.Add(F + '  (' + L + ' GB)   <-- recommended'); end
+          if (F = RecId) or ((Tier = 1) and (Pos(RecId, LowerCase(F)) > 0) and (Pos('uncensored', LowerCase(F)) = 0)) then begin RecIdx := N; ModelCombo.Items.Add(F + '  (' + L + ' GB)   <-- recommended'); end
           else ModelCombo.Items.Add(F + '  (' + L + ' GB)');
         end;
       end;
@@ -629,7 +629,7 @@ begin
   Gb := '-1';
   if RbOnYes.Checked and (OnlineGB <> '') then Gb := OnlineGB
   else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Gb := ModelGBs[ModelCombo.ItemIndex]
-  else if RbT1.Checked then Gb := '2.5'
+  else if RbT1.Checked then Gb := '1.5'
   else if RbT2.Checked then Gb := '6.7'
   else if RbT3.Checked then Gb := '14.6';
   if Gb = VoiceRecKey then Exit;
@@ -699,7 +699,7 @@ begin
   if WakeCheck.Checked then S := S + Space + 'Wake word "Hey Jarvis"' + NewLine;
   if RbOnYes.Checked and (OnlineRepo <> '') then M := 'newest found online' + NewLine + Space + Space + OnlineRepo + ' (about ' + OnlineGB + ' GB)' + NewLine + Space + Space + '(tested after the download)'
   else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
-  else if RbT1.Checked then M := 'download about 2.5 GB'
+  else if RbT1.Checked then M := 'download about 1.5 GB'
   else if RbT2.Checked then M := 'download about 6.7 GB'
   else if RbT3.Checked then M := 'download about 14.6 GB'
   else M := 'none (later in LM Studio)';

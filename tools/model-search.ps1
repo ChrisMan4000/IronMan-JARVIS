@@ -14,7 +14,7 @@ try {
     if ($smi) { try { $v = (& $smi --query-gpu=memory.total --format=csv,noheader,nounits 2>$null | Select-Object -First 1); if ($v) { $Vram = [math]::Round([double]("$v".Trim()) / 1024) } } catch { $Vram = 0 } }
   }
   if ($Ram -lt 0) { $Ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB) }
-  if ($Vram -ge 4) { $budget = $Vram * 0.75 - 1 } else { $budget = [math]::Min($Ram * 0.3, 8) }   # leaves room for the context, Whisper and the voice
+  if ($Vram -ge 4) { $budget = $Vram * 0.75 - 1 } else { $budget = [math]::Min($Ram * 0.3, 2) }   # processor only: about 2 GB (a 2B model); bigger ones took minutes per answer on a Snapdragon laptop   # leaves room for the context, Whisper and the voice
   $list = Invoke-RestMethod -Uri 'https://huggingface.co/api/models?author=lmstudio-community&sort=createdAt&direction=-1&limit=100' -TimeoutSec 25
   $family = '(?i)qwen|gemma|llama|gpt-oss|mistral|ministral|glm|granite|hermes|phi|nemotron'   # families known to call tools
   $skip = '(?i)embed|vl|vision|coder|guard|reward|ocr|base|distill|r1'
@@ -26,7 +26,7 @@ try {
     $pm = [regex]::Match(($id -split '/')[-1], '(?<![\d.])(\d+(?:\.\d+)?)[bB](?![a-zA-Z])')
     if (-not $pm.Success) { continue }
     $gb = [math]::Round([double]::Parse($pm.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture) * 0.62 + 0.5, 1)
-    if ($gb -gt $budget -or $gb -lt 2) { continue }
+    if ($gb -gt $budget -or $gb -lt 1) { continue }
     $date = "$($m.createdAt)".Substring(0, [math]::Min(10, "$($m.createdAt)".Length))
     if (-not $best -or $gb -gt $best.gb) { $best = @{ id = $id; gb = $gb; date = $date } }
   }
