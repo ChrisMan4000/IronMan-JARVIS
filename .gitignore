@@ -140,3 +140,6 @@ tado-token.json
 tools/dbip.mmdb
 tools/npu/.venv/
 tools/npu/models/
+
+# desloppify scan state
+.desloppify/
