@@ -360,7 +360,9 @@ procedure InitializeWizard;
 var Y, N: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
-  WizardForm.WizardSmallBitmapImage.Left := WizardForm.WizardSmallBitmapImage.Left - ScaleX(22);   { logo a bit more to the left }
+  WizardForm.WizardSmallBitmapImage.Left := WizardForm.WizardSmallBitmapImage.Left - ScaleX(14);   { logo a bit more to the left }
+  WizardForm.PageNameLabel.Width := WizardForm.WizardSmallBitmapImage.Left - WizardForm.PageNameLabel.Left - ScaleX(8);   { the texts must not cover the logo }
+  WizardForm.PageDescriptionLabel.Width := WizardForm.WizardSmallBitmapImage.Left - WizardForm.PageDescriptionLabel.Left - ScaleX(8);
   StatusPath := ExpandConstant('{tmp}\jarvis-status.txt');
   ModelsDetected := False;
   SetupCode := 0;
@@ -383,7 +385,7 @@ begin
   { Tado }
   TadoPage := NewPage(HuePage.ID, 'Tado Smart Heating (optional)', 'Control your Tado radiator valves.');
   Y := 0;
-  AddText(TadoPage, Y, 'Lets Jarvis set or switch off your Tado heating ("heating off in the living room"). Needs a Tado account. Your browser opens once so you can approve the login.', CText, False);
+  AddText(TadoPage, Y, 'Lets Jarvis set or switch off your Tado heating ("heating off in the living room"). Needs a Tado account. Your browser opens once later, so you can approve the login.', CText, False);
   AddLink(TadoPage, Y, 'Tado Smart Heating', 'https://www.tado.com/en');
   TadoCheck := AddCheck(TadoPage, Y, 'Use Tado Smart Heating');
 
@@ -449,7 +451,7 @@ begin
   Y := Y + ScaleY(30);
 
   { document search }
-  RagPage := NewPage(TtsPage.ID, 'Document search (optional, experimental)', 'Ask questions about your own PDF, Word and text files.');
+  RagPage := NewPage(TtsPage.ID, 'Document search (optional)', 'Ask questions about your own PDF, Word and text files.');
   Y := 0;
   AddText(RagPage, Y, 'Uses the LM Studio plugin Big RAG to index your files. Indexing thousands of files takes hours and the feature is fussy. You finish its setup inside LM Studio afterwards.', CText, False);
   AddLink(RagPage, Y, 'Big RAG plugin', 'https://lmstudio.ai/mindstudio/big-rag');
@@ -484,9 +486,10 @@ begin
 end;
 
 procedure DetectModels;
-var Lines: TArrayOfString; I, N, Rc, Tier: Integer; L, F, Gpu, Ram, Tmp, Mark, M: String;
+var Lines: TArrayOfString; I, N, Rc, Tier, RecIdx: Integer; L, F, Gpu, Ram, Tmp, Mark, M, RecId: String;
 begin
   ModelsDetected := True;
+  RecIdx := -1; RecId := '';
   Tier := 1; Gpu := '0'; Ram := '?';
   Tmp := ExpandConstant('{tmp}\llms.txt');
   ExtractTemporaryFile('list-llms.ps1');
@@ -499,6 +502,7 @@ begin
       begin
         Delete(L, 1, 4);
         Tier := StrToIntDef(NextField(L), 1);
+        if Tier = 3 then RecId := 'google/gemma-4-26b-a4b-qat' else if Tier = 2 then RecId := 'google/gemma-4-12b-qat' else RecId := 'qwen/qwen3-4b-2507';
         Gpu := NextField(L);
         Ram := NextField(L);
       end
@@ -512,7 +516,8 @@ begin
           ModelKeys[N] := F;
           SetArrayLength(ModelGBs, N + 1);
           ModelGBs[N] := L;
-          ModelCombo.Items.Add(F + '  (' + L + ' GB)');
+          if F = RecId then begin RecIdx := N; ModelCombo.Items.Add(F + '  (' + L + ' GB)   <-- recommended'); end
+          else ModelCombo.Items.Add(F + '  (' + L + ' GB)');
         end;
       end;
     end;
@@ -528,8 +533,9 @@ begin
   begin
     RbExist.Enabled := True;
     SetRadioLook(RbExist);
-    ModelCombo.ItemIndex := 0;
+    if RecIdx >= 0 then ModelCombo.ItemIndex := RecIdx else ModelCombo.ItemIndex := 0;
     RbExist.Checked := True;
+    if RecIdx >= 0 then ModelInfo.Caption := M + #13#10 + 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended model is already in LM Studio (marked in the list).';
   end;
   ModelRadioClick(nil);
 end;
