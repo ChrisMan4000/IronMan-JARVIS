@@ -84,7 +84,7 @@ var
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
   ModelCombo, WhisperCombo: TNewComboBox;
   ClipEdit: TNewEdit;
-  ClipHint: TNewStaticText;
+  ClipHint, ModelTip: TNewStaticText;
   OnlinePage: TWizardPage;
   OnlineBtn: TNewButton;
   OnlineInfo: TNewStaticText;
@@ -423,6 +423,8 @@ begin
   RbT2 := AddRadio(ModelPage, Y, T2Text);
   RbT3 := AddRadio(ModelPage, Y, T3Text);
   RbSkip := AddRadio(ModelPage, Y, 'Skip (I will download a model in LM Studio myself)');
+  ModelTip := AddText(ModelPage, Y, 'Tip: the next step can search online for the newest models, if you like.', CText, False);
+  ModelTip.Font.Style := [fsItalic];
   RbExist.Enabled := False;
   SetRadioLook(RbExist);
   RbT1.Checked := True;
