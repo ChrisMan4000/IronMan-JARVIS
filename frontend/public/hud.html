@@ -512,7 +512,7 @@ function plot(d,x,y,w,h,col,t){g.strokeStyle=col;g.lineWidth=1.8*u;g.beginPath()
     const yy=y+h/2-Math.max(-1,Math.min(1,v))*h/2;i?g.lineTo(x+i,yy):g.moveTo(x+i,yy)}g.stroke()}
 const tcol=(t,c)=>t>80?'#ff4d4d':t>65?'#ff9a3d':c;
 
-const MAX_FPS=30;let lastDraw=0;
+let MAX_FPS=30;let lastDraw=0;
 let WOT=null,WOK='';
 function wearOv(){const W=innerWidth,Hh=innerHeight,k=W+'x'+Hh;
 if(WOK!==k){WOK=k;const cv=document.createElement('canvas');cv.width=W;cv.height=Hh;const o=cv.getContext('2d'),r=Math.random,uu=Hh/1440;
@@ -623,7 +623,7 @@ const tr=state==='thinking'?5:state==='speaking'?2.4:state==='listening'?1.7:0.9
 B.rate+=(tr+level*2-B.rate)*0.04;B.ph+=dt*B.rate*2;
 const br=0.5+0.5*Math.sin(B.ph),S=1+0.05*br+level*0.06,RS=R*S,sp=0.6+B.rate*0.4;
 Rc=RS*2.1;rot=t/6000*sp;window.RING={x:cx,y:cy,r:RS*2.1+20*u};
-NOG=hwOk&&!hw.gpu;const gq=hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
+NOG=hwOk&&!hw.gpu;MAX_FPS=NOG?12:30;const gq=hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
 const P=(r,a)=>[cx+cs(a)*r,cy+sn(a)*r];
 const A=(r,a0,a1,w,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;arc(cx,cy,r,a0,a1)};
 const T=(r,n,len,a0,w,every,len2,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;
