@@ -291,7 +291,10 @@ async function speak(t){
   const parts=(spoken.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)||[spoken]).map(x=>x.trim()).filter(Boolean);
   const chunks=[];let cur='';
   for(const p of parts){cur+=(cur?' ':'')+p;if(cur.length>=40){chunks.push(cur);cur=''}}
-  if(cur)chunks.push(cur);if(chunks[0].length>70){const m=chunks[0].slice(25).search(/[,;:]/);if(m>=0){const k=26+m;const a=chunks[0].slice(0,k).trim(),b=chunks[0].slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}
+  if(cur)chunks.push(cur);{ // the first piece is kept short so the voice starts sooner (shorter still on a PC without a GPU); the rest follows while it plays
+    const lim=NOG?30:45,c0=chunks[0];
+    if(c0.length>lim+10){let k=-1;const m=c0.slice(10,lim+20).search(/[,;:]/);if(m>=0)k=11+m;else{const sp=c0.lastIndexOf(' ',lim);if(sp>=10)k=sp}
+      if(k>0){const a=c0.slice(0,k).trim(),b=c0.slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}}
   const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x})});
     if(!r.ok)throw new Error('Speech failed: '+r.status);return ctx.decodeAudioData(await r.arrayBuffer())};
   window.MICMX=0;window.MICPK=0;interrupted=false;const stopB=await bargeStart();
