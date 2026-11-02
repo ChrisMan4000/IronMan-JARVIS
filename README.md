@@ -57,6 +57,7 @@ The full list of OpenJarvis's own features is here: <https://openjarvis.stanford
 - **3.2 GB** the project folder after install
 - **about 16 GB** the default model `google/gemma-4-26b-a4b-qat` (small PC? take `google/gemma-4-e2b`, about 4.4 GB)
 - **a few hundred MB** voice model and wake word files
+- **Optional, about 12 GB more:** the better voice (GPU Whisper and Chatterbox, see "Optional: better voice" below, not set up by the installer): about 6 GB of extra packages in the project folder and about 6.5 GB of voice model downloads. Measured on my PC with it set up: project folder 9.2 GB, voice model cache 6.9 GB.
 
 ## 🚀 Install
 
