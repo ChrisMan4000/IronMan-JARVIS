@@ -76,6 +76,7 @@ def query(h):
 
 
 # ---------------------------------------------------------------- CPU / network / GPU sampling
+
 class FT(ctypes.Structure):
     _fields_ = [("lo", wintypes.DWORD), ("hi", wintypes.DWORD)]
 
@@ -711,6 +712,13 @@ def bench_loop():
 threading.Thread(target=bench_loop, daemon=True).start()
 
 
+# Optional local additions: a file hwstats_private.py next to this one (not part of the repo) can add routes.
+try:
+    import hwstats_private as _private
+    PRIVATE_ROUTES = _private.setup(globals())
+except ImportError:
+    PRIVATE_ROUTES = {}
+
 class H(BaseHTTPRequestHandler):
     """Routes GET requests. Anything with a wrong Host header is refused first."""
 
@@ -718,6 +726,8 @@ class H(BaseHTTPRequestHandler):
         if not host_ok(self):
             return send(self, 403, {"error": "bad host"})
         path = urllib.parse.urlparse(self.path).path
+        if path in PRIVATE_ROUTES:
+            return PRIVATE_ROUTES[path](self)
         if path == "/tado":
             return serve_tado(self)
         if path == "/hue":
