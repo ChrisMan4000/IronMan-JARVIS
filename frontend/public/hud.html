@@ -285,7 +285,11 @@ async function bargeStart(){
 async function speak(t){
   const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>]/g,'').replace(/\s+/g,' ').trim();   // links are not read aloud (markdown links keep their text)
   if(!clean||!on)return;
-  const parts=(clean.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)||[clean]).map(x=>x.trim()).filter(Boolean);
+  // the source list is never read aloud; on a PC without a GPU only the first sentences are read (the whole answer stays on screen), so the voice does not run for minutes
+  let spoken=clean.replace(/\s*\bSources?:.*$/i,'').trim();
+  if(NOG&&spoken.length>350){const cut=spoken.slice(0,350),k=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('! '),cut.lastIndexOf('? '));spoken=k>120?cut.slice(0,k+1):cut}
+  if(!spoken)return;
+  const parts=(spoken.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)||[spoken]).map(x=>x.trim()).filter(Boolean);
   const chunks=[];let cur='';
   for(const p of parts){cur+=(cur?' ':'')+p;if(cur.length>=40){chunks.push(cur);cur=''}}
   if(cur)chunks.push(cur);if(chunks[0].length>70){const m=chunks[0].slice(25).search(/[,;:]/);if(m>=0){const k=26+m;const a=chunks[0].slice(0,k).trim(),b=chunks[0].slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}
