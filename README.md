@@ -8,17 +8,17 @@
 ![The same HUD, with an orange box on every panel telling you where its data comes from](docs/images/hud-annotated.png)
 <sub>Every orange box says where that panel gets its data. The full list is further down.</sub>
 
-> **Credit where it is due:** this is a **fork of [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (Apache-2.0). The brain, the server and the engine are theirs. I added the full-screen HUD, voice, smart-home tools and installer on top. Please go give the original project a star. The original README is in [docs/OPENJARVIS-README.md](docs/OPENJARVIS-README.md).
+> <sub><i>**Credit where it is due:** this is a **fork of [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (Apache-2.0). The brain, the server and the engine are theirs. I added the full-screen HUD, voice, smart-home tools and installer on top. Please go give the original project a star. The original README is in [docs/OPENJARVIS-README.md](docs/OPENJARVIS-README.md).</i></sub>
 
 <p align="center">
-  <a href="https://github.com/ChrisMan4000/IronMan-JARVIS/releases/latest/download/IronMan-JARVIS-Installer.exe"><img src="docs/images/install-button.svg" alt="Install J.A.R.V.I.S. (download IronMan-JARVIS-Installer.exe for Windows 11)" width="280"></a>
+  <a href="https://github.com/ChrisMan4000/IronMan-JARVIS/releases/latest/download/IronMan-JARVIS-Installer.exe"><img src="docs/images/install-button.svg" alt="Install J.A.R.V.I.S. (download IronMan-JARVIS-Installer.exe for Windows 11)" width="350"></a>
 </p>
 
 ## 🤝 The honest part
 
-> 🏹 **Why bother running it locally?** Samuele Marro calls this kind of thing a [countervailing technology](https://www.lesswrong.com/posts/TuBYwefHQLDXttwdP/countervailing-technologies): a tool that moves power back towards the little guy, works without anyone's permission and is free.
+> <i>🏹 **Why bother running it locally?** Samuele Marro calls this kind of thing a [countervailing technology](https://www.lesswrong.com/posts/TuBYwefHQLDXttwdP/countervailing-technologies): a tool that moves power back towards the little guy, works without anyone's permission and is free.</i>
 >
-> The crossbow let townspeople stand up to armoured knights. Local AI lets one guy with a computer stand up to the Cloud. Nobody can switch it off, charge for it or read along. Jarvis is my little crossbow.
+> <i>The crossbow let townspeople stand up to armoured knights. Local AI lets one guy with a computer stand up to the Cloud. Nobody can switch it off, charge for it or read along. Jarvis is my little crossbow.</i>
 
 - I am **not a developer**. This is my **first GitHub project**.
 - It took **72 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
