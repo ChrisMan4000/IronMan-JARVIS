@@ -223,6 +223,14 @@ begin
   Y := Y + ScaleY(26);
 end;
 
+{ the wizard is a 32-bit program: a plain powershell.exe would be the 32-bit one and cannot see nvidia-smi in System32 }
+function PsExe: String;
+begin
+  Result := 'powershell.exe';
+  if FileExists(ExpandConstant('{win}\Sysnative\WindowsPowerShell\v1.0\powershell.exe')) then
+    Result := ExpandConstant('{win}\Sysnative\WindowsPowerShell\v1.0\powershell.exe');
+end;
+
 function AddRadio(Page: TWizardPage; var Y: Integer; const Txt: String): TNewRadioButton;
 var L: TNewStaticText; N: Integer;
 begin
@@ -241,6 +249,7 @@ begin
   Result.Tag := GetArrayLength(Lbls) - 1;   { index of this radio's label }
   L.OnClick := @RadioLabelClick;
   Y := Y + L.Height + ScaleY(6);
+  if L.Height < ScaleY(30) then Y := Y + ScaleY(15);   { a one-line label can wrap when the mark is added }
 end;
 
 procedure SetRadioText(R: TNewRadioButton; const Txt: String);
@@ -351,6 +360,7 @@ procedure InitializeWizard;
 var Y, N: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
+  WizardForm.WizardSmallBitmapImage.Left := WizardForm.WizardSmallBitmapImage.Left - ScaleX(22);   { logo a bit more to the left }
   StatusPath := ExpandConstant('{tmp}\jarvis-status.txt');
   ModelsDetected := False;
   SetupCode := 0;
@@ -480,7 +490,7 @@ begin
   Tier := 1; Gpu := '0'; Ram := '?';
   Tmp := ExpandConstant('{tmp}\llms.txt');
   ExtractTemporaryFile('list-llms.ps1');
-  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\list-llms.ps1') + '" -Out "' + Tmp + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\list-llms.ps1') + '" -Out "' + Tmp + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
   if LoadStringsFromFile(Tmp, Lines) then
     for I := 0 to GetArrayLength(Lines) - 1 do
     begin
@@ -538,7 +548,7 @@ begin
   Tmp := ExpandConstant('{tmp}\voicerec.txt');
   DeleteFile(Tmp);
   ExtractTemporaryFile('voice-rec.ps1');
-  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\voice-rec.ps1') + '" -RecOut "' + Tmp + '" -RecLlmGB ' + Gb, '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\voice-rec.ps1') + '" -RecOut "' + Tmp + '" -RecLlmGB ' + Gb, '', SW_HIDE, ewWaitUntilTerminated, Rc);
   RecWhisper := 'base'; RecTts := 'kokoro'; HasNvidia := False;
   Vram := '0'; Ram := '?'; Nv := '0'; FreeGb := '0';
   if LoadStringsFromFile(Tmp, Lines) then
@@ -607,7 +617,7 @@ begin
   S := S + Space + 'Speech recognition: Whisper ' + WhisperId(WhisperCombo.ItemIndex) + NewLine;
   if VoiceRbChatterbox.Checked then
   begin
-    S := S + Space + 'Voice: Chatterbox (installs several GB of graphics card packages and can take a long time)';
+    S := S + Space + 'Voice: Chatterbox' + NewLine + Space + Space + '(several GB of graphics card packages, can take long)';
     if Trim(ClipEdit.Text) <> '' then S := S + ', your own voice clip';
     S := S + NewLine;
   end
@@ -618,9 +628,9 @@ begin
     S := S + Space + 'LM Studio: already installed' + NewLine
   else
     S := S + Space + 'LM Studio: will be installed' + NewLine;
-  S := S + Space + 'Fan monitor (LibreHardwareMonitor): installed for the HUD fan panel, Windows asks for administrator permission once' + NewLine;
-  if (not RbSkip.Checked) and (not RbExist.Checked) then S := S + Space + '(a model download of several GB can take a very long time; the setup waits for it)' + NewLine;
-  S := S + NewLine + 'Other missing programs (Git, uv, Node.js, Rust, Windows Terminal) are installed with winget; Windows may ask for permission.';
+  S := S + Space + 'Fan monitor (LibreHardwareMonitor) for the HUD fan panel' + NewLine + Space + Space + '(Windows asks for administrator permission once)' + NewLine;
+  if (not RbSkip.Checked) and (not RbExist.Checked) then S := S + Space + '(a model download of several GB can take a very long' + NewLine + Space + 'time; the setup waits for it)' + NewLine;
+  S := S + NewLine + 'Other missing programs (Git, uv, Node.js, Rust,' + NewLine + 'Windows Terminal) are installed with winget;' + NewLine + 'Windows may ask for permission.';
   Result := S;
 end;
 
@@ -692,7 +702,7 @@ begin
     DeleteFile(StatusPath);
     { the command runs the script, then writes its exit code as an EXIT line (single quotes inside, no $ expansion by Inno) }
     Params := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "$PID | Set-Content -LiteralPath ''' + StatusPath + '.pid''; & ''' + ExpandConstant('{app}\install-jarvis.ps1') + ''' -FromWizard -StatusFile ''' + StatusPath + '''' + Opts + '; Add-Content -LiteralPath ''' + StatusPath + ''' (''EXIT|'' + $LASTEXITCODE)"';
-    if not Exec('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewNoWait, Rc) then
+    if not Exec(PsExe, Params, ExpandConstant('{app}'), SW_HIDE, ewNoWait, Rc) then
     begin
       Code := -1;
       Break;
@@ -754,7 +764,7 @@ begin
   begin
     { 1. stop everything that runs from the folder (otherwise Windows keeps its files locked); LM Studio is left running }
     if FileExists(ExpandConstant('{app}\tools\stop-jarvis.ps1')) then
-      Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\stop-jarvis.ps1') + '" -KeepLmStudio', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+      Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\stop-jarvis.ps1') + '" -KeepLmStudio', '', SW_HIDE, ewWaitUntilTerminated, Rc);
     { 2. the two desktop icons made by the setup script }
     Desk := ExpandConstant('{userdesktop}');
     DeleteFile(Desk + '\Jarvis.lnk');
