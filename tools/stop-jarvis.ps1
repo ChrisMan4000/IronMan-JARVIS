@@ -19,13 +19,23 @@ if (-not $KeepLmStudio) {
   Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force
 }
 # 4. close only the Jarvis terminal window (by its tab title); other terminal windows are left alone
-Add-Type -Namespace W2 -Name S -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t); [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l); [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);'
+Add-Type -Namespace W2 -Name S -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t); [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l); [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr p, IntPtr a, string c, string t); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
 $wins = @()
 foreach ($tt in 'Jarvis Server 8000','Jarvis Services') { $h = [W2.S]::FindWindow([NullString]::Value, $tt); if ($h -ne [IntPtr]::Zero) { $wins += $h } }
 # the window the launcher remembered (its title may have changed after the programs in it were killed)
 $hf = Join-Path $env:USERPROFILE '.openjarvis\terminal-hwnd.txt'
 if (Test-Path $hf) { foreach ($l in (Get-Content $hf -ErrorAction SilentlyContinue)) { if ($l -match '^\d+$') { $h = [IntPtr][int64]$l; if ([W2.S]::IsWindow($h)) { $wins += $h } } }; Remove-Item $hf -ErrorAction SilentlyContinue }
-foreach ($h in ($wins | Sort-Object -Unique)) { [void][W2.S]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
+# Windows Terminal asks "Close all tabs?" when a window with several tabs is closed. Everything in the Jarvis window is already stopped,
+# so end that window's own Windows Terminal process (each window has its own process); other terminal windows are never touched.
+$wtCount = @{}
+$cur = [IntPtr]::Zero
+do { $cur = [W2.S]::FindWindowEx([IntPtr]::Zero, $cur, 'CASCADIA_HOSTING_WINDOW_CLASS', $null); if ($cur -ne [IntPtr]::Zero) { $wp = [uint32]0; [void][W2.S]::GetWindowThreadProcessId($cur, [ref]$wp); $wtCount[[int]$wp] = 1 + [int]$wtCount[[int]$wp] } } while ($cur -ne [IntPtr]::Zero)
+foreach ($h in ($wins | Sort-Object -Unique)) {
+  $wp = [uint32]0; [void][W2.S]::GetWindowThreadProcessId($h, [ref]$wp)
+  $pn = (Get-Process -Id ([int]$wp) -ErrorAction SilentlyContinue).ProcessName
+  if ($pn -eq 'WindowsTerminal' -and $wtCount[[int]$wp] -eq 1) { taskkill /PID ([int]$wp) /F 2>&1 | Out-Null }
+  else { [void][W2.S]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
+}
 Start-Sleep 3
 $left = @(Get-NetTCPConnection -LocalPort 5173,8000,8765,8766,8443,1234 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalPort })
 if ($left.Count -eq 0) { Write-Host "Jarvis stopped." } else { Write-Host ("Still listening: " + ($left -join ',')) }
