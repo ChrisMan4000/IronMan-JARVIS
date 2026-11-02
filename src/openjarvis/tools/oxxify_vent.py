@@ -117,10 +117,18 @@ def _int(b) -> int:
 def read_status(ip: str, dev_id: str, pwd: str) -> dict:
     ask = bytes([P_POWER, P_SPEED, P_BOOST, P_TIMER, P_HUM_ON, P_HUM_SET, P_HUM, P_MANUAL, P_FAN1, P_FAN2,
                  P_FILTER_LEFT, P_ALARM, P_FILTER_DUE, P_MODE])
-    a = _req(ip, dev_id, pwd, 0x01, ask)
-    if not a:
-        raise OSError("no answer")
-    p = a[0][2]
+    a = _req(ip, dev_id, pwd, 0x01, ask, timeout=1.0)
+    if a:
+        p = a[0][2]
+    else:
+        # some units stay silent when one asked number is unknown to them: ask one by one
+        p = {}
+        for k in ask:
+            r = _req(ip, dev_id, pwd, 0x01, bytes([k]), timeout=0.6)
+            if r:
+                p.update(r[0][2])
+        if P_POWER not in p:
+            raise OSError("no answer")
     fl = p.get(P_FILTER_LEFT, b"")
     return {
         "power": _int(p.get(P_POWER)) == 1,
