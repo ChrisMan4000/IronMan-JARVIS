@@ -153,12 +153,19 @@ def pick(path):
     return "http://localhost:5173", path, {"host": "localhost:5173"}
 
 
+# Home Screen icons and the web app manifest: the iPhone fetches them without the login cookie.
+PUBLIC = {"/jarvis-icon-180.png", "/jarvis-icon-192.png", "/jarvis-icon-512.png", "/hud.webmanifest",
+          "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/favicon.ico"}
+
+
 async def proxy(request):
-    if not authed(request):
+    pub = request.method in ("GET", "HEAD") and request.url.path in PUBLIC
+    rp = "/jarvis-icon-180.png" if request.url.path.startswith("/apple-touch-icon") else request.url.path
+    if not pub and not authed(request):
         if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
             return RedirectResponse("/login", status_code=303)
         return Response("login required", status_code=401)
-    base, path, forced = pick(request.url.path)
+    base, path, forced = pick(rp)
     url = base + path + (("?" + request.url.query) if request.url.query else "")
     hdrs = {k: v for k, v in request.headers.items()
             if k not in HOP and k not in ("cookie", "origin", "referer")}
