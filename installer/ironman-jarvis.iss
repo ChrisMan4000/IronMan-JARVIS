@@ -740,11 +740,42 @@ begin
   if CurStep = ssPostInstall then RunSetup;
 end;
 
+{ puts the block of controls of a custom page in the middle of the page (equal space left/right and top/bottom) }
+procedure CenterPage(Page: TWizardPage);
+var I: Integer; C: TControl; MinL, MinT, MaxR, MaxB, DX, DY: Integer;
+begin
+  if Page.Surface.ControlCount = 0 then Exit;
+  MinL := 100000; MinT := 100000; MaxR := 0; MaxB := 0;
+  for I := 0 to Page.Surface.ControlCount - 1 do
+  begin
+    C := Page.Surface.Controls[I];
+    if C.Visible then
+    begin
+      if C.Left < MinL then MinL := C.Left;
+      if C.Top < MinT then MinT := C.Top;
+      if C.Left + C.Width > MaxR then MaxR := C.Left + C.Width;
+      if C.Top + C.Height > MaxB then MaxB := C.Top + C.Height;
+    end;
+  end;
+  if MaxR <= MinL then Exit;
+  DX := ((Page.SurfaceWidth - (MaxR - MinL)) div 2) - MinL;
+  DY := ((Page.SurfaceHeight - (MaxB - MinT)) div 2) - MinT;
+  if DX < 0 then DX := 0;
+  if DY < 0 then DY := -MinT;   { too tall: start at the top }
+  for I := 0 to Page.Surface.ControlCount - 1 do
+  begin
+    C := Page.Surface.Controls[I];
+    C.Left := C.Left + DX;
+    C.Top := C.Top + DY;
+  end;
+end;
+
 procedure CurPageChanged(CurPageID: Integer);
 var S: String;
 begin
   if (CurPageID = ModelPage.ID) and (not ModelsDetected) then DetectModels;
   if CurPageID = VoicePage.ID then DetectVoice;
+  if (CurPageID >= 100) and (CurPageID <> wpFinished) then CenterPage(PageFromID(CurPageID));
   if CurPageID = wpFinished then
   begin
     S := '';
