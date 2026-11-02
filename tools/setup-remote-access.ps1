@@ -51,3 +51,4 @@ Write-Host ""
 Write-Host "DONE. Start Jarvis as usual (the gateway starts with it), then open:  https://${ip}:8443/hud.html" -ForegroundColor Green
 Write-Host "iPhone: send jarvis-ca.crt to it (AirDrop/mail), install the profile, then Settings > General > About > Certificate Trust Settings > switch it on."
 Write-Host "iOS Firefox also needs Settings > Firefox > Local Network. Your Wi-Fi network must be set to 'Private' in Windows."
+Write-Host "Fullscreen on the iPhone: open the address above, tap the green + button at the top right (or Share > Add to Home Screen) and start Jarvis from the new JARVIS icon."

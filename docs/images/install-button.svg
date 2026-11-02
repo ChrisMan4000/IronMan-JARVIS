@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="110" viewBox="0 0 560 110">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a8f0cb"/>
+      <stop offset="1" stop-color="#8fe6b8"/>
+    </linearGradient>
+    <filter id="glow" x="-10%" y="-30%" width="120%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <polygon points="22,10 538,10 550,22 550,88 538,100 22,100 10,88 10,22" fill="url(#g)" filter="url(#glow)"/>
+  <polygon points="22,10 538,10 550,22 550,88 538,100 22,100 10,88 10,22" fill="none" stroke="#02060b" stroke-opacity=".35" stroke-width="1"/>
+  <g stroke="#02060b" stroke-width="3" fill="none" stroke-linecap="square">
+    <path d="M24 24 h18 M24 24 v14"/><path d="M536 24 h-18 M536 24 v14"/>
+    <path d="M24 86 h18 M24 86 v-14"/><path d="M536 86 h-18 M536 86 v-14"/>
+  </g>
+  <g fill="none" stroke="#02060b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M70 34 v26 M59 50 l11 11 l11 -11 M57 72 h26"/>
+  </g>
+  <text x="100" y="58" font-family="Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="28" font-weight="700" textLength="410" lengthAdjust="spacingAndGlyphs" fill="#02060b">INSTALL J.A.R.V.I.S.</text>
+  <text x="101" y="80" font-family="Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="13" textLength="410" lengthAdjust="spacingAndGlyphs" fill="#02060b" fill-opacity=".75">WINDOWS 11  ·  IronMan-JARVIS-Installer.exe  ·  41 MB</text>
+</svg>

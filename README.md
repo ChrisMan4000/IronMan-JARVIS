@@ -10,7 +10,13 @@
 
 > **Credit where it is due:** this is a **fork of [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (Apache-2.0). The brain, the server and the engine are theirs. I added the full-screen HUD, voice, smart-home tools and installer on top. Please go give the original project a star. The original README is in [docs/OPENJARVIS-README.md](docs/OPENJARVIS-README.md).
 
+<p align="center">
+  <a href="https://github.com/ChrisMan4000/IronMan-JARVIS/releases/latest/download/IronMan-JARVIS-Installer.exe"><img src="docs/images/install-button.svg" alt="Install J.A.R.V.I.S. (download IronMan-JARVIS-Installer.exe for Windows 11)" width="560"></a>
+</p>
+
 ## 🤝 The honest part
+
+> 🏹 **Why bother running it locally?** Samuele Marro calls this kind of thing a **[countervailing technology](https://www.lesswrong.com/posts/TuBYwefHQLDXttwdP/countervailing-technologies)**: a tool that moves power back towards the little guy, works without anyone's permission and gets cheaper every year. The crossbow let townspeople stand up to armoured knights. Local AI lets one guy with a graphics card stand up to the cloud. Nobody can switch it off, raise the price or read along. Jarvis is my little crossbow.
 
 - I am **not a developer**. This is my **first GitHub project**.
 - It took **72 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
@@ -112,6 +118,7 @@ The HUD has a phone layout (small brain, short intro, chat box, model chooser, s
 3. Allow the port for your home network only (administrator PowerShell): `netsh advfirewall firewall add rule name="Jarvis Gateway 8443 LAN" dir=in action=allow protocol=TCP localport=8443 remoteip=localsubnet profile=private`.
 4. Start Jarvis as usual (the gateway starts with the other services once a password exists). Open `https://<your-PC-IP>:8443/hud.html` and log in.
 5. iPhone: install mkcert's `rootCA.pem` (public file, send it as `.crt`), then Settings > General > About > Certificate Trust Settings > switch it on. iOS Firefox also needs Settings > Firefox > Local Network. HTTPS is required for the microphone.
+6. Fullscreen on the iPhone: on the first visit the phone HUD shows a green **+** button at the top right. Tap it and follow the steps (Share > **Add to Home Screen**). The new **JARVIS** icon then opens the HUD fullscreen, without the browser bars (log in once more there).
 
 Browsers must allow cookies for the login. Five wrong passwords lock that device for 5 minutes. Not tested on every phone size. 📲
 
@@ -198,3 +205,7 @@ See [NOTICE](NOTICE) for the full list of modified and added files (Apache-2.0, 
 Apache License 2.0, same as OpenJarvis (see [LICENSE](LICENSE)). Huge thanks to the [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) team, [LM Studio](https://lmstudio.ai), Kokoro, Whisper, [openWakeWord](https://github.com/dscripka/openWakeWord), Open-Meteo, NOAA and DB-IP. Built with a lot of help from Claude.
 
 *Fan project, not affiliated with Marvel, Disney or the OpenJarvis authors. "Iron Man" and "J.A.R.V.I.S." are their owners' trademarks and are used here as a homage.*
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/ChrisCathode"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20Beer&emoji=&slug=ChrisCathode&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a Beer"></a>
+</p>

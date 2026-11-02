@@ -1,5 +1,6 @@
 <!doctype html><html><head><meta charset="utf-8"><title>J.A.R.V.I.S.</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="JARVIS"><meta name="theme-color" content="#02060b"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="hud.webmanifest" crossorigin="use-credentials">
 <style>
 html,body{margin:0;height:100%;background:#02060b;overflow:hidden;font-family:Consolas,monospace}
 canvas{position:fixed;inset:0;width:100%;height:100%;cursor:pointer}
@@ -16,18 +17,18 @@ border:1px solid rgba(25,211,255,.3);background:rgba(0,16,26,.65);padding:.8vh 1
 #pcv{position:fixed;inset:0;width:100%;height:100%;display:none;touch-action:manipulation}
 html.phn #cv{display:none}
 html.phn #pcv{display:block}
-html.phn #log{width:94vw !important;height:24vh !important;height:24dvh !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px) !important;font-size:14px !important;padding:6px 10px !important;-webkit-overflow-scrolling:touch}
+html.phn #log{width:94vw !important;height:calc(24vh - 17px) !important;height:calc(24dvh - 17px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px) !important;font-size:14px !important;padding:6px 10px !important;-webkit-overflow-scrolling:touch}
 html.phn #log .src,html.phn #log .lnk{font-size:12px !important}
 html.phn #bar{width:94vw !important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px) !important;gap:6px !important}
 html.phn #bar input[type=text]{font-size:16px !important;padding:12px 10px !important}
 html.phn #bar button{padding:11px 12px !important}
 html.phn #tChip{font-size:13px !important}
 html.phn #lampBox{left:50% !important;top:50px !important;transform:translateX(-50%);font-size:12px !important;gap:1.6em !important;animation:phnIn 1s ease 1.6s both}
-html.phn #mname{position:fixed !important;left:50% !important;top:76px !important;transform:translateX(-50%);width:min(88vw,380px) !important;height:auto !important;padding:8px 10px !important;font-size:14px !important;animation:phnIn 1s ease 1.8s both}
+html.phn #mname{position:fixed !important;left:50% !important;top:76px !important;transform:translateX(-50%);width:min(88vw,380px) !important;height:auto !important;padding:8px 10px !important;font-size:14px !important;text-align:center !important;animation:phnIn 1s ease 1.8s both}
 html.phn #mset,html.phn #mstat{display:none !important}
-html.phn #mlist{position:fixed !important;left:50% !important;top:118px !important;transform:translateX(-50%);width:min(88vw,380px) !important;max-height:50vh !important;overflow:auto !important;font-size:14px !important;z-index:20 !important}
+html.phn #mlist{position:fixed !important;left:50% !important;top:118px !important;transform:translateX(-50%);width:min(88vw,380px) !important;max-height:50vh !important;overflow:auto !important;font-size:14px !important;z-index:20 !important;text-align:center !important}html.phn #lampG{display:inline !important}html.phn #mlist div{white-space:normal !important}
 html.phn #log,html.phn #bar{animation:phnIn 1s ease 2s both}
-html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24vh - 32px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24dvh - 32px) !important}
+html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24vh - 49px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24dvh - 49px) !important}
 @keyframes phnIn{from{opacity:0}}
 </style><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
 <canvas id="cv"></canvas><canvas id="pcv"></canvas><div id="log"></div>
@@ -386,7 +387,7 @@ mname.id='mname';mset.id='mset';mstat.id='mstat';mlist.id='mlist';
 mset.innerHTML='<button id="bR" title="Reasoning effort (medium when on)">REASONING OFF</button><button id="bT" title="Thinking mode">THINKING OFF</button><span>CTX</span><input type="number" id="mctx" min="1024" step="1024"><button id="bA" style="display:none" title="Reload the model with this context">APPLY</button>';
 document.body.append(mname,mset,mstat,mlist);
 const lampBox=document.createElement('div');lampBox.id='lampBox';
-lampBox.innerHTML='<span><i id="lampW"></i>WEB SEARCH</span><span><i id="lampD"></i>DOC SEARCH</span>';
+lampBox.innerHTML='<span><i id="lampW"></i>WEB SEARCH</span><span><i id="lampD"></i>DOC SEARCH</span><span id="lampG" style="display:none;color:#8fe6b8"></span>';
 (()=>{const s=document.createElement('style');s.textContent='#lampBox{position:fixed;z-index:5;display:flex;gap:1.2em;font-family:Consolas,monospace;color:#7fdcff;opacity:.9;white-space:nowrap}#lampBox i{display:inline-block;width:.8em;height:.8em;border-radius:50%;margin-right:.4em;background:#12303c;border:1px solid rgba(25,211,255,.5);vertical-align:middle}#lampBox i.on{background:#ff9a3d;border-color:#ff9a3d;box-shadow:0 0 .8em #ff9a3d}';document.head.appendChild(s)})();
 document.body.append(lampBox);
 function lampPlace(){const u=innerHeight/1440,top=innerHeight*0.07;Object.assign(lampBox.style,{left:(innerWidth*((innerWidth/innerHeight<2.8)?0.01:0.015)+28*u)+'px',top:(top+186*u)+'px',fontSize:Math.max(10,11*u)+'px'})}
@@ -421,6 +422,7 @@ function mdlPlace(){
 function mdlRender(){
   const c=mdlCur(),nm=MDL.loading?('LOADING '+MDL.loading):(c?c.id:'NO MODEL LOADED'),u=innerHeight/1440,iw=innerWidth*((innerWidth/innerHeight<2.8)?0.16:0.11)-56*u;
   mname.textContent=nm.toUpperCase()+' \u25BE';
+  {const lg=document.getElementById('lampG');if(lg)lg.textContent=(c&&c.size_gb)?(c.size_gb+' GB'):'';}
   mname.style.fontSize=Math.min(24*u,iw/((nm.length+2)*0.62))+'px';
   const cp=c&&c.caps,ck=!!(c&&!cp),rOk=!!(cp&&cp.reasoning),tOk=!!(cp&&cp.thinking);
   mbR.disabled=!rOk;mbT.disabled=!tOk;mbR.style.opacity=rOk?'':'.35';mbT.style.opacity=tOk?'':'.35';mbR.style.cursor=rOk?'pointer':'default';mbT.style.cursor=tOk?'pointer':'default';
@@ -561,7 +563,7 @@ const lv=(typeof level==='number'&&isFinite(level))?level:0;
 const tg=Math.min(1,Math.max(lv,state==='thinking'?0.6+0.2*Math.sin(t/200):0.08));
 S.act+=(tg-S.act)*0.1;const av=S.act;
 S.rot+=dt*(0.25+av*1.8);S.pulse+=dt*(1.5+av*4);S.sig+=dt*(0.4+av*1.2);
-const logTop=Hh-64-Hh*0.24,gap=logTop-125;
+const logTop=Hh-64-(Hh*0.24-17),gap=logTop-125;
 const R=Math.max(40,Math.min(W*0.26,(gap-28)/2.95)),cx=W/2,cy=125+gap/2-10,rr=R*1.22;
 S.cx=cx;S.cy=cy;S.R=R;
 const gl=g.createRadialGradient(cx,cy,0,cx,cy,R*1.8);
@@ -596,8 +598,9 @@ g.font=fs+'px Consolas,monospace';g.textAlign='left';g.textBaseline='middle';g.f
 const tw=g.measureText(T).width;g.fillText(T.slice(0,nT),W/2-tw/2,28);g.shadowBlur=0;
 const ul=ez((el-1.2)/0.8);g.strokeStyle=col;g.globalAlpha=0.35;g.lineWidth=1;g.beginPath();g.moveTo(W/2-W*0.38*ul,44);g.lineTo(W/2+W*0.38*ul,44);g.stroke();
 const lab={idle:'TAP BRAIN TO TALK',listening:'LISTENING',thinking:'THINKING',speaking:'SPEAKING'}[state]||'';
-g.font=Math.max(11,fs*0.55)+'px Consolas,monospace';g.textAlign='center';g.fillStyle=col;g.globalAlpha=0.75*ez((el-1.8)/0.6);
+g.font=Math.max(11,fs*0.55)+'px Consolas,monospace';g.textAlign='center';g.fillStyle=col;g.globalAlpha=0.75*ez((el-2.5)/0.6);
 g.fillText(lab,W/2,cy+rr*1.2+16);g.globalAlpha=1;
+if(el<2.6){const CT='Connecting to Jarvis...',nc=Math.min(CT.length,Math.floor(el*16)),fa=el<2?1:Math.max(0,1-(el-2)/0.6);g.textAlign='center';g.fillStyle='#8fe6b8';g.shadowColor='#8fe6b8';g.shadowBlur=6;g.globalAlpha=0.9*fa;g.fillText(CT.slice(0,nc)+((nc<CT.length&&Math.floor(el*6)%2)?'_':''),W/2,cy+rr*1.2+16);g.shadowBlur=0;g.globalAlpha=1}
 }
 function frame(t){frameOrig(t);if(lastDraw===t&&!window.PHN)wearOv()}
 function frameOrig(t){
@@ -1046,4 +1049,16 @@ function end(){if(done)return;done=true;clearInterval(iv);o.style.pointerEvents=
 o.addEventListener('click',end);
 setTimeout(end,2200);
 })();
-</script><script>if(!(innerWidth<=820&&innerHeight>innerWidth*1.05)){document.write('<script src="hud-boot.js"><\/script>')}</script></body></html>
+</script><script>(function(){var st=window.navigator.standalone||matchMedia('(display-mode: fullscreen),(display-mode: standalone)').matches;if(st)return;function fs(){document.removeEventListener('pointerdown',fs,true);var e=document.documentElement,f=e.requestFullscreen||e.webkitRequestFullscreen;if(f&&!document.fullscreenElement&&!document.webkitFullscreenElement){try{var p=f.call(e,{navigationUI:'hide'});if(p&&p.catch)p.catch(function(){})}catch(x){}}}document.addEventListener('pointerdown',fs,true);})()</script><script>(function(){
+var st=window.navigator.standalone||matchMedia('(display-mode: fullscreen),(display-mode: standalone)').matches,K='jvA2hs';
+if(st||!(innerWidth<=820&&innerHeight>innerWidth*1.05))return;try{if(localStorage.getItem(K))return}catch(x){}
+var dp=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e});
+var cs=document.createElement('style');cs.textContent='#a2hs{position:fixed;z-index:30;top:8px;right:4px;width:28px;height:28px;padding:3px;background:rgba(0,16,26,.8);border:1px solid #8fe6b8;color:#8fe6b8;box-shadow:0 0 10px rgba(143,230,184,.45);cursor:pointer;animation:phnIn 1s ease 2.4s both}#a2hsP{position:fixed;z-index:31;left:50%;top:56px;transform:translateX(-50%);width:min(88vw,360px);box-sizing:border-box;padding:12px 14px;background:rgba(0,16,26,.94);border:1px solid #8fe6b8;color:#7fdcff;font:14px/1.5 Consolas,monospace;display:none}#a2hsP b{color:#8fe6b8;letter-spacing:.15em}#a2hsP ol{margin:.5em 0;padding-left:1.3em}#a2hsP i{color:#ff9a3d;font-style:normal}#a2hsP button{margin-top:6px;font:inherit;background:none;border:1px solid #19d3ff;color:#19d3ff;padding:4px 12px;cursor:pointer}';document.head.appendChild(cs);
+var b=document.createElement('button');b.id='a2hs';b.title='Add to Home Screen (fullscreen)';b.setAttribute('aria-label','Add to Home Screen');
+b.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
+var pn=document.createElement('div');pn.id='a2hsP';
+pn.innerHTML='<b>ADD TO HOME SCREEN</b><div>Jarvis then opens fullscreen from its own icon.</div><ol><li>Tap <i>Share</i> <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#ff9a3d" stroke-width="2" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4M5 11v9h14v-9"/></svg> (Firefox: menu, then <i>Share</i>)</li><li>Choose <i>Add to Home Screen</i>, then <i>Add</i></li><li>Open <i>JARVIS</i> from the new icon and log in once</li></ol><button>GOT IT</button>';
+function done(){try{localStorage.setItem(K,'1')}catch(x){}b.remove();pn.remove()}
+b.onclick=function(){if(dp){dp.prompt();dp.userChoice.then(done,done);return}pn.style.display=pn.style.display==='block'?'none':'block'};
+pn.querySelector('button').onclick=done;
+document.body.append(b,pn)})()</script><script>if(!(innerWidth<=820&&innerHeight>innerWidth*1.05)){document.write('<script src="hud-boot.js"><\/script>')}</script></body></html>
