@@ -17,6 +17,7 @@ OutputBaseFilename=IronMan-JARVIS-Installer
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+WizardResizable=yes
 WizardImageFile=wizard-side.bmp,wizard-side-150.bmp,wizard-side-200.bmp
 WizardSmallImageFile=wizard-small.bmp,wizard-small-200.bmp
 SetupIconFile=..\assets\jarvis.ico
@@ -191,6 +192,7 @@ end;
 procedure CheckLabelClick(Sender: TObject); forward;
 procedure RadioLabelClick(Sender: TObject); forward;
 procedure OnlineCheckClick(Sender: TObject); forward;
+procedure WizardResize(Sender: TObject); forward;
 
 { Windows draws the text of check boxes and radio buttons itself and ignores the color, so the real control has no text
   and a colored label next to it carries the text (clicking the label works like clicking the box). }
@@ -368,6 +370,7 @@ procedure InitializeWizard;
 var Y, N: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
+  WizardForm.OnResize := @WizardResize;   { the window can be resized: keep the page content centered }
   WizardForm.WizardSmallBitmapImage.Left := WizardForm.WizardSmallBitmapImage.Left - ScaleX(14);   { logo a bit more to the left }
   WizardForm.PageNameLabel.Width := WizardForm.WizardSmallBitmapImage.Left - WizardForm.PageNameLabel.Left - ScaleX(8);   { the texts must not cover the logo }
   WizardForm.PageDescriptionLabel.Width := WizardForm.WizardSmallBitmapImage.Left - WizardForm.PageDescriptionLabel.Left - ScaleX(8);
@@ -688,7 +691,7 @@ begin
   if HueCheck.Checked then S := S + Space + 'Philips Hue Smart Lights (bridge ' + Trim(HueIpEdit.Text) + ')' + NewLine;
   if TadoCheck.Checked then S := S + Space + 'Tado Smart Heating' + NewLine;
   if WakeCheck.Checked then S := S + Space + 'Wake word "Hey Jarvis"' + NewLine;
-  if RbOnYes.Checked and (OnlineRepo <> '') then M := 'newest found online, ' + OnlineRepo + ' (about ' + OnlineGB + ' GB, tested after the download)'
+  if RbOnYes.Checked and (OnlineRepo <> '') then M := 'newest found online' + NewLine + Space + Space + OnlineRepo + ' (about ' + OnlineGB + ' GB)' + NewLine + Space + Space + '(tested after the download)'
   else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
   else if RbT1.Checked then M := 'download about 2.5 GB'
   else if RbT2.Checked then M := 'download about 6.7 GB'
@@ -844,6 +847,11 @@ begin
     C.Left := C.Left + DX;
     C.Top := C.Top + DY;
   end;
+end;
+
+procedure WizardResize(Sender: TObject);
+begin
+  if (WizardForm.CurPageID >= 100) and (WizardForm.CurPageID <> wpFinished) then CenterPage(PageFromID(WizardForm.CurPageID));
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
