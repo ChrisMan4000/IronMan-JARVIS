@@ -370,6 +370,8 @@ procedure InitializeWizard;
 var Y, N: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
+  WizardForm.BorderStyle := bsSizeable;   { make sure the window frame can be dragged and maximized }
+  WizardForm.BorderIcons := [biSystemMenu, biMinimize, biMaximize];
   WizardForm.OnResize := @WizardResize;   { the window can be resized: keep the page content centered }
   WizardForm.WizardSmallBitmapImage.Left := WizardForm.WizardSmallBitmapImage.Left - ScaleX(14);   { logo a bit more to the left }
   WizardForm.PageNameLabel.Width := WizardForm.WizardSmallBitmapImage.Left - WizardForm.PageNameLabel.Left - ScaleX(8);   { the texts must not cover the logo }
