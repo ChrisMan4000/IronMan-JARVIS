@@ -82,6 +82,7 @@ var
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
   ModelCombo, WhisperCombo: TNewComboBox;
   ClipEdit: TNewEdit;
+  ClipHint: TNewStaticText;
   ModelGBs: TArrayOfString;
   VoiceRecKey, RecWhisper, RecTts: String;
   HasNvidia: Boolean;
@@ -443,10 +444,14 @@ begin
   VoiceRbChatterbox := AddRadio(TtsPage, Y, K2Text);
   VoiceRbKokoro.Checked := True;
   VoiceRbKokoro.OnClick := @ModelRadioClick; VoiceRbChatterbox.OnClick := @ModelRadioClick;
-  AddText(TtsPage, Y, 'Optional, Chatterbox only: full path of a clear .wav, .mp3 or .flac clip (10-20 seconds, one speaker) of YOUR OWN voice, or a voice you have permission to copy. Empty = the built-in voice.', CText, False);
+  ClipHint := AddText(TtsPage, Y, 'Optional, Chatterbox only: full path of a clear .wav, .mp3 or .flac clip (10-20 seconds, one speaker) of YOUR OWN voice, or a voice you have permission to copy. Empty = the built-in voice.', CText, False);
+  Y := Y - ClipHint.Height - ScaleY(6);   { redo the layout: indented like the Chatterbox text, italic }
+  ClipHint.Left := ScaleX(22); ClipHint.Width := TtsPage.SurfaceWidth - ScaleX(22);
+  ClipHint.Font.Style := [fsItalic];
+  Y := Y + ClipHint.Height + ScaleY(6);
   ClipEdit := TNewEdit.Create(TtsPage);
   ClipEdit.Parent := TtsPage.Surface;
-  ClipEdit.Left := 0; ClipEdit.Top := Y; ClipEdit.Width := TtsPage.SurfaceWidth;
+  ClipEdit.Left := ScaleX(22); ClipEdit.Top := Y; ClipEdit.Width := TtsPage.SurfaceWidth - ScaleX(22);
   ClipEdit.Enabled := False;
   Y := Y + ScaleY(30);
 
@@ -535,7 +540,7 @@ begin
     SetRadioLook(RbExist);
     if RecIdx >= 0 then ModelCombo.ItemIndex := RecIdx else ModelCombo.ItemIndex := 0;
     RbExist.Checked := True;
-    if RecIdx >= 0 then ModelInfo.Caption := M + #13#10 + 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended model is already in LM Studio (marked in the list).';
+    if RecIdx >= 0 then ModelInfo.Caption := M + #13#10 + 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended model is already installed.';
   end;
   ModelRadioClick(nil);
 end;
