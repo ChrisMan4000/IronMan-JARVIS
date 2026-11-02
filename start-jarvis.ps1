@@ -39,6 +39,8 @@ if ($lmsExe) {
   $hid = @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })
   if (-not $hid.Count -and (Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)) { Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 3 }
   Start-Process $lmsExe -WindowStyle Normal; Start-Sleep -Seconds 5
+  # still no window (LM Studio sometimes starts in the tray when the launcher itself is minimized): start it once more, a second start shows the window
+  if (-not @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count) { Start-Process $lmsExe -WindowStyle Normal; Start-Sleep -Seconds 3 }
 } else { Write-Host "The LM Studio app was not found (only its hidden server can start). Run the Jarvis installer again to install LM Studio." -ForegroundColor Yellow }
 if (-not (Test-Lms)) {
   Write-Host "LM Studio server is not running - starting it..." -ForegroundColor Yellow

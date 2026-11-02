@@ -30,3 +30,4 @@ Start-Sleep 3
 $left = @(Get-NetTCPConnection -LocalPort 5173,8000,8765,8766,8443,1234 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalPort })
 if ($left.Count -eq 0) { Write-Host "Jarvis stopped." } else { Write-Host ("Still listening: " + ($left -join ',')) }
 Start-Sleep 3
+exit 0   # exit code 0: Windows Terminal closes the window by itself when the script is done

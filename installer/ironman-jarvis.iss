@@ -21,6 +21,7 @@ WizardResizable=yes
 WizardImageFile=wizard-side.bmp,wizard-side-150.bmp,wizard-side-200.bmp
 WizardSmallImageFile=wizard-small.bmp,wizard-small-200.bmp
 SetupIconFile=..\assets\jarvis.ico
+UninstallDisplayIcon={app}\assets\jarvis.ico
 
 [Messages]
 WelcomeLabel1=IronMan J.A.R.V.I.S.
