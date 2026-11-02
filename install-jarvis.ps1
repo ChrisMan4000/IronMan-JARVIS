@@ -208,6 +208,8 @@ if (-not $lmsCmd) {
     if ($FromWizard) { Status 6 "Testing $key (one quick tool-call test)" }
     $ok = $false
     try {
+      try { & $lmsCmd server start 2>&1 | Out-Null } catch { }   # the chat test needs LM Studio's server (port 1234)
+      Start-Sleep -Seconds 3
       & $lmsCmd load $key -c 4096 -y 2>&1 | Out-Null
       $body = @{ model = $key; temperature = 0; max_tokens = 200; tool_choice = 'auto'
         messages = @(@{ role = 'user'; content = 'What is the weather in Paris right now? Use the tool.' })
