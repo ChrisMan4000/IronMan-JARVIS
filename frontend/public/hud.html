@@ -283,7 +283,7 @@ async function bargeStart(){
   return ()=>{closed=true;clearInterval(timer);try{sp.disconnect()}catch(e){}try{src.disconnect()}catch(e){}st.getTracks().forEach(x=>x.stop())};
 }
 async function speak(t){
-  const clean=t.replace(/[*#`_>]/g,'').replace(/\s+/g,' ').trim();
+  const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>]/g,'').replace(/\s+/g,' ').trim();   // links are not read aloud (markdown links keep their text)
   if(!clean||!on)return;
   const parts=(clean.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)||[clean]).map(x=>x.trim()).filter(Boolean);
   const chunks=[];let cur='';
