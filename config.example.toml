@@ -25,6 +25,7 @@ enabled = [
   "hue_light_list",
   "hue_all_set",
   "tado_heating",
+  "oxxify_vent",
 ]
 
 [tools.mcp]
