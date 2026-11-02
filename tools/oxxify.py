@@ -15,6 +15,24 @@ cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
 if cmd == "discover":
     units = discover()
     print("\n".join("%s  id %s" % u for u in units) if units else "No Oxxify unit answered on the home network.")
+elif cmd == "debug":
+    # shows how the unit answers single questions; the password itself is never printed
+    import socket
+    from openjarvis.tools.oxxify_vent import _packet, _parse
+    ip, did = discover()[0]
+    pwd = getpass.getpass("Unit password (Enter = 1111): ") or "1111"
+    print("unit %s id %s, password length %d" % (ip, did, len(pwd)))
+    for label, func, data in [("power", 1, b"\x01"), ("speed", 1, b"\x02"), ("mode", 1, b"\xb7"),
+                              ("humidity", 1, b"\x25"), ("power+speed", 1, b"\x01\x02"),
+                              ("filter (3 bytes)", 1, b"\x64"), ("fan rpm (2 bytes)", 1, b"\x4a")]:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(2)
+        s.sendto(_packet(did, pwd, func, data), (ip, 4000))
+        try:
+            raw, _ = s.recvfrom(1024); r = _parse(raw)
+            print("%-18s -> %s" % (label, ("func %02x data %s" % (r[1], {hex(k): v.hex() for k, v in r[2].items()})) if r else "unreadable answer, %d bytes" % len(raw)))
+        except socket.timeout:
+            print("%-18s -> no answer" % label)
+        s.close()
 elif cmd == "setup":
     units = discover()
     if not units:
