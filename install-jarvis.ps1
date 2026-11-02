@@ -10,6 +10,9 @@ param(
   [switch]$WantTado, [switch]$WantWake, [switch]$WantRag,
   [int]$ModelTier = 0,          # 1-3 = download that size (see Step 6b), 0 = none
   [string]$ModelId = '',        # an LM Studio model that is already installed
+  [string]$WhisperModel = '',   # speech recognition size: tiny|base|small|medium|large-v3 (empty = recommended for this PC, see tools\voice-setup.ps1)
+  [string]$TtsChoice = '',      # voice: kokoro|chatterbox (empty = kokoro; plain PowerShell use asks)
+  [string]$VoiceClip = '',      # optional clip of your OWN voice for Chatterbox
   [string]$StatusFile = ''      # the wizard reads progress lines from this file
 )
 $ErrorActionPreference = 'Continue'
@@ -291,11 +294,19 @@ if ($ragAsked) {
   }
 }
 
-# ---------- 7. voice model ----------
-Write-Host ""; Write-Host "Step 7: voice model (Kokoro, a few minutes)" -ForegroundColor Cyan
-Status 8 "Downloading the voice model (a few minutes)"
-uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
-if ($LASTEXITCODE -ne 0) { Write-Host "Voice model download failed. Jarvis still works; the first spoken answer will try again." -ForegroundColor Yellow }
+# ---------- 7. voice: speech recognition (Whisper size) and voice (Kokoro or Chatterbox) ----------
+Write-Host ""; Write-Host "Step 7: voice (speech recognition and voice; each part is tested after the download)" -ForegroundColor Cyan
+Status 8 "Voice models (a few minutes, much longer for the GPU voice)"
+$llmGB = -1   # size of the language model sharing the graphics card: used for the recommendation
+if ($chosen) { foreach ($lm in @(Get-LlmList)) { if ($lm.modelKey -eq $chosen) { $llmGB = [math]::Round($lm.sizeBytes / 1GB, 1) } } }
+if (Test-Path "$Repo\tools\voice-setup.ps1") {
+  $vs = @{ Repo = $Repo; Whisper = $WhisperModel; Tts = $TtsChoice; VoiceClip = $VoiceClip; LlmGB = $llmGB; StatusFile = $StatusFile }
+  if (-not $FromWizard) { $vs.Ask = $true }
+  & "$Repo\tools\voice-setup.ps1" @vs
+} else {
+  uv run --no-sync python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('voice model ready')"
+  if ($LASTEXITCODE -ne 0) { Write-Host "Voice model download failed. Jarvis still works; the first spoken answer will try again." -ForegroundColor Yellow }
+}
 # the voice needs the small English language model of spaCy; install it now (pinned official release) so the first spoken answer does not download it
 uv pip install "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" 2>&1 | Out-Null
 

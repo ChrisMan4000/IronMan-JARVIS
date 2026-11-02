@@ -29,6 +29,7 @@ FinishedHeadingLabel=Setup finished
 [Files]
 Source: "..\*"; DestDir: "{app}"; Excludes: "installer\*,.git\*,IronMan-JARVIS-Installer.exe"; Flags: recursesubdirs createallsubdirs
 Source: "list-llms.ps1"; Flags: dontcopy
+Source: "..\tools\voice-rec.ps1"; Flags: dontcopy
 
 [UninstallDelete]
 ; the setup script creates the Python environment, node_modules, caches and logs inside the folder: remove all of it
@@ -43,6 +44,8 @@ const
   T1Text  = 'About 2.5 GB   qwen/qwen3-4b-2507   (small and fast, simpler answers)';
   T2Text  = 'About 6.7 GB   google/gemma-4-12b-qat   (good balance for 12-16 GB graphics cards)';
   T3Text  = 'About 14.6 GB   google/gemma-4-26b-a4b-qat   (best quality, needs about 24 GB GPU memory)';
+  K1Text  = 'Kokoro   (one size only, 82 million parameters; light, runs on any PC, about 0.3 GB)';
+  K2Text  = 'Chatterbox   (more natural, can copy a voice; NVIDIA graphics card, about 4 GB graphics memory, several GB download)';
 
 function DwmSetWindowAttribute(hwnd: HWND; dwAttribute: DWORD; var pvAttribute: DWORD; cbAttribute: DWORD): Longint;
   external 'DwmSetWindowAttribute@dwmapi.dll stdcall delayload';
@@ -73,11 +76,15 @@ begin
 end;
 
 var
-  HuePage, TadoPage, WakePage, ModelPage, VoicePage, RagPage, KeyPage: TWizardPage;
+  HuePage, TadoPage, WakePage, ModelPage, VoicePage, TtsPage, RagPage, KeyPage: TWizardPage;
   HueCheck, TadoCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
   HueIpEdit, KeyEdit: TNewEdit;
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
-  ModelCombo: TNewComboBox;
+  ModelCombo, WhisperCombo: TNewComboBox;
+  ClipEdit: TNewEdit;
+  ModelGBs: TArrayOfString;
+  VoiceRecKey, RecWhisper, RecTts: String;
+  HasNvidia: Boolean;
   ModelInfo, VoiceInfo: TNewStaticText;
   ModelKeys: TArrayOfString;
   Lbls: array of TNewStaticText;
@@ -291,6 +298,7 @@ end;
 procedure ModelRadioClick(Sender: TObject);
 begin
   ModelCombo.Enabled := RbExist.Checked and RbExist.Enabled;
+  ClipEdit.Enabled := VoiceRbChatterbox.Checked and VoiceRbChatterbox.Enabled;
 end;
 
 procedure CheckLabelClick(Sender: TObject);
@@ -312,10 +320,35 @@ begin
   end;
 end;
 
+{ Whisper sizes (same list as tools\voice-rec.ps1) }
+function WhisperId(I: Integer): String;
+begin
+  case I of
+    0: Result := 'tiny';
+    1: Result := 'base';
+    2: Result := 'small';
+    3: Result := 'medium';
+  else
+    Result := 'large-v3';
+  end;
+end;
+
+function WhisperText(I: Integer): String;
+begin
+  case I of
+    0: Result := 'tiny   (about 0.08 GB download, fastest, makes many mistakes)';
+    1: Result := 'base   (about 0.15 GB, fine for clear speech on weak PCs)';
+    2: Result := 'small   (about 0.5 GB, good balance)';
+    3: Result := 'medium   (about 1.5 GB, very accurate, about 3.5 GB graphics memory)';
+  else
+    Result := 'large-v3   (about 3.1 GB, most accurate, about 5 GB graphics memory)';
+  end;
+end;
+
 { ---------- pages ---------- }
 
 procedure InitializeWizard;
-var Y: Integer; Saved: String; Ip8: AnsiString;
+var Y, N: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
   StatusPath := ExpandConstant('{tmp}\jarvis-status.txt');
@@ -373,8 +406,40 @@ begin
   RbExist.OnClick := @ModelRadioClick; RbT1.OnClick := @ModelRadioClick; RbT2.OnClick := @ModelRadioClick;
   RbT3.OnClick := @ModelRadioClick; RbSkip.OnClick := @ModelRadioClick;
 
+  { speech recognition (Whisper size) }
+  VoicePage := NewPage(ModelPage.ID, 'Speech recognition', 'How Jarvis understands what you say.');
+  Y := 0;
+  AddText(VoicePage, Y, 'Whisper (run through faster-whisper) turns your voice into text. A bigger size understands better but needs more download and memory. The size that fits your PC best is marked.', CText, False);
+  AddLink(VoicePage, Y, 'faster-whisper', 'https://github.com/SYSTRAN/faster-whisper');
+  AddLink(VoicePage, Y, 'Whisper sizes compared', 'https://github.com/openai/whisper#available-models-and-languages');
+  VoiceInfo := AddText(VoicePage, Y, 'Looking at your PC...' + #13#10 + ' ', COrange, False);
+  WhisperCombo := TNewComboBox.Create(VoicePage);
+  WhisperCombo.Parent := VoicePage.Surface;
+  WhisperCombo.Left := 0; WhisperCombo.Top := Y; WhisperCombo.Width := VoicePage.SurfaceWidth;
+  WhisperCombo.Style := csDropDownList;
+  for N := 0 to 4 do WhisperCombo.Items.Add(WhisperText(N));
+  WhisperCombo.ItemIndex := 1;
+  Y := Y + ScaleY(28);
+
+  { voice for the answers (Kokoro or Chatterbox) }
+  TtsPage := NewPage(VoicePage.ID, 'Voice', 'How Jarvis sounds when it answers.');
+  Y := 0;
+  AddText(TtsPage, Y, 'Kokoro is small and works on every PC. Chatterbox sounds more natural and can copy a voice from a short clip, but it needs an NVIDIA graphics card and a long download. The best choice for your PC is marked.', CText, False);
+  AddLink(TtsPage, Y, 'Kokoro', 'https://huggingface.co/hexgrad/Kokoro-82M');
+  AddLink(TtsPage, Y, 'Chatterbox', 'https://github.com/resemble-ai/chatterbox');
+  VoiceRbKokoro := AddRadio(TtsPage, Y, K1Text);
+  VoiceRbChatterbox := AddRadio(TtsPage, Y, K2Text);
+  VoiceRbKokoro.Checked := True;
+  VoiceRbKokoro.OnClick := @ModelRadioClick; VoiceRbChatterbox.OnClick := @ModelRadioClick;
+  AddText(TtsPage, Y, 'Optional, Chatterbox only: full path of a clear .wav, .mp3 or .flac clip (10-20 seconds, one speaker) of YOUR OWN voice, or a voice you have permission to copy. Empty = the built-in voice.', CText, False);
+  ClipEdit := TNewEdit.Create(TtsPage);
+  ClipEdit.Parent := TtsPage.Surface;
+  ClipEdit.Left := 0; ClipEdit.Top := Y; ClipEdit.Width := TtsPage.SurfaceWidth;
+  ClipEdit.Enabled := False;
+  Y := Y + ScaleY(30);
+
   { document search }
-  RagPage := NewPage(ModelPage.ID, 'Document search (optional, experimental)', 'Ask questions about your own PDF, Word and text files.');
+  RagPage := NewPage(TtsPage.ID, 'Document search (optional, experimental)', 'Ask questions about your own PDF, Word and text files.');
   Y := 0;
   AddText(RagPage, Y, 'Uses the LM Studio plugin Big RAG to index your files. Indexing thousands of files takes hours and the feature is fussy. You finish its setup inside LM Studio afterwards.', CText, False);
   AddLink(RagPage, Y, 'Big RAG plugin', 'https://lmstudio.ai/mindstudio/big-rag');
@@ -435,6 +500,8 @@ begin
           N := GetArrayLength(ModelKeys);
           SetArrayLength(ModelKeys, N + 1);
           ModelKeys[N] := F;
+          SetArrayLength(ModelGBs, N + 1);
+          ModelGBs[N] := L;
           ModelCombo.Items.Add(F + '  (' + L + ' GB)');
         end;
       end;
@@ -457,9 +524,65 @@ begin
   ModelRadioClick(nil);
 end;
 
+{ looks at the PC (tools\voice-rec.ps1, read-only) and marks the best Whisper size and voice; runs again only when the language model choice changed }
+procedure DetectVoice;
+var Lines: TArrayOfString; I, Rc: Integer; L, Tmp, Gb, Vram, Ram, Nv, FreeGb, Mark: String;
+begin
+  Gb := '-1';
+  if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Gb := ModelGBs[ModelCombo.ItemIndex]
+  else if RbT1.Checked then Gb := '2.5'
+  else if RbT2.Checked then Gb := '6.7'
+  else if RbT3.Checked then Gb := '14.6';
+  if Gb = VoiceRecKey then Exit;
+  VoiceRecKey := Gb;
+  Tmp := ExpandConstant('{tmp}\voicerec.txt');
+  DeleteFile(Tmp);
+  ExtractTemporaryFile('voice-rec.ps1');
+  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\voice-rec.ps1') + '" -RecOut "' + Tmp + '" -RecLlmGB ' + Gb, '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  RecWhisper := 'base'; RecTts := 'kokoro'; HasNvidia := False;
+  Vram := '0'; Ram := '?'; Nv := '0'; FreeGb := '0';
+  if LoadStringsFromFile(Tmp, Lines) then
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      L := Trim(Lines[I]);
+      if Pos('HW|', L) = 1 then begin Delete(L, 1, 3); Vram := NextField(L); Ram := NextField(L); Nv := NextField(L); end
+      else if Pos('WREC|', L) = 1 then RecWhisper := Copy(L, 6, 20)
+      else if Pos('TREC|', L) = 1 then RecTts := Copy(L, 6, 20)
+      else if Pos('FREE|', L) = 1 then FreeGb := Copy(L, 6, 20);
+    end;
+  HasNvidia := Nv = '1';
+  if HasNvidia then
+    VoiceInfo.Caption := 'Your PC: NVIDIA graphics card with ' + Vram + ' GB, RAM ' + Ram + ' GB. About ' + FreeGb + ' GB of graphics memory stay free next to the language model.'
+  else
+    VoiceInfo.Caption := 'Your PC: no NVIDIA graphics card found, RAM ' + Ram + ' GB. Speech recognition runs on the processor, so the smaller sizes are the sensible ones.';
+  Mark := '   <-- recommended';
+  WhisperCombo.Items.Clear;
+  for I := 0 to 4 do
+  begin
+    if WhisperId(I) = RecWhisper then WhisperCombo.Items.Add(WhisperText(I) + Mark)
+    else WhisperCombo.Items.Add(WhisperText(I));
+    if WhisperId(I) = RecWhisper then WhisperCombo.ItemIndex := I;
+  end;
+  SetRadioText(VoiceRbKokoro, K1Text);
+  SetRadioText(VoiceRbChatterbox, K2Text);
+  if RecTts = 'chatterbox' then SetRadioText(VoiceRbChatterbox, K2Text + Mark) else SetRadioText(VoiceRbKokoro, K1Text + Mark);
+  VoiceRbChatterbox.Enabled := HasNvidia;
+  SetRadioLook(VoiceRbChatterbox);
+  if not HasNvidia then SetRadioText(VoiceRbChatterbox, K2Text + '   (not possible: no NVIDIA card found)');
+  VoiceRbChatterbox.Checked := (RecTts = 'chatterbox') and HasNvidia;
+  VoiceRbKokoro.Checked := not VoiceRbChatterbox.Checked;
+  ModelRadioClick(nil);
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  if CurPageID = TtsPage.ID then
+    if VoiceRbChatterbox.Checked and (Trim(ClipEdit.Text) <> '') and (not FileExists(Trim(ClipEdit.Text))) then
+    begin
+      MsgBox('The voice clip was not found. Check the path (it must be a .wav, .mp3 or .flac file) or leave the box empty to use the built-in voice.', mbError, MB_OK);
+      Result := False;
+    end;
   if CurPageID = HuePage.ID then
     if HueCheck.Checked and (not ValidIp(Trim(HueIpEdit.Text))) then
     begin
@@ -481,6 +604,14 @@ begin
   else if RbT3.Checked then M := 'download about 14.6 GB'
   else M := 'none (later in LM Studio)';
   S := S + Space + 'Language model: ' + M + NewLine;
+  S := S + Space + 'Speech recognition: Whisper ' + WhisperId(WhisperCombo.ItemIndex) + NewLine;
+  if VoiceRbChatterbox.Checked then
+  begin
+    S := S + Space + 'Voice: Chatterbox (installs several GB of graphics card packages and can take a long time)';
+    if Trim(ClipEdit.Text) <> '' then S := S + ', your own voice clip';
+    S := S + NewLine;
+  end
+  else S := S + Space + 'Voice: Kokoro' + NewLine;
   if RagCheck.Checked then S := S + Space + 'Document search (Big RAG)' + NewLine;
   if Trim(KeyEdit.Text) <> '' then S := S + Space + 'Web search key (Firecrawl): entered' + NewLine;
   if LmStudioInstalled then
@@ -522,7 +653,7 @@ begin
 end;
 
 procedure RunSetup;
-var Opts, Params: String; Run, Code, Rc, Ticks: Integer; Lines: TArrayOfString;
+var Opts, Params, Clip: String; Run, Code, Rc, Ticks: Integer; Lines: TArrayOfString;
 begin
   Opts := '';
   if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp ''' + Trim(HueIpEdit.Text) + '''';
@@ -533,6 +664,18 @@ begin
   else if RbT1.Checked then Opts := Opts + ' -ModelTier 1'
   else if RbT2.Checked then Opts := Opts + ' -ModelTier 2'
   else if RbT3.Checked then Opts := Opts + ' -ModelTier 3';
+  Opts := Opts + ' -WhisperModel ''' + WhisperId(WhisperCombo.ItemIndex) + '''';
+  if VoiceRbChatterbox.Checked then
+  begin
+    Opts := Opts + ' -TtsChoice ''chatterbox''';
+    Clip := Trim(ClipEdit.Text);
+    if Clip <> '' then
+    begin
+      StringChangeEx(Clip, '''', '''''', True);
+      Opts := Opts + ' -VoiceClip ''' + Clip + '''';
+    end;
+  end
+  else Opts := Opts + ' -TtsChoice ''kokoro''';
   { the key goes through this process's environment, never through a command line }
   if Trim(KeyEdit.Text) <> '' then SetEnvironmentVariableW('JARVIS_FIRECRAWL_KEY', Trim(KeyEdit.Text));
   if HueCheck.Checked then
@@ -585,6 +728,7 @@ procedure CurPageChanged(CurPageID: Integer);
 var S: String;
 begin
   if (CurPageID = ModelPage.ID) and (not ModelsDetected) then DetectModels;
+  if CurPageID = VoicePage.ID then DetectVoice;
   if CurPageID = wpFinished then
   begin
     S := '';

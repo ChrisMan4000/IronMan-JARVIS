@@ -32,6 +32,7 @@ enabled = false
 
 [speech]
 # English only: the voice does not pronounce other languages correctly.
+# The installer (tools\voice-setup.ps1) picks model/device/compute_type/tts_backend/voice_id for your PC; run it again with -Ask to change them.
 backend = "faster-whisper"
 model = "base"
 language = "en"

@@ -37,7 +37,7 @@ The full list of OpenJarvis's own features is here: <https://openjarvis.stanford
 - 📱 **Phone and second PC:** the HUD has a phone layout and can be reached from other devices in your home network through a small password-protected HTTPS gateway (optional, see [below](#-optional-use-the-hud-from-your-phone-or-another-pc-home-network-only)).
 - 💶 **Cost comparison:** the DATA STREAM box shows in euro what the same tokens would have cost on cloud models, and what you saved by running locally.
 - 🗺️ **Smart network map:** the world map zooms to your live connections. A cinematic start-up intro and a worn, sci-fi box style complete the look.
-- 🔊 **Voice:** Kokoro is the default voice. On a strong NVIDIA GPU you can switch by hand to GPU Whisper (`large-v3`) and the Chatterbox voice (see [Optional: better voice](#-optional-better-voice-nvidia-gpu)).
+- 🔊 **Voice, chosen for your PC:** the installer looks at your graphics card and RAM, then recommends a Whisper size (`tiny` to `large-v3`) and a voice (Kokoro or Chatterbox). You can pick something else; each part is tested after the download and falls back to the lighter choice if it does not work (see [Voice: Whisper size and Kokoro or Chatterbox](#-voice-whisper-size-and-kokoro-or-chatterbox)).
 - 🇬🇧 **English only on purpose.** The voice does not pronounce other languages correctly, so speech is set to English.
 - 📈 **HUD always shows a 'x% Confidence'** to ensure you know, how far you can trust the answer. Predictions are in _italic_. Two lights in the top left corner show whether web or doc search was used, and sources are always shown as clickable links.
 
@@ -57,7 +57,7 @@ The full list of OpenJarvis's own features is here: <https://openjarvis.stanford
 - **3.2 GB** the project folder after install
 - **about 16 GB** the default model `google/gemma-4-26b-a4b-qat` (small PC? take `google/gemma-4-e2b`, about 4.4 GB)
 - **a few hundred MB** voice model and wake word files
-- **Optional, about 12 GB more:** the better voice (GPU Whisper and Chatterbox, see "Optional: better voice" below, not set up by the installer): about 6 GB of extra packages in the project folder and about 6.5 GB of voice model downloads. Measured on my PC with it set up: project folder 9.2 GB, voice model cache 6.9 GB.
+- **Optional, about 12 GB more:** the Chatterbox voice with a large Whisper size (see "Voice" below; the installer only sets it up if you choose it): about 6 GB of extra packages in the project folder and about 6.5 GB of voice model downloads. Measured on my PC with it set up: project folder 9.2 GB, voice model cache 6.9 GB.
 
 ## 🚀 Install
 
@@ -115,9 +115,17 @@ The HUD has a phone layout (small brain, short intro, chat box, model chooser, s
 
 Browsers must allow cookies for the login. Five wrong passwords lock that device for 5 minutes. Not tested on every phone size. 📲
 
-## 🎤 Optional: better voice (NVIDIA GPU)
+## 🎤 Voice: Whisper size and Kokoro or Chatterbox
 
-Not set up by the installer. With an NVIDIA GPU (8 GB+ free VRAM) you can use faster-whisper `large-v3` on the GPU and the Chatterbox voice. Important: add packages with `uv pip install` only, **never** `uv sync` or plain `uv run` afterwards, because they remove the hand-added packages (CUDA PyTorch, `nvidia-cublas-cu12`, `nvidia-cudnn-cu12`, `av<17`, `maxminddb`) and break speech and the network map. Keep `MAX_FPS=30` in `hud.html`: a 60 fps HUD competes with the voice for the GPU.
+The installer (the .exe pages "Speech recognition" and "Voice", or the questions of `install-jarvis.ps1`) checks your NVIDIA graphics memory, your RAM and the size of the language model you picked, then marks the best choice. The numbers are rough; a mistake only costs speed, because every part is tested and falls back (graphics card to processor, Chatterbox to Kokoro).
+
+| Part | Choices | Read more |
+|---|---|---|
+| Speech recognition (Whisper through faster-whisper) | `tiny` (0.08 GB), `base` (0.15 GB), `small` (0.5 GB), `medium` (1.5 GB), `large-v3` (3.1 GB). Bigger = fewer mistakes, more download and memory. NVIDIA card with room to spare: runs on the card; otherwise on the processor. | [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Whisper sizes](https://github.com/openai/whisper#available-models-and-languages) |
+| Voice: Kokoro | One size only (82 million parameters, about 0.3 GB), runs on any PC | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) |
+| Voice: Chatterbox | More natural, can copy a voice from a 10-20 second clip of **your own** voice (or one you have permission to copy). Needs an NVIDIA card (about 4 GB graphics memory next to the language model) and a long download | [Chatterbox](https://github.com/resemble-ai/chatterbox) |
+
+Change the choice later: `powershell -ExecutionPolicy Bypass -File tools\voice-setup.ps1 -Ask`. It keeps a copy of your old settings as `config.toml.before-voice`. The Chatterbox part was built from the author's setup (RTX 5090) and is **not yet tested on other PCs**. Important after a GPU voice is installed: add packages with `uv pip install` only, **never** `uv sync` or plain `uv run` afterwards, because they remove the hand-added packages (CUDA PyTorch, `nvidia-cublas-cu12`, `nvidia-cudnn-cu12`, `av<17`, `maxminddb`) and break speech and the network map. Keep `MAX_FPS=30` in `hud.html`: a 60 fps HUD competes with the voice for the GPU.
 
 ## 🧠 Memory: Jarvis remembers things
 

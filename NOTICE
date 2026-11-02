@@ -22,6 +22,8 @@ Modified OpenJarvis files (each carries a "Modified for the IronMan J.A.R.V.I.S.
   src/openjarvis/security/__init__.py
   src/openjarvis/security/taint.py
   src/openjarvis/speech/faster_whisper.py
+  src/openjarvis/speech/__init__.py
+  src/openjarvis/speech/_tts_discovery.py
   src/openjarvis/speech/kokoro_tts.py
   src/openjarvis/tools/__init__.py
   src/openjarvis/tools/_stubs.py
@@ -36,6 +38,7 @@ Files added by this project:
   src/openjarvis/tools/rss_news.py   news headlines tool
   src/openjarvis/tools/oracle_search.py  document search tool
   src/openjarvis/tools/storage/sqlite_dense.py  meaning-based memory backend (SQLite + LM Studio embeddings)
+  src/openjarvis/speech/chatterbox_tts.py  optional GPU voice (Chatterbox, needs chatterbox-tts)
   tools/                             local hardware helper, wake word service, helper scripts
   start-jarvis.ps1, install-jarvis.ps1, uninstall-jarvis.ps1, config.example.toml
   installer/                         Inno Setup recipe, wizard images and helper for the Windows installer (.exe)
