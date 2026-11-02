@@ -285,9 +285,8 @@ async function bargeStart(){
 async function speak(t){
   const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>]/g,'').replace(/\s+/g,' ').trim();   // links are not read aloud (markdown links keep their text)
   if(!clean||!on)return;
-  // the source list is never read aloud; on a PC without a GPU only the first sentences are read (the whole answer stays on screen), so the voice does not run for minutes
+  // the source list is never read aloud; the rest of the answer is read in full, sentence by sentence (the next piece is prepared while one plays)
   let spoken=clean.replace(/\s*\bSources?:.*$/i,'').trim();
-  if(NOG&&spoken.length>350){const cut=spoken.slice(0,350),k=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('! '),cut.lastIndexOf('? '));spoken=k>120?cut.slice(0,k+1):cut}
   if(!spoken)return;
   const parts=(spoken.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)||[spoken]).map(x=>x.trim()).filter(Boolean);
   const chunks=[];let cur='';
