@@ -408,6 +408,7 @@ begin
   AddText(WakePage, Y, 'Listens for "Hey Jarvis" with the open-source openWakeWord. It needs its own Python environment and a few hundred MB, a few minutes of setup. Without it you click the ring or press F6.', CText, False);
   AddLink(WakePage, Y, 'openWakeWord', 'https://github.com/dscripka/openWakeWord');
   WakeCheck := AddCheck(WakePage, Y, 'Set up the wake word "Hey Jarvis"');
+  WakeCheck.Checked := True;   { on by default }
 
   { language model }
   ModelPage := NewPage(WakePage.ID, 'Language model', 'The AI that answers you. It runs in LM Studio on your PC.');
