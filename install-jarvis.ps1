@@ -10,6 +10,7 @@ param(
   [switch]$WantTado, [switch]$WantWake, [switch]$WantRag,
   [int]$ModelTier = 0,          # 1-3 = download that size (see Step 6b), 0 = none
   [string]$ModelId = '',        # an LM Studio model that is already installed
+  [string]$OnlineModel = '',    # optional: Hugging Face repo found by tools\model-search.ps1 (tested after the download; on failure the choice above is used)
   [string]$WhisperModel = '',   # speech recognition size: tiny|base|small|medium|large-v3 (empty = recommended for this PC, see tools\voice-setup.ps1)
   [string]$TtsChoice = '',      # voice: kokoro|chatterbox (empty = kokoro; plain PowerShell use asks)
   [string]$VoiceClip = '',      # optional clip of your OWN voice for Chatterbox
@@ -194,7 +195,49 @@ if (-not $lmsCmd) {
 } else {
   $chosen = $null
   $have = @(Get-LlmList)
-  if ($FromWizard) {
+  # optional: a newer model found online (Hugging Face), downloaded and tested for tool calls; on failure the normal choice below is used
+  function Use-OnlineModel([string]$repo) {
+    $before = @(Get-LlmList | ForEach-Object { $_.modelKey })
+    Write-Host "  Downloading $repo (newest model found online, can take a while)..." -ForegroundColor Cyan
+    if ($FromWizard) { Status 6 "Downloading $repo (found online). This can take a very long time, please wait" }
+    & $lmsCmd get $repo -y 2>&1 | ForEach-Object { Write-Host "    $_" }
+    $new = @(Get-LlmList | Where-Object { $before -notcontains $_.modelKey } | Select-Object -First 1)
+    if ($new.Count -eq 0) { Write-Host "  Could not confirm the download of $repo. Using the normal choice instead." -ForegroundColor Yellow; return $null }
+    $key = $new[0].modelKey
+    Write-Host "  Testing $key (can it call tools?)..." -ForegroundColor Cyan
+    if ($FromWizard) { Status 6 "Testing $key (one quick tool-call test)" }
+    $ok = $false
+    try {
+      & $lmsCmd load $key -c 4096 -y 2>&1 | Out-Null
+      $body = @{ model = $key; temperature = 0; max_tokens = 200; tool_choice = 'auto'
+        messages = @(@{ role = 'user'; content = 'What is the weather in Paris right now? Use the tool.' })
+        tools = @(@{ type = 'function'; function = @{ name = 'get_weather'; description = 'Get the current weather of a city'; parameters = @{ type = 'object'; properties = @{ city = @{ type = 'string' } }; required = @('city') } } }) } | ConvertTo-Json -Depth 8
+      $r = Invoke-RestMethod -Uri 'http://127.0.0.1:1234/v1/chat/completions' -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 240
+      if ($r.choices[0].message.tool_calls -and "$($r.choices[0].message.tool_calls[0].function.name)" -eq 'get_weather') { $ok = $true }
+    } catch { Write-Host "  Test error: $($_.Exception.Message)" -ForegroundColor Yellow }
+    try { & $lmsCmd unload --all 2>&1 | Out-Null } catch { }
+    if ($ok) { Write-Host "  $key passed the tool-call test." -ForegroundColor Green; return $key }
+    Write-Host "  $key did not pass the tool-call test. Using the normal choice instead (the downloaded model stays in LM Studio)." -ForegroundColor Yellow
+    return $null
+  }
+  $online = ''
+  if ($OnlineModel -match '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$') { $online = $OnlineModel }
+  elseif (-not $FromWizard) {
+    $ms = Join-Path $PSScriptRoot 'tools\model-search.ps1'
+    if ((Test-Path $ms) -and ((Read-Host "  Optional: look online for a newer model that fits your PC? (y/N)").Trim() -match '^[yY]')) {
+      $tmpO = Join-Path $env:TEMP 'jarvis-models-online.txt'; Remove-Item $tmpO -Force -ErrorAction SilentlyContinue
+      try { & $ms -Out $tmpO } catch { }
+      $bl = @(); if (Test-Path $tmpO) { $bl = @(Get-Content $tmpO | Where-Object { $_ -like 'BEST|*' }) }
+      if ($bl.Count -gt 0) {
+        $bp = $bl[0] -split '\|'
+        Write-Host ("   Found: {0}  (about {1} GB, added {2})" -f $bp[1], $bp[2], $bp[3])
+        if ((Read-Host "  Use it? It is tested after the download and the normal choice is used if the test fails (y/N)").Trim() -match '^[yY]') { $online = $bp[1] }
+      } else { Write-Host "  Nothing suitable found (or no internet). Continuing with the normal choice." -ForegroundColor Yellow }
+    }
+  }
+  if ($online) { $ok = Use-OnlineModel $online; if ($ok) { $chosen = $ok } }
+  if ($chosen) { }
+  elseif ($FromWizard) {
     if ($ModelId -match '^[A-Za-z0-9._:/@+-]+$') { $chosen = $ModelId }
   } elseif ($have.Count -gt 0) {
     Write-Host "  Models already in LM Studio:"

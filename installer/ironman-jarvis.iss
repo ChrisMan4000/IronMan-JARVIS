@@ -30,6 +30,7 @@ FinishedHeadingLabel=Setup finished
 Source: "..\*"; DestDir: "{app}"; Excludes: "installer\*,.git\*,IronMan-JARVIS-Installer.exe"; Flags: recursesubdirs createallsubdirs
 Source: "list-llms.ps1"; Flags: dontcopy
 Source: "..\tools\voice-rec.ps1"; Flags: dontcopy
+Source: "..\tools\model-search.ps1"; Flags: dontcopy
 
 [UninstallDelete]
 ; the setup script creates the Python environment, node_modules, caches and logs inside the folder: remove all of it
@@ -83,6 +84,11 @@ var
   ModelCombo, WhisperCombo: TNewComboBox;
   ClipEdit: TNewEdit;
   ClipHint: TNewStaticText;
+  OnlinePage: TWizardPage;
+  OnlineBtn: TNewButton;
+  OnlineInfo: TNewStaticText;
+  RbOnYes, RbOnNo: TNewRadioButton;
+  OnlineRepo, OnlineGB: String;
   ModelGBs: TArrayOfString;
   VoiceRecKey, RecWhisper, RecTts: String;
   HasNvidia: Boolean;
@@ -184,6 +190,7 @@ end;
 
 procedure CheckLabelClick(Sender: TObject); forward;
 procedure RadioLabelClick(Sender: TObject); forward;
+procedure OnlineCheckClick(Sender: TObject); forward;
 
 { Windows draws the text of check boxes and radio buttons itself and ignores the color, so the real control has no text
   and a colored label next to it carries the text (clicking the label works like clicking the box). }
@@ -420,7 +427,27 @@ begin
   RbT3.OnClick := @ModelRadioClick; RbSkip.OnClick := @ModelRadioClick;
 
   { speech recognition (Whisper size) }
-  VoicePage := NewPage(ModelPage.ID, 'Speech recognition', 'How Jarvis understands what you say.');
+  { optional: look online for a newer model that fits the PC }
+  OnlinePage := NewPage(ModelPage.ID, 'Newest models (optional)', 'Look online for a newer language model that fits your PC.');
+  Y := 0;
+  AddText(OnlinePage, Y, 'The three sizes on the previous page are a fixed list. This optional step asks Hugging Face for the newest chat models of the LM Studio community and suggests the biggest one that fits your PC. After the download the setup tests that the model can call tools (Jarvis needs that). If the test fails, your choice from the previous page is installed instead. You can skip this step.', CText, False);
+  AddLink(OnlinePage, Y, 'Hugging Face: lmstudio-community', 'https://huggingface.co/lmstudio-community');
+  OnlineBtn := TNewButton.Create(OnlinePage);
+  OnlineBtn.Parent := OnlinePage.Surface;
+  OnlineBtn.Left := 0; OnlineBtn.Top := Y; OnlineBtn.Width := ScaleX(200); OnlineBtn.Height := ScaleY(26);
+  OnlineBtn.Caption := 'Check online now';
+  OnlineBtn.OnClick := @OnlineCheckClick;
+  Y := Y + ScaleY(36);
+  OnlineInfo := AddText(OnlinePage, Y, 'Not checked yet.', COrange, False);
+  Y := Y - OnlineInfo.Height - ScaleY(6);
+  OnlineInfo.AutoSize := False; OnlineInfo.Height := ScaleY(48);
+  Y := Y + ScaleY(54);
+  RbOnYes := AddRadio(OnlinePage, Y, 'Use the model found online');
+  RbOnNo := AddRadio(OnlinePage, Y, 'No, keep my choice from the previous page');
+  RbOnYes.Enabled := False; SetRadioLook(RbOnYes);
+  RbOnNo.Checked := True;
+
+  VoicePage := NewPage(OnlinePage.ID, 'Speech recognition', 'How Jarvis understands what you say.');
   Y := 0;
   AddText(VoicePage, Y, 'Whisper (run through faster-whisper) turns your voice into text. A bigger size understands better but needs more download and memory. The size that fits your PC best is marked.', CText, False);
   AddLink(VoicePage, Y, 'faster-whisper', 'https://github.com/SYSTRAN/faster-whisper');
@@ -545,12 +572,54 @@ begin
   ModelRadioClick(nil);
 end;
 
+{ button on the optional page: asks Hugging Face (tools\model-search.ps1, read-only) for the best new model that fits }
+procedure OnlineCheckClick(Sender: TObject);
+var Lines: TArrayOfString; Tmp, L: String; Rc, I: Integer;
+begin
+  OnlineBtn.Enabled := False;
+  OnlineInfo.Caption := 'Searching Hugging Face, please wait a few seconds...';
+  WizardForm.Update;
+  OnlineRepo := ''; OnlineGB := '';
+  Tmp := ExpandConstant('{tmp}\models-online.txt');
+  DeleteFile(Tmp);
+  ExtractTemporaryFile('model-search.ps1');
+  Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\model-search.ps1') + '" -Out "' + Tmp + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  if LoadStringsFromFile(Tmp, Lines) then
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      L := Trim(Lines[I]);
+      if Pos('BEST|', L) = 1 then
+      begin
+        Delete(L, 1, 5);
+        OnlineRepo := NextField(L);
+        OnlineGB := NextField(L);
+        if not ValidModelId(OnlineRepo) then OnlineRepo := '';
+      end;
+    end;
+  if OnlineRepo <> '' then
+  begin
+    OnlineInfo.Caption := 'Found: ' + OnlineRepo + ' (about ' + OnlineGB + ' GB, estimated). It fits your PC.';
+    SetRadioText(RbOnYes, 'Use ' + OnlineRepo + '   (about ' + OnlineGB + ' GB, found online)   <-- newest that fits');
+    RbOnYes.Enabled := True; SetRadioLook(RbOnYes);
+    RbOnYes.Checked := True;
+  end
+  else
+  begin
+    OnlineInfo.Caption := 'Nothing suitable found (or no internet). Your choice from the previous page stays.';
+    RbOnYes.Enabled := False; SetRadioLook(RbOnYes);
+    RbOnNo.Checked := True;
+  end;
+  VoiceRecKey := '';
+  OnlineBtn.Enabled := True;
+end;
+
 { looks at the PC (tools\voice-rec.ps1, read-only) and marks the best Whisper size and voice; runs again only when the language model choice changed }
 procedure DetectVoice;
 var Lines: TArrayOfString; I, Rc: Integer; L, Tmp, Gb, Vram, Ram, Nv, FreeGb, Mark: String;
 begin
   Gb := '-1';
-  if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Gb := ModelGBs[ModelCombo.ItemIndex]
+  if RbOnYes.Checked and (OnlineGB <> '') then Gb := OnlineGB
+  else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Gb := ModelGBs[ModelCombo.ItemIndex]
   else if RbT1.Checked then Gb := '2.5'
   else if RbT2.Checked then Gb := '6.7'
   else if RbT3.Checked then Gb := '14.6';
@@ -619,7 +688,8 @@ begin
   if HueCheck.Checked then S := S + Space + 'Philips Hue Smart Lights (bridge ' + Trim(HueIpEdit.Text) + ')' + NewLine;
   if TadoCheck.Checked then S := S + Space + 'Tado Smart Heating' + NewLine;
   if WakeCheck.Checked then S := S + Space + 'Wake word "Hey Jarvis"' + NewLine;
-  if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
+  if RbOnYes.Checked and (OnlineRepo <> '') then M := 'newest found online, ' + OnlineRepo + ' (about ' + OnlineGB + ' GB, tested after the download)'
+  else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
   else if RbT1.Checked then M := 'download about 2.5 GB'
   else if RbT2.Checked then M := 'download about 6.7 GB'
   else if RbT3.Checked then M := 'download about 14.6 GB'
@@ -681,6 +751,7 @@ begin
   if TadoCheck.Checked then Opts := Opts + ' -WantTado';
   if WakeCheck.Checked then Opts := Opts + ' -WantWake';
   if RagCheck.Checked then Opts := Opts + ' -WantRag';
+  if RbOnYes.Checked and (OnlineRepo <> '') then Opts := Opts + ' -OnlineModel ''' + OnlineRepo + '''';
   if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Opts := Opts + ' -ModelId ''' + ModelKeys[ModelCombo.ItemIndex] + ''''
   else if RbT1.Checked then Opts := Opts + ' -ModelTier 1'
   else if RbT2.Checked then Opts := Opts + ' -ModelTier 2'
