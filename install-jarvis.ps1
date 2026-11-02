@@ -307,7 +307,8 @@ if (-not $lmsCmd) {
   if ($chosen -and $chosen -match '^[A-Za-z0-9._:/@+-]+$') {
     Write-Host "  Loading $chosen (context 8192)..." -ForegroundColor Cyan
     Status 6 "Loading $chosen into memory (this can take a few minutes, please wait)"
-    & $lmsCmd load $chosen -c 8192 -y
+    $parArg = @(); if (-not (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { $parArg = @('--parallel', '1') }   # processor only: one slot keeps the prompt cached
+    & $lmsCmd load $chosen -c 8192 -y $parArg
     # remember the choice: start-jarvis.ps1 loads this model when none is loaded
     [System.IO.File]::WriteAllText((Join-Path $Cfg 'jarvis-model.txt'), $chosen, $Utf8)
     Write-Host "  Model saved: $chosen" -ForegroundColor Green

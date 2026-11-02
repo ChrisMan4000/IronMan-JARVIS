@@ -22,6 +22,8 @@ function Wait-For($url, $name, $timeoutSec = 180) {
   return $false
 }
 
+# PCs without an NVIDIA card (processor only): one slot, so the long Jarvis prompt stays cached between questions (with 4 slots it was read again from scratch every time, minutes per answer on a Surface)
+$lmsPar = @(); if (-not (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { $lmsPar = @('--parallel', '1') }
 # --- Step 1: LM Studio must be running
 Write-Host "Checking LM Studio..." -ForegroundColor Cyan
 function Test-Lms { try { Invoke-WebRequest "http://localhost:1234/v1/models" -TimeoutSec 3 -UseBasicParsing | Out-Null; return $true } catch { return $false } }
@@ -69,7 +71,7 @@ if ($info) {
   if ($ReloadOnContextMismatch -and $info.loaded_context_length -and [int]$info.loaded_context_length -ne $want) {
     Write-Host "Model $model is loaded with context $($info.loaded_context_length), saved context is $want - reloading..." -ForegroundColor Yellow
     lms unload --all
-    lms load $model -c $want -y
+    lms load $model -c $want -y $lmsPar
   } else {
     Write-Host "Model already loaded: $model (context $($info.loaded_context_length))" -ForegroundColor Green
   }
@@ -87,7 +89,7 @@ if ($info) {
   foreach ($c in $cands) {
     $want = Get-SavedCtx $c
     Write-Host "No model loaded - loading $c with context $want..." -ForegroundColor Yellow
-    lms load $c -c $want -y
+    lms load $c -c $want -y $lmsPar
     $chk = $null
     try { $chk = (Invoke-RestMethod "http://localhost:1234/api/v0/models" -TimeoutSec 5).data | Where-Object { $_.id -eq $c -and $_.state -eq "loaded" } | Select-Object -First 1 } catch {}
     if ($chk) { $model = $c; $loadedOk = $true; break }
