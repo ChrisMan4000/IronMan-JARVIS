@@ -15,6 +15,8 @@ import time
 import urllib.request
 from typing import Any
 
+from openjarvis.tools import device_log
+
 logger = logging.getLogger(__name__)
 
 _JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
@@ -94,16 +96,8 @@ def error_text(exc: BaseException) -> str:
 
 
 def log_call(tool: str, params: dict[str, Any]) -> None:
-    """Append one shortened line per call so the user can see what was asked."""
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(
-                "%s %s %s\n" % (time.strftime("%H:%M:%S"), tool, repr(params)[:300])
-            )
-    except (
-        OSError
-    ) as exc:  # the log is a convenience; never let it block a light switch
-        logger.debug("hue call log not written: %s", exc)
+    """One shortened line per call in hue-set-log.txt (what was asked)."""
+    device_log.append_change(LOG_FILE, "%s %s" % (tool, repr(params)[:300]))
 
 
 def rooms(groups: dict[str, dict[str, Any]]) -> list[tuple[str, str]]:

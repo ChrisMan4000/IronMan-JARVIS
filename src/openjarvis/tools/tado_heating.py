@@ -17,14 +17,13 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import device_log
 from openjarvis.tools._stubs import BaseTool, ToolSpec
-
-logger = logging.getLogger(__name__)
 
 TOOL_NAME = "tado_heating"
 TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "tado-token.json")
@@ -111,12 +110,7 @@ def describe_zone(z: Any) -> str:
 
 
 def _log_change(text: str) -> None:
-    """Append one line to tado-set-log.txt."""
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write("%s %s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), text))
-    except OSError as exc:  # the log is a convenience; never block the change
-        logger.debug("tado change log not written: %s", exc)
+    device_log.append_change(LOG_FILE, text)
 
 
 def _result(text: str, ok: bool = True) -> ToolResult:

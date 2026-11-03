@@ -14,20 +14,18 @@ success means the read-back confirmed it.
 from __future__ import annotations
 
 import json
-import logging
 import os
 import socket
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any, TypedDict, TypeVar
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import device_log
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
-logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 TOOL_NAME = "oxxify_vent"
@@ -367,11 +365,7 @@ def plan_change(action: str, value: str) -> Plan | str:
 
 
 def _log_change(text: str) -> None:
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write("%s %s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), text))
-    except OSError as exc:  # the log is a convenience; never block the change
-        logger.debug("oxxify change log not written: %s", exc)
+    device_log.append_change(LOG_FILE, text)
 
 
 def _result(text: str, ok: bool = True) -> ToolResult:
