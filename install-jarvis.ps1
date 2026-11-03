@@ -111,7 +111,7 @@ if ($LASTEXITCODE -ne 0) {
   Signal FAIL uv sync failed; exit 1
 }
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
-uv pip install maxminddb python-tado maturin pdfplumber psutil huggingface_hub
+uv pip install maxminddb "python-tado>=1.0,<1.1" maturin pdfplumber psutil huggingface_hub
 # optional speed-up module (Rust). Not built on ARM PCs (Windows blocks the build there); Jarvis works the same without it.
 if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional Rust module is skipped." }
 else {
