@@ -5,6 +5,7 @@
 # Never run 'uv sync' or a plain 'uv run' afterwards: they remove the hand-added GPU packages (use 'uv run --no-sync').
 # Honest note: written from the working setup of the author's PC (RTX 5090), NOT yet tested on other PCs. Each part is tested
 # after the install and the script falls back to the lighter choice (processor / Kokoro) when a test fails.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'StatusFile', Justification = 'used by function Say; the rule does not look inside nested functions')]
 param(
   [string]$Repo = '',
   [string]$Whisper = '',        # tiny | base | small | medium | large-v3 (empty = recommendation)
@@ -23,10 +24,10 @@ $Utf8 = New-Object System.Text.UTF8Encoding($false)
 
 function Say($t, $color = 'Cyan') {
   Write-Host $t -ForegroundColor $color
-  if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "STEP 8|$t`r`n") } catch { } }
+  if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "STEP 8|$t`r`n") } catch { Write-Verbose "status file not writable: $_" } }
 }
 # runs a small Python test inside the project environment; returns everything it printed (check it for the OK marker)
-function Run-Py([string]$code, [string[]]$pyArgs) {
+function Invoke-Py([string]$code, [string[]]$pyArgs) {
   $f = Join-Path $env:TEMP ('jarvis-voice-' + [guid]::NewGuid().ToString('N') + '.py')
   [System.IO.File]::WriteAllText($f, $code, $Utf8)
   Push-Location $Repo
@@ -36,7 +37,7 @@ function Run-Py([string]$code, [string[]]$pyArgs) {
   return ($txt -join "`n")
 }
 function Get-SpeechBlock([string]$text) { return [regex]::Match($text, '(?ms)^\[speech\][ \t]*\r?\n(.*?)(?=^\[|\z)') }
-function Set-SpeechValue([string]$text, [string]$key, [string]$value) {
+function Merge-SpeechValue([string]$text, [string]$key, [string]$value) {
   $m = Get-SpeechBlock $text
   $line = $key + ' = "' + $value + '"'
   if (-not $m.Success) { return ($text.TrimEnd() + "`r`n`r`n[speech]`r`n" + $line + "`r`n") }
@@ -130,12 +131,12 @@ try {
     uv pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*" "av>=15,<17"
   }
   Say "Voice: downloading and testing speech recognition (Whisper $Whisper)"
-  $res = Run-Py $pyWhisper @($Whisper, $device, $compute)
+  $res = Invoke-Py $pyWhisper @($Whisper, $device, $compute)
   if (($res -notmatch 'WHISPER_OK') -and $device -eq 'cuda') {
     Write-Host "  Speech recognition on the graphics card did not work. Trying the processor (slower)." -ForegroundColor Yellow
     $device = 'cpu'; $compute = 'int8'
     if (@('medium', 'large-v3') -contains $Whisper) { $Whisper = 'small'; Write-Host "  Using the smaller size 'small' on the processor." -ForegroundColor Yellow }
-    $res = Run-Py $pyWhisper @($Whisper, $device, $compute)
+    $res = Invoke-Py $pyWhisper @($Whisper, $device, $compute)
   }
   if ($res -notmatch 'WHISPER_OK') { Write-Host "  The speech recognition test failed (internet?). The setting is saved anyway; Jarvis tries again on first use." -ForegroundColor Yellow }
 
@@ -149,7 +150,7 @@ try {
     uv pip install "chatterbox-tts==0.1.7"   # the version tested on the author's PC (it pins torch 2.6.0 and transformers 5.2.0; torch is upgraded right after)
     uv pip install --upgrade "torch>=2.7" "torchaudio>=2.7" --index-url https://download.pytorch.org/whl/cu128
     Say "Voice: loading Chatterbox once (downloads its model, about 3 GB)"
-    $res = Run-Py $pyChatterbox @()
+    $res = Invoke-Py $pyChatterbox @()
     if ($res -notmatch 'CHATTERBOX_OK') {
       Write-Host "  Chatterbox did not work on this PC (see the lines above). Using Kokoro instead. You can try again later with: powershell -ExecutionPolicy Bypass -File tools\voice-setup.ps1 -Ask" -ForegroundColor Yellow
       $Tts = 'kokoro'
@@ -171,12 +172,12 @@ try {
     if (-not (Test-Path "$cfgFile.before-voice")) { Copy-Item $cfgFile "$cfgFile.before-voice" }
     $c = [System.IO.File]::ReadAllText($cfgFile, [System.Text.Encoding]::UTF8)
     $cur = [regex]::Match((Get-SpeechBlock $c).Groups[1].Value, '(?m)^[ \t]*tts_backend[ \t]*=[ \t]*"([^"]*)"').Groups[1].Value
-    $c = Set-SpeechValue $c 'model' $Whisper
-    $c = Set-SpeechValue $c 'device' $device
-    $c = Set-SpeechValue $c 'compute_type' $compute
-    $c = Set-SpeechValue $c 'tts_backend' $Tts
-    if ($Tts -eq 'chatterbox') { $c = Set-SpeechValue $c 'voice_id' $voiceId }
-    elseif ($cur -ne 'kokoro') { $c = Set-SpeechValue $c 'voice_id' 'am_adam' }
+    $c = Merge-SpeechValue -text $c -key 'model' -value $Whisper
+    $c = Merge-SpeechValue -text $c -key 'device' -value $device
+    $c = Merge-SpeechValue -text $c -key 'compute_type' -value $compute
+    $c = Merge-SpeechValue -text $c -key 'tts_backend' -value $Tts
+    if ($Tts -eq 'chatterbox') { $c = Merge-SpeechValue -text $c -key 'voice_id' -value $voiceId }
+    elseif ($cur -ne 'kokoro') { $c = Merge-SpeechValue -text $c -key 'voice_id' -value 'am_adam' }
     [System.IO.File]::WriteAllText($cfgFile, $c, $Utf8)
     Write-Host "  Saved to $cfgFile (backup of the old file: config.toml.before-voice)" -ForegroundColor Green
   } else { Write-Host "  No settings file found at $cfgFile - voice settings not saved." -ForegroundColor Yellow }

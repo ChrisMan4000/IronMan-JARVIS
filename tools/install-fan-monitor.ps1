@@ -5,8 +5,9 @@
 #  3. runs tools\setup-fan-monitor.ps1 (hidden start/stop together with Jarvis, firewall rule that blocks port 8085 from the network)
 #  4. starts it once and checks that http://127.0.0.1:8085/data.json answers
 # The result (OK / NOWEB / FAIL: reason) is written to -ResultFile. Honest note: not tested on a freshly wiped PC.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'ResultFile', Justification = 'used by function Done; the rule does not look inside nested functions')]
 param([string]$Folder = 'C:\Program Files\LibreHardwareMonitor', [string]$ResultFile = '')
-function Done($t) { Write-Host $t; if ($ResultFile) { try { [System.IO.File]::WriteAllText($ResultFile, $t) } catch { } }; exit }
+function Done($t) { Write-Host $t; if ($ResultFile) { try { [System.IO.File]::WriteAllText($ResultFile, $t) } catch { Write-Verbose "result file not writable: $_" } }; exit }
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) { Done 'FAIL: not started as administrator' }
 try {
@@ -56,7 +57,7 @@ try {
   $ok = $false
   for ($i = 0; $i -lt 15 -and -not $ok; $i++) {
     Start-Sleep -Seconds 2
-    try { Invoke-RestMethod 'http://127.0.0.1:8085/data.json' -TimeoutSec 3 | Out-Null; $ok = $true } catch { }
+    try { Invoke-RestMethod 'http://127.0.0.1:8085/data.json' -TimeoutSec 3 | Out-Null; $ok = $true } catch { Write-Verbose "fan monitor web server not answering yet: $_" }
   }
   Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue | Stop-Process -Force
   if ($ok) { Done 'OK' } else { Done 'NOWEB' }

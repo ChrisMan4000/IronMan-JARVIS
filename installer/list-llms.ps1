@@ -14,6 +14,6 @@ if ($lms) {
     $j = (& $lms ls --json 2>$null) -join "`n"
     $arr = ConvertFrom-Json $j      # PowerShell 5 returns the array as ONE object: loop over it
     foreach ($m in $arr) { if ($m.type -eq 'llm' -and $m.modelKey) { $lines += ("{0}|{1}" -f $m.modelKey, [math]::Round($m.sizeBytes / 1GB, 1).ToString([Globalization.CultureInfo]::InvariantCulture)) } }
-  } catch { }
+  } catch { Write-Verbose "lms ls failed: $_" }
 }
 if ($Out) { [System.IO.File]::WriteAllLines($Out, [string[]]$lines) }

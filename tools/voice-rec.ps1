@@ -7,6 +7,7 @@
 #      -> writes the lines  HW|vramGB|ramGB|nvidia 0/1|arm 0/1   WREC|<whisper size>   TREC|<kokoro or chatterbox>   FREE|<GB>
 # NOTE: parameter names start with Rec on purpose: dot-sourcing must not overwrite variables of the calling script.
 # The memory numbers are rough estimates (large-v3 measured on an RTX 5090: Whisper large-v3 plus Chatterbox used about 8 GB together).
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'VoiceWhisperOptions', Justification = 'read by tools\voice-setup.ps1, which dot-sources this file')]
 param([string]$RecOut = '', [double]$RecLlmGB = -1)
 
 function Get-HwInfo {

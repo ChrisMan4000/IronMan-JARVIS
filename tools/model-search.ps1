@@ -3,6 +3,7 @@
 # biggest one that fits the graphics memory (or the RAM when there is no NVIDIA card). Size is estimated from the name (billions
 # of parameters x 0.62 GB + 0.5), so it is a guess; the installer tests the model after the download.
 # Output lines (with -Out written to that file):  BEST|<huggingface repo>|<estimated GB>|<date>   or   NONE|<reason>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Out', Justification = 'used by function Put; the rule does not look inside nested functions')]
 param([string]$Out = '', [double]$Vram = -1, [double]$Ram = -1)
 function Put($lines) { if ($Out) { [System.IO.File]::WriteAllLines($Out, [string[]]$lines) } else { $lines } }
 try {

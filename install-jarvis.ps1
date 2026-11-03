@@ -25,14 +25,14 @@ $Utf8 = New-Object System.Text.UTF8Encoding($false)
 function Ask($q) { if ($FromWizard) { return $true }; $a = Read-Host "$q (y/n)"; return ($a -match '^\s*y') }
 function Status($n, $text) {
   Write-Host "[$n/10] $text" -ForegroundColor Cyan
-  if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "STEP $n|$text`r`n") } catch { } }
+  if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "STEP $n|$text`r`n") } catch { Write-Verbose "status file not writable: $_" } }
 }
-function Signal($word, $text) { if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "$word|$text`r`n") } catch { } } }
-function Pair-Hue($ip) {
+function Signal($word, $text) { if ($StatusFile) { try { [System.IO.File]::AppendAllText($StatusFile, "$word|$text`r`n") } catch { Write-Verbose "status file not writable: $_" } } }
+function Connect-HueBridge($ip) {
   # asks the Hue bridge for an app key (the round button on the bridge must have been pressed in the last 30 seconds)
   if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') {
     [Environment]::SetEnvironmentVariable('HUE_BRIDGE_IP', $ip, 'User')
-    try { [System.IO.File]::WriteAllText("$Cfg\hue-ip.txt", $ip, $Utf8) } catch { }   # the installer wizard pre-fills the address from this after a reinstall
+    try { [System.IO.File]::WriteAllText("$Cfg\hue-ip.txt", $ip, $Utf8) } catch { Write-Verbose "could not save the Hue address: $_" }   # the installer wizard pre-fills the address from this after a reinstall
     if ($FromWizard -and (Test-Path "$Cfg\hue-key.txt")) { Write-Host "Hue key already saved."; return }
     if (-not $FromWizard) { Read-Host "Press the round button on top of the Hue bridge, THEN press Enter here" | Out-Null }
     try {
@@ -48,12 +48,12 @@ function Chk($name, $ok, $hint) {
   else     { Write-Host "  MISSING  $name   ($hint)" -ForegroundColor Yellow }
 }
 New-Item -ItemType Directory -Force $Cfg | Out-Null
-if ($FromWizard) { try { Start-Transcript -Path (Join-Path $Cfg 'install-log.txt') -Append | Out-Null } catch { } }
+if ($FromWizard) { try { Start-Transcript -Path (Join-Path $Cfg 'install-log.txt') -Append | Out-Null } catch { Write-Verbose "install log not started: $_" } }
 Set-Location $Repo
 if (-not (Test-Path "$Repo\start-jarvis.ps1")) { Write-Host "Run this script from the IronMan-JARVIS folder." -ForegroundColor Red; exit }
 
 # Wizard: pair with the Hue bridge FIRST (the button press is only valid for about 30 seconds)
-if ($FromWizard -and $WantHue) { Status 1 "Philips Hue: pairing with the bridge"; Pair-Hue $HueIp }
+if ($FromWizard -and $WantHue) { Status 1 "Philips Hue: pairing with the bridge"; Connect-HueBridge $HueIp }
 # ---------- 1. programs ----------
 Write-Host "Step 1: programs" -ForegroundColor Cyan
 Status 1 "Checking and installing programs (Git, uv, Node.js, Rust, LM Studio)"
@@ -108,7 +108,7 @@ $env:SETUPTOOLS_SCM_PRETEND_VERSION = "1.0.0"
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
 if ($LASTEXITCODE -ne 0) {
   Write-Host "ERROR: the Python packages could not be installed (uv sync failed). See the red text above. Nothing else was set up." -ForegroundColor Red
-  Signal FAIL uv sync failed; exit 1
+  Signal -word 'FAIL' -text 'uv sync failed'; exit 1
 }
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
 uv pip install maxminddb "python-tado>=1.0,<1.1" maturin pdfplumber psutil huggingface_hub
@@ -186,7 +186,7 @@ if (-not $lmsCmd -and $FromWizard) {
     Start-Process $lmsExe
     $lmsFile = "$env:USERPROFILE\.lmstudio\bin\lms.exe"
     for ($w = 0; $w -lt 45 -and -not (Test-Path $lmsFile); $w++) { Start-Sleep -Seconds 2 }
-    if (Test-Path $lmsFile) { $lmsCmd = $lmsFile; try { & $lmsFile bootstrap 2>$null | Out-Null } catch { } }
+    if (Test-Path $lmsFile) { $lmsCmd = $lmsFile; try { & $lmsFile bootstrap 2>$null | Out-Null } catch { Write-Verbose "lms bootstrap failed: $_" } }
     Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force   # was started hidden only to create lms.exe; start-jarvis.ps1 opens the real window later
   }
 }
@@ -204,7 +204,7 @@ if (-not $lmsCmd) {
         Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 2
         $pf = Join-Path $env:USERPROFILE '.lmstudio\.internal\backend-preferences-v2.json'
         $o = [ordered]@{ formatDefaults = [ordered]@{}; versions = [ordered]@{} }
-        if (Test-Path $pf) { try { $j = Get-Content $pf -Raw | ConvertFrom-Json; if ($j.formatDefaults) { $j.formatDefaults.PSObject.Properties | ForEach-Object { $o.formatDefaults[$_.Name] = $_.Value } }; if ($j.versions) { $j.versions.PSObject.Properties | ForEach-Object { $o.versions[$_.Name] = $_.Value } } } catch { } }
+        if (Test-Path $pf) { try { $j = Get-Content $pf -Raw | ConvertFrom-Json; if ($j.formatDefaults) { $j.formatDefaults.PSObject.Properties | ForEach-Object { $o.formatDefaults[$_.Name] = $_.Value } }; if ($j.versions) { $j.versions.PSObject.Properties | ForEach-Object { $o.versions[$_.Name] = $_.Value } } } catch { Write-Verbose "LM Studio presets not readable: $_" } }
         $o.formatDefaults['gguf'] = 'llama.cpp-win-arm64'; $o.versions['llama.cpp-win-arm64'] = $ver
         [System.IO.File]::WriteAllText($pf, ($o | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
         Write-Host "  ARM PC: LM Studio engine set to llama.cpp-win-arm64 $ver (much faster than the emulated x86 engine)." -ForegroundColor Green
@@ -226,7 +226,7 @@ if (-not $lmsCmd) {
     if ($FromWizard) { Status 6 "Testing $key (one quick tool-call test)" }
     $ok = $false
     try {
-      try { & $lmsCmd server start 2>&1 | Out-Null } catch { }   # the chat test needs LM Studio's server (port 1234)
+      try { & $lmsCmd server start 2>&1 | Out-Null } catch { Write-Verbose "LM Studio server start failed: $_" }   # the chat test needs LM Studio's server (port 1234)
       Start-Sleep -Seconds 3
       & $lmsCmd load $key -c 4096 -y 2>&1 | Out-Null
       $body = @{ model = $key; temperature = 0; max_tokens = 200; tool_choice = 'auto'
@@ -235,7 +235,7 @@ if (-not $lmsCmd) {
       $r = Invoke-RestMethod -Uri 'http://127.0.0.1:1234/v1/chat/completions' -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 240
       if ($r.choices[0].message.tool_calls -and "$($r.choices[0].message.tool_calls[0].function.name)" -eq 'get_weather') { $ok = $true }
     } catch { Write-Host "  Test error: $($_.Exception.Message)" -ForegroundColor Yellow }
-    try { & $lmsCmd unload --all 2>&1 | Out-Null } catch { }
+    try { & $lmsCmd unload --all 2>&1 | Out-Null } catch { Write-Verbose "lms unload failed: $_" }
     if ($ok) { Write-Host "  $key passed the tool-call test." -ForegroundColor Green; return $key }
     Write-Host "  $key did not pass the tool-call test. Using the normal choice instead (the downloaded model stays in LM Studio)." -ForegroundColor Yellow
     return $null
@@ -246,7 +246,7 @@ if (-not $lmsCmd) {
     $ms = Join-Path $PSScriptRoot 'tools\model-search.ps1'
     if ((Test-Path $ms) -and ((Read-Host "  Optional: look online for a newer model that fits your PC? (y/N)").Trim() -match '^[yY]')) {
       $tmpO = Join-Path $env:TEMP 'jarvis-models-online.txt'; Remove-Item $tmpO -Force -ErrorAction SilentlyContinue
-      try { & $ms -Out $tmpO } catch { }
+      try { & $ms -Out $tmpO } catch { Write-Verbose "model search failed: $_" }
       $bl = @(); if (Test-Path $tmpO) { $bl = @(Get-Content $tmpO | Where-Object { $_ -like 'BEST|*' }) }
       if ($bl.Count -gt 0) {
         $bp = $bl[0] -split '\|'
@@ -331,15 +331,15 @@ if ($ragAsked) {
     Write-Host "  Downloading the embedding model (nomic-embed-text, small)..." -ForegroundColor Cyan
     $embOk = $false
     foreach ($eid in 'nomic-ai/nomic-embed-text-v1.5', 'nomic-embed-text-v1.5', 'nomic-ai/nomic-embed-text-v1.5-GGUF') {
-      try { & $lmsCmd get $eid -y 2>&1 | ForEach-Object { Write-Host "    $_" } } catch { }
-      try { if (@((ConvertFrom-Json ((& $lmsCmd ls --json 2>$null) -join "`n")) | Where-Object { "$($_.modelKey)" -match 'nomic-embed' }).Count -gt 0) { $embOk = $true; break } } catch { }
+      try { & $lmsCmd get $eid -y 2>&1 | ForEach-Object { Write-Host "    $_" } } catch { Write-Verbose "lms get $eid failed: $_" }
+      try { $lsJson = (& $lmsCmd ls --json 2>$null) -join "`n"; if (@((ConvertFrom-Json $lsJson) | Where-Object { "$($_.modelKey)" -match 'nomic-embed' }).Count -gt 0) { $embOk = $true; break } } catch { Write-Verbose "lms ls failed: $_" }
     }
     if (-not $embOk) { Write-Host "  Embedding model not found after download. Get it later in LM Studio: search for nomic-embed-text-v1.5" -ForegroundColor Yellow }
     # plugin: first try the command line, then the lmstudio:// link
     $ragDir = Join-Path $env:USERPROFILE ".lmstudio\extensions\plugins\mindstudio\big-rag"
     if (-not (Test-Path $ragDir)) {
       Write-Host "  Installing plugin mindstudio/big-rag..." -ForegroundColor Cyan
-      try { & $lmsCmd get mindstudio/big-rag -y } catch { }
+      try { & $lmsCmd get mindstudio/big-rag -y } catch { Write-Verbose "big-rag download failed: $_" }
       Start-Sleep -Seconds 3
     }
     if (-not (Test-Path $ragDir)) {
@@ -381,7 +381,7 @@ Status 9 "Philips Hue and Tado (optional)"
 if ($useHue -and -not $FromWizard) {
   Write-Host ""; Write-Host "Step 8: Philips Hue (https://www.philips-hue.com/en-us/explore-hue)" -ForegroundColor Cyan
   $ip = (Read-Host "IP address of your Hue bridge (Hue app > Settings > Bridge)").Trim()
-  Pair-Hue $ip
+  Connect-HueBridge $ip
 }
 
 # ---------- 9. Tado (optional) ----------
@@ -459,10 +459,10 @@ $st.Save()
 
 # ---------- final checks ----------
 Write-Host ""; Write-Host "Checks:" -ForegroundColor Cyan
-Chk "lms (LM Studio command)" ((Have lms) -or (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe")) "open LM Studio once, then run: lms bootstrap"
-Chk "nvidia-smi" (Have nvidia-smi) "no NVIDIA GPU: the GPU gauges will not work, the rest does"
-Chk "settings file" (Test-Path $cfgFile) "rerun this script"
-Chk "wake word environment" (Test-Path "$NpuDir\.venv\Scripts\python.exe") "optional"
+Chk -name "lms (LM Studio command)" -ok ((Have lms) -or (Test-Path "$env:USERPROFILE\.lmstudio\bin\lms.exe")) -hint "open LM Studio once, then run: lms bootstrap"
+Chk -name "nvidia-smi" -ok (Have nvidia-smi) -hint "no NVIDIA GPU: the GPU gauges will not work, the rest does"
+Chk -name "settings file" -ok (Test-Path $cfgFile) -hint "rerun this script"
+Chk -name "wake word environment" -ok (Test-Path "$NpuDir\.venv\Scripts\python.exe") -hint "optional"
 Write-Host ""
 Write-Host "Still to do by hand:" -ForegroundColor Yellow
 Write-Host " 1. Open LM Studio once, then in PowerShell run: lms bootstrap  (open a NEW PowerShell afterwards)"
@@ -477,5 +477,5 @@ if ($ragAsked) {
 }
 Write-Host "Done." -ForegroundColor Green
 Signal 'DONE' 'finished'
-if ($FromWizard) { try { Stop-Transcript | Out-Null } catch { } }
+if ($FromWizard) { try { Stop-Transcript | Out-Null } catch { Write-Verbose "install log not stopped: $_" } }
 if ($FromWizard) { exit 0 }

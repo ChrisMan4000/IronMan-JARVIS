@@ -26,7 +26,7 @@ function Wait-For($url, $name, $timeoutSec = 180) {
 $lmsPar = @(); if (-not (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { $lmsPar = @('--parallel', '1') }
 # --- Step 1: LM Studio must be running
 Write-Host "Checking LM Studio..." -ForegroundColor Cyan
-function Test-Lms { try { Invoke-WebRequest "http://localhost:1234/v1/models" -TimeoutSec 3 -UseBasicParsing | Out-Null; return $true } catch { return $false } }
+function Test-LmStudio { try { Invoke-WebRequest "http://localhost:1234/v1/models" -TimeoutSec 3 -UseBasicParsing | Out-Null; return $true } catch { return $false } }
 function Get-Loaded {
   try {
     $d = (Invoke-RestMethod "http://localhost:1234/api/v0/models" -TimeoutSec 5).data
@@ -44,7 +44,7 @@ if ($lmsExe) {
   # still no window (LM Studio sometimes starts in the tray when the launcher itself is minimized): start it once more, a second start shows the window
   if (-not @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count) { Start-Process $lmsExe -WindowStyle Normal; Start-Sleep -Seconds 3 }
 } else { Write-Host "The LM Studio app was not found (only its hidden server can start). Run the Jarvis installer again to install LM Studio." -ForegroundColor Yellow }
-if (-not (Test-Lms)) {
+if (-not (Test-LmStudio)) {
   Write-Host "LM Studio server is not running - starting it..." -ForegroundColor Yellow
   lms server start
 }
@@ -57,14 +57,14 @@ function Get-SavedCtx($id) {
     $s = Get-Content "$env:USERPROFILE\.openjarvis\hud-model-settings.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
     $pr = $s.PSObject.Properties[$id]
     if ($pr -and $pr.Value.context) { $c = [int]$pr.Value.context }
-  } catch {}
+  } catch { Write-Verbose "saved model settings not readable: $_" }
   return $c
 }
 $info = $null
 try {
   $info = (Invoke-RestMethod "http://localhost:1234/api/v0/models" -TimeoutSec 5).data |
     Where-Object { $_.state -eq "loaded" -and ($_.type -eq "llm" -or $_.type -eq "vlm") } | Select-Object -First 1
-} catch {}
+} catch { Write-Verbose "loaded model not readable: $_" }
 if ($info) {
   $model = $info.id
   $want = Get-SavedCtx $model
@@ -84,14 +84,14 @@ if ($info) {
   try {
     $arr = ConvertFrom-Json ((lms ls --json 2>$null) -join "`n")
     foreach ($m in $arr) { if ($m.type -eq 'llm' -and $m.modelKey -and ($cands -notcontains $m.modelKey) -and $m.modelKey -match '^[A-Za-z0-9._:/@+-]+$') { $cands += $m.modelKey } }
-  } catch {}
+  } catch { Write-Verbose "lms ls failed: $_" }
   $loadedOk = $false
   foreach ($c in $cands) {
     $want = Get-SavedCtx $c
     Write-Host "No model loaded - loading $c with context $want..." -ForegroundColor Yellow
     lms load $c -c $want -y $lmsPar
     $chk = $null
-    try { $chk = (Invoke-RestMethod "http://localhost:1234/api/v0/models" -TimeoutSec 5).data | Where-Object { $_.id -eq $c -and $_.state -eq "loaded" } | Select-Object -First 1 } catch {}
+    try { $chk = (Invoke-RestMethod "http://localhost:1234/api/v0/models" -TimeoutSec 5).data | Where-Object { $_.id -eq $c -and $_.state -eq "loaded" } | Select-Object -First 1 } catch { Write-Verbose "model state check failed: $_" }
     if ($chk) { $model = $c; $loadedOk = $true; break }
     Write-Host "Could not load $c - trying the next model..." -ForegroundColor Yellow
   }
@@ -107,7 +107,7 @@ if ($model -notmatch '^[A-Za-z0-9._:/@+-]+$') {
 }
 
 # --- Step 2b: early warm-up straight to LM Studio (runs in the background)
-Start-Job -ArgumentList $model -ScriptBlock { param($m) try { $b = @{model=$m; max_tokens=1; messages=@(@{role='user'; content='Hi'})} | ConvertTo-Json -Depth 5; Invoke-RestMethod -Method Post -Uri http://localhost:1234/v1/chat/completions -Body $b -ContentType 'application/json' -TimeoutSec 300 | Out-Null } catch {} } | Out-Null
+Start-Job -ScriptBlock { try { $b = @{model=$using:model; max_tokens=1; messages=@(@{role='user'; content='Hi'})} | ConvertTo-Json -Depth 5; Invoke-RestMethod -Method Post -Uri http://localhost:1234/v1/chat/completions -Body $b -ContentType 'application/json' -TimeoutSec 300 | Out-Null } catch { Write-Verbose "model warm-up failed: $_" } } | Out-Null
 # --- Step 3: start the helper programs and the Jarvis server, each in its own terminal tab
 $env:PYTHONWARNINGS = 'ignore'; $env:HF_HUB_VERBOSITY = 'error'   # keeps harmless library warnings out of the terminal windows (inherited by the tabs; no semicolons in the wt command, wt would split it)
 # optional fan monitor: only runs if tools\setup-fan-monitor.ps1 was used (starts LibreHardwareMonitor hidden, closes it again after Jarvis stops)
@@ -133,7 +133,7 @@ Start-Sleep -Seconds 3
 $hl = @()
 foreach ($i in 1..10) { $done = $false; foreach ($ti in 'Jarvis Services','Jarvis Server 8000') { $h = [W.S]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $ti); if ($h -ne [IntPtr]::Zero) { [void][W.S]::ShowWindow($h, 6); $done = $true; $hl += [string]$h.ToInt64() } }; if ($done) { break }; Start-Sleep -Seconds 1 }
 # remember the terminal window, so Stop Jarvis can close it even when its title has changed
-try { [System.IO.File]::WriteAllLines((Join-Path $env:USERPROFILE '.openjarvis\terminal-hwnd.txt'), [string[]]@($hl | Select-Object -Unique)) } catch { }
+try { [System.IO.File]::WriteAllLines((Join-Path $env:USERPROFILE '.openjarvis\terminal-hwnd.txt'), [string[]]@($hl | Select-Object -Unique)) } catch { Write-Verbose "terminal window list not saved: $_" }
 Write-Host "All done." -ForegroundColor Green
 # --- Step 6: warm-up (first request is slow): runs hidden in the background, so this window can close right away
 Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$root\tools\warmup.ps1`" -Model `"$model`""
