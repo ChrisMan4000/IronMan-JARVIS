@@ -301,7 +301,7 @@ async function speak(t){
     const lim=NOG?30:45,c0=chunks[0];
     if(c0.length>lim+10){let k=-1;const m=c0.slice(10,lim+20).search(/[,;:]/);if(m>=0)k=11+m;else{const sp=c0.lastIndexOf(' ',lim);if(sp>=10)k=sp}
       if(k>0){const a=c0.slice(0,k).trim(),b=c0.slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}}
-  const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x})});
+  const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(90000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
     if(!r.ok)throw new Error('Speech failed: '+r.status);return ctx.decodeAudioData(await r.arrayBuffer())};
   window.MICMX=0;window.MICPK=0;interrupted=false;const stopB=await bargeStart();
   try{
@@ -317,7 +317,7 @@ async function speak(t){
       playing=null;
       if(interrupted)break;
     }
-  }finally{if(stopB)stopB()}
+  }finally{if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
   if(interrupted)add('sys','(interrupted)');else await new Promise(r=>setTimeout(r,100));
 }
 cv.style.cursor='default';cv.onmousemove=ev=>{const rg=window.RING;cv.style.cursor=(rg&&Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)<=rg.r)?'pointer':'default'};
