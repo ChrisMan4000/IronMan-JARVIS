@@ -62,9 +62,11 @@ if ($lmsApp) {
   # an LM Studio that was started hidden (tray only) is closed first, otherwise starting it again shows no window
   $withWindow = @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })
   if (-not $withWindow.Count -and (Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)) { Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 3 }
-  Start-Process $lmsApp -WindowStyle Normal; Start-Sleep -Seconds 5
+  # started through Explorer, so LM Studio (and its helper processes) do not attach to this window:
+  # otherwise its log fills this window and keeps it open after Stop Jarvis
+  Start-Process explorer.exe -ArgumentList ('"{0}"' -f $lmsApp); Start-Sleep -Seconds 5
   # still no window (LM Studio sometimes starts in the tray when the launcher itself is minimized): start it once more, a second start shows the window
-  if (-not @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count) { Start-Process $lmsApp -WindowStyle Normal; Start-Sleep -Seconds 3 }
+  if (-not @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count) { Start-Process explorer.exe -ArgumentList ('"{0}"' -f $lmsApp); Start-Sleep -Seconds 3 }
 } else { Write-Host "The LM Studio app was not found (only its hidden server can start). Run the Jarvis installer again to install LM Studio." -ForegroundColor Yellow }
 $lmsUrl = "http://localhost:$JarvisLmStudioPort/v1/models"
 try { Invoke-WebRequest $lmsUrl -TimeoutSec 3 -UseBasicParsing | Out-Null }

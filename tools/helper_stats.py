@@ -304,6 +304,22 @@ def _read_number(path: str) -> float:
         return 0.0
 
 
+def read_web_links() -> dict[str, Any] | None:
+    """{"at": time, "urls": [...]} of the last web_search (tool_marks.py), or None."""
+    try:
+        with open(
+            os.path.join(JARVIS_DIR, "tool-web_search-links.txt"), encoding="utf-8"
+        ) as f:
+            lines = f.read().split()
+        at = float(lines[0])
+    except (OSError, ValueError, IndexError):  # no web search yet, or a half file
+        return None
+    return {
+        "at": at,
+        "urls": [u for u in lines[1:4] if u.startswith(("http://", "https://"))],
+    }
+
+
 def tools_step() -> None:
     """When web_search / oracle_search last ran (for the two HUD lights)."""
     live.set(
@@ -312,6 +328,7 @@ def tools_step() -> None:
             "now": time.time(),
             "web": _read_number(os.path.join(JARVIS_DIR, "tool-web_search.txt")),
             "doc": _read_number(os.path.join(JARVIS_DIR, "tool-oracle_search.txt")),
+            "web_links": read_web_links(),
         },
     )
 

@@ -561,6 +561,11 @@ class ToolExecutor:
                 },
             )
 
+        if tool_call.name == "web_search" and result.success:
+            from openjarvis.tools import tool_marks
+
+            tool_marks.save_web_links(str(result.content or ""))  # for the HUD's Links line
+
         return result
 
     @staticmethod

@@ -108,14 +108,21 @@ function Get-OnlineModel([string]$Lms, [string]$RepoId) {
   $before = @(Get-LlmModel $Lms | ForEach-Object { $_.modelKey })
   Write-Host "  Downloading $RepoId (newest model found online, can take a while)..." -ForegroundColor Cyan
   Write-WizardLine $StatusFile "STEP 6|Downloading $RepoId (found online). This can take a very long time, please wait"
-  & $Lms get $RepoId -y 2>&1 | ForEach-Object { Write-Host "    $_" }
+  # lms get reads "owner/name" as an LM Studio Hub name; a Hugging Face repo needs its full address
+  $source = if ($RepoId -match '^https?://') { $RepoId } else { "https://huggingface.co/$RepoId" }
+  & $Lms get $source --gguf -y 2>&1 | ForEach-Object { Write-Host "    $_" }
   $new = @(Get-LlmModel $Lms | Where-Object { $before -notcontains $_.modelKey } | Select-Object -First 1)
-  if ($new.Count -eq 0) { Write-Host "  Could not confirm the download of $RepoId. Using the normal choice instead." -ForegroundColor Yellow; return $null }
+  if ($new.Count -eq 0) {
+    Write-Host "  Could not confirm the download of $RepoId. Using the normal choice instead." -ForegroundColor Yellow
+    Write-JarvisLog "online model $RepoId not downloaded (lms get $source)"
+    return $null
+  }
   $key = $new[0].modelKey
   Write-Host "  Testing $key (can it call tools?)..." -ForegroundColor Cyan
   Write-WizardLine $StatusFile "STEP 6|Testing $key (one quick tool-call test)"
   if (Test-ModelToolCall $Lms $key) { Write-Host "  $key passed the tool-call test." -ForegroundColor Green; return $key }
   Write-Host "  $key did not pass the tool-call test. Using the normal choice instead (the downloaded model stays in LM Studio)." -ForegroundColor Yellow
+  Write-JarvisLog "online model $key failed the tool-call test"
   return $null
 }
 function Find-OnlineModel {
