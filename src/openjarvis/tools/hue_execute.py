@@ -1,37 +1,62 @@
+"""Hue tool: carry out a room switch that the user approved in the HUD (approval path).
+
+Pairs with hue_propose. Built and tested but not enabled: the direct hue_set tool is
+used instead. To switch the approval path on, enable hue_propose and hue_execute and
+remove hue_set from the enabled tools.
+"""
+
 from __future__ import annotations
 
-import json
-import os
-import time
-import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import hue_bridge
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 from openjarvis.tools.approval_store import (
     STATUS_APPROVED,
     STATUS_EXECUTED,
     ApprovalStore,
+    PendingAction,
 )
+from openjarvis.tools.hue_propose import HUE_ROOM_POWER
 
-BRIDGE = os.environ.get("HUE_BRIDGE_IP", "").strip()  # your Hue bridge IP, see README
-KEY_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "hue-key.txt")
+TOOL_NAME = "hue_execute"
 
 
 def _fail(msg: str) -> ToolResult:
-    return ToolResult(tool_name="hue_execute", content=msg, success=False)
+    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
 
 
-@ToolRegistry.register("hue_execute")
+def _approved_action(
+    store: ApprovalStore, rid: str
+) -> tuple[PendingAction | None, str]:
+    """(action, "") for an approved, unexpired Hue request, else (None, reason)."""
+    act = store.get_action(rid)
+    if act is None:
+        return None, "Request %s not found." % rid
+    if act.action_type != HUE_ROOM_POWER:
+        return None, "Request %s is not a Hue request." % rid
+    if act.status != STATUS_APPROVED:
+        return (
+            None,
+            "Request %s is %s, not approved by the user. Nothing was changed."
+            % (rid, act.status),
+        )
+    if datetime.fromisoformat(act.expires_at) < datetime.now(timezone.utc):
+        return None, "Request %s has expired. Nothing was changed." % rid
+    return act, ""
+
+
+@ToolRegistry.register(TOOL_NAME)
 class HueExecuteTool(BaseTool):
-    tool_id = "hue_execute"
+    tool_id = TOOL_NAME
 
     @property
     def spec(self) -> ToolSpec:
         return ToolSpec(
-            name="hue_execute",
+            name=TOOL_NAME,
             description=(
                 "Carries out a Hue room request that the USER has already"
                 " approved in the HUD. Give the request id returned by"
@@ -52,54 +77,33 @@ class HueExecuteTool(BaseTool):
         )
 
     def execute(self, **params: Any) -> ToolResult:
+        hue_bridge.log_call(TOOL_NAME, params)
         rid = str(params.get("request_id", "")).strip()
         if not rid:
             return _fail("No request id given.")
         try:
             store = ApprovalStore()
-            try:
-                act = store.get_action(rid)
-                if act is None:
-                    return _fail("Request %s not found." % rid)
-                if act.action_type != "hue_room_power":
-                    return _fail("Request %s is not a Hue request." % rid)
-                if act.status != STATUS_APPROVED:
-                    return _fail(
-                        "Request %s is %s, not approved by the user. Nothing was changed."
-                        % (rid, act.status)
-                    )
-                exp = datetime.fromisoformat(act.expires_at)
-                if exp < datetime.now(timezone.utc):
-                    return _fail("Request %s has expired. Nothing was changed." % rid)
-                gid = str(act.payload.get("group_id"))
-                room = act.payload.get("room")
-                want_on = act.payload.get("state") == "on"
-                with open(KEY_FILE, "r", encoding="utf-8") as f:
-                    key = f.read().strip()
-                base = "http://%s/api/%s/groups/%s" % (BRIDGE, key, gid)
-                req = urllib.request.Request(
-                    base + "/action",
-                    data=json.dumps({"on": want_on}).encode("utf-8"),
-                    method="PUT",
-                    headers={"Content-Type": "application/json"},
-                )
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    reply = json.loads(r.read().decode("utf-8"))
-                store.update_status(rid, STATUS_EXECUTED)
-                time.sleep(1.0)
-                with urllib.request.urlopen(base, timeout=5) as r:
-                    grp = json.loads(r.read().decode("utf-8"))
-                any_on = bool(grp.get("state", {}).get("any_on"))
-                ok = any_on == want_on
-                text = "Sent: %s %s. Bridge reply: %s. Verified by reading back: %s (any light on now: %s)." % (
-                    room,
-                    "on" if want_on else "off",
-                    json.dumps(reply),
-                    "YES" if ok else "NO, state does not match",
-                    any_on,
-                )
-                return ToolResult(tool_name="hue_execute", content=text, success=ok)
-            finally:
-                store.close()
-        except Exception as e:
+        except Exception as e:  # approvals database missing or locked
             return _fail("Hue execute error: %s" % type(e).__name__)
+        try:
+            act, refusal = _approved_action(store, rid)
+            if act is None:
+                return _fail(refusal)
+            gid = str(act.payload.get("group_id"))
+            room = str(act.payload.get("room"))
+            want_on = act.payload.get("state") == "on"
+            try:
+                reply = hue_bridge.set_room_power(gid, want_on)
+            except Exception as e:  # nothing was switched
+                return _fail("Hue execute error: %s" % hue_bridge.error_text(e))
+            store.update_status(rid, STATUS_EXECUTED)  # sent: never replay this request
+            try:
+                text, ok = hue_bridge.read_back_report(gid, room, want_on, reply)
+            except Exception as e:  # sent, but the state could not be confirmed
+                return _fail(
+                    "Sent: %s %s. Could not read back (%s)."
+                    % (room, "on" if want_on else "off", hue_bridge.error_text(e))
+                )
+            return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
+        finally:
+            store.close()

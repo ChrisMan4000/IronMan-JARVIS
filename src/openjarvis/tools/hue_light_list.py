@@ -1,33 +1,57 @@
-"""Hue tool (read-only): list every single Philips Hue light with id, state and brightness.
+"""Hue tool (read-only): list every Philips Hue lamp with id, state and brightness."""
 
-Reviewed 2026-10-14: comments added, behavior unchanged.
-"""
 from __future__ import annotations
 
-import json
-import os
-import urllib.request
 from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import hue_bridge
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
-# Bridge address and the file with the app key (never print or share the key)
-BRIDGE = os.environ.get("HUE_BRIDGE_IP", "").strip()  # your Hue bridge IP, see README
-KEY_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "hue-key.txt")
+TOOL_NAME = "hue_light_list"
 
 
-@ToolRegistry.register("hue_light_list")
+def _fail(msg: str) -> ToolResult:
+    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
+
+
+def _id_order(light_id: str) -> tuple[int, str]:
+    """Numeric ids first, in number order; any other id after them (never a crash)."""
+    return (int(light_id), "") if light_id.isdigit() else (1 << 30, light_id)
+
+
+def lamp_report(lights: dict[str, dict[str, Any]]) -> str:
+    """One line per lamp: id, name, ON/off, brightness when on, unreachable flag."""
+    lines = []
+    for lid in sorted(lights, key=_id_order):
+        light = lights[lid]
+        state = light.get("state", {})
+        text = "id %s: %s - %s" % (
+            lid,
+            light.get("name", "?"),
+            "ON" if state.get("on") else "off",
+        )
+        if state.get("on") and "bri" in state:
+            text += " at %d%%" % round(state["bri"] * 100 / 254)
+        if not state.get("reachable", True):
+            text += " (unreachable)"
+        lines.append(text)
+    return "\n".join(lines)
+
+
+@ToolRegistry.register(TOOL_NAME)
 class HueLightListTool(BaseTool):
-    tool_id = "hue_light_list"
+    tool_id = TOOL_NAME
 
     @property
     def spec(self) -> ToolSpec:
         return ToolSpec(
-            name="hue_light_list",
+            name=TOOL_NAME,
             description=(
-                "Use this ONLY for one individual light or lamp, never when the user asks about rooms or says hue_lights. Read-only. Lists every single Philips Hue light one by one"
+                "Use this ONLY for one individual light or lamp, never when the user"
+                " asks about rooms or says hue_lights. Read-only. Lists every single"
+                " Philips Hue light one by one"
                 " with its id, name, on or off, whether it is reachable and"
                 " its brightness in percent. Use it when the user asks about"
                 " an individual light or lamp, or wants every light listed."
@@ -39,33 +63,7 @@ class HueLightListTool(BaseTool):
 
     def execute(self, **params: Any) -> ToolResult:
         try:
-            with open(KEY_FILE, "r", encoding="utf-8") as f:
-                key = f.read().strip()
-            url = "http://%s/api/%s/lights" % (BRIDGE, key)
-            with urllib.request.urlopen(url, timeout=5) as r:
-                lights = json.loads(r.read().decode("utf-8"))
-
-            # One line per light: id, name, on/off, brightness, reachable.
-            lines = []
-            for lid in sorted(lights, key=lambda x: int(x)):
-                li = lights[lid]
-                st = li.get("state", {})
-                text = "id %s: %s - %s" % (
-                    lid,
-                    li.get("name", "?"),
-                    "ON" if st.get("on") else "off",
-                )
-                if st.get("on") and "bri" in st:
-                    text += " at %d%%" % round(st["bri"] * 100 / 254)
-                if not st.get("reachable", True):
-                    text += " (unreachable)"
-                lines.append(text)
-            return ToolResult(
-                tool_name="hue_light_list", content="\n".join(lines), success=True
-            )
-        except Exception as e:
-            return ToolResult(
-                tool_name="hue_light_list",
-                content="Hue bridge error: %s" % type(e).__name__,
-                success=False,
-            )
+            report = lamp_report(hue_bridge.request("/lights"))
+        except Exception as e:  # any bridge/network problem becomes a short tool reply
+            return _fail("Hue bridge error: %s" % hue_bridge.error_text(e))
+        return ToolResult(tool_name=TOOL_NAME, content=report, success=True)

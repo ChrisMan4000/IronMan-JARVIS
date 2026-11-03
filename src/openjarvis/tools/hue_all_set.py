@@ -1,43 +1,78 @@
 """Hue tool: switch ALL Philips Hue rooms on or off and report per room.
 
-Each room is switched, then every light is checked (on/off and reachable).
-Reviewed 2026-10-14: comments added, behavior unchanged.
+Each room is switched, then every light is checked on its own (on/off and reachable),
+because a room's any_on read-back can look right while all its lights are unreachable.
 """
+
 from __future__ import annotations
 
-import json
-import os
 import time
-import urllib.request
 from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import hue_bridge
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
-# Bridge address and the file with the app key (never print or share the key)
-BRIDGE = os.environ.get("HUE_BRIDGE_IP", "").strip()  # your Hue bridge IP, see README
-KEY_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "hue-key.txt")
+TOOL_NAME = "hue_all_set"
+
+# Per-room verdicts, in the order the summary line counts them.
+VERIFIED, PARTLY, UNCONFIRMABLE, FAILED = (
+    "verified",
+    "partly",
+    "unconfirmable",
+    "failed",
+)
 
 
 def _fail(msg: str) -> ToolResult:
-    return ToolResult(tool_name="hue_all_set", content=msg, success=False)
+    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
 
 
-def _get(url: str) -> Any:
-    """GET a URL from the bridge and decode the JSON."""
-    with urllib.request.urlopen(url, timeout=5) as r:
-        return json.loads(r.read().decode("utf-8"))
+def room_verdict(
+    name: str,
+    light_ids: list[str],
+    lights: dict[str, dict[str, Any]],
+    sent: bool,
+    want_on: bool,
+) -> tuple[str, str]:
+    """(verdict, report line) for one room after the switch command."""
+    state = "on" if want_on else "off"
+    if not sent:
+        return FAILED, "%s: FAILED, the bridge did not accept the command" % name
+    reachable, unreachable = [], []
+    for lid in light_ids:
+        light = lights.get(lid)
+        if light is not None and light.get("state", {}).get("reachable", True):
+            reachable.append(light)
+        else:  # unreachable, or missing from the bridge's light list
+            unreachable.append(light.get("name", lid) if light else lid)
+    if not reachable:
+        return UNCONFIRMABLE, "%s: NOT CONFIRMABLE, all lights unreachable (%s)" % (
+            name,
+            ", ".join(unreachable),
+        )
+    if not all(
+        bool(light.get("state", {}).get("on")) == want_on for light in reachable
+    ):
+        return FAILED, "%s: MISMATCH, a reachable light is not %s" % (name, state)
+    if unreachable:
+        return PARTLY, "%s: confirmed %s for the reachable lights; unreachable: %s" % (
+            name,
+            state,
+            ", ".join(unreachable),
+        )
+    return VERIFIED, "%s: verified %s" % (name, state)
 
 
-@ToolRegistry.register("hue_all_set")
+@ToolRegistry.register(TOOL_NAME)
 class HueAllSetTool(BaseTool):
-    tool_id = "hue_all_set"
+    tool_id = TOOL_NAME
 
     @property
     def spec(self) -> ToolSpec:
         return ToolSpec(
-            name="hue_all_set",
+            name=TOOL_NAME,
             description=(
                 "ALWAYS call this tool when the user asks to switch ALL"
                 " Philips Hue lights, every room or the whole house on or off"
@@ -49,26 +84,20 @@ class HueAllSetTool(BaseTool):
             ),
             parameters={
                 "type": "object",
-                "properties": {
-                    "state": {"type": "string", "description": "on or off"}
-                },
+                "properties": {"state": {"type": "string", "description": "on or off"}},
                 "required": ["state"],
             },
             category="smart-home",
         )
 
     def execute(self, **params: Any) -> ToolResult:
+        hue_bridge.log_call(TOOL_NAME, params)
         state = str(params.get("state", "")).strip().lower()
         if state not in ("on", "off"):
             return _fail("state must be on or off.")
         want_on = state == "on"
         try:
-            with open(KEY_FILE, "r", encoding="utf-8") as f:
-                key = f.read().strip()
-            base = "http://%s/api/%s" % (BRIDGE, key)
-
-            # List all rooms.
-            groups = _get(base + "/groups")
+            groups = hue_bridge.request("/groups")
             rooms = [
                 (gid, g.get("name"), [str(x) for x in g.get("lights", [])])
                 for gid, g in groups.items()
@@ -76,72 +105,41 @@ class HueAllSetTool(BaseTool):
             ]
             if not rooms:
                 return _fail("No rooms found.")
-
-            # Send the command to every room.
             sent = {}
-            for gid, name, _ids in rooms:
+            for gid, _name, _ids in rooms:
                 try:
-                    req = urllib.request.Request(
-                        "%s/groups/%s/action" % (base, gid),
-                        data=json.dumps({"on": want_on}).encode("utf-8"),
-                        method="PUT",
-                        headers={"Content-Type": "application/json"},
-                    )
-                    with urllib.request.urlopen(req, timeout=5) as r:
-                        r.read()
+                    hue_bridge.set_room_power(gid, want_on)
                     sent[gid] = True
-                except Exception:
+                except (
+                    Exception
+                ):  # one refused room is reported as FAILED, the others still switch
                     sent[gid] = False
-            time.sleep(1.0)
-
-            # Check every light and write one line per room.
-            lights = _get(base + "/lights")
-            lines = []
-            n_ok = n_part = n_none = n_bad = 0
-            for gid, name, ids in rooms:
-                reach = []
-                unreach = []
-                for lid in ids:
-                    li = lights.get(lid, {})
-                    if li.get("state", {}).get("reachable", True):
-                        reach.append(lid)
-                    else:
-                        unreach.append(li.get("name", lid))
-                if not sent[gid]:
-                    n_bad += 1
-                    lines.append("%s: FAILED, the bridge did not accept the command" % name)
-                elif not reach:
-                    n_none += 1
-                    lines.append(
-                        "%s: NOT CONFIRMABLE, all lights unreachable (%s)"
-                        % (name, ", ".join(unreach))
-                    )
-                else:
-                    match = all(
-                        bool(lights[lid].get("state", {}).get("on")) == want_on
-                        for lid in reach
-                    )
-                    if not match:
-                        n_bad += 1
-                        lines.append("%s: MISMATCH, a reachable light is not %s" % (name, state))
-                    elif unreach:
-                        n_part += 1
-                        lines.append(
-                            "%s: confirmed %s for the reachable lights; unreachable: %s"
-                            % (name, state, ", ".join(unreach))
-                        )
-                    else:
-                        n_ok += 1
-                        lines.append("%s: verified %s" % (name, state))
+            time.sleep(hue_bridge.READ_BACK_DELAY)
+            lights = hue_bridge.request("/lights")
+            verdicts = [
+                room_verdict(name, ids, lights, sent[gid], want_on)
+                for gid, name, ids in rooms
+            ]
+            count = {
+                v: sum(1 for verdict, _line in verdicts if verdict == v)
+                for v in (VERIFIED, PARTLY, UNCONFIRMABLE, FAILED)
+            }
             head = (
-                "Requested all rooms %s. %d verified, %d partly (some lights unreachable),"
-                " %d not confirmable (all lights unreachable), %d failed."
-                % (state, n_ok, n_part, n_none, n_bad)
+                "Requested all rooms %s. %d verified, %d partly (some lights"
+                " unreachable), %d not confirmable (all lights unreachable),"
+                " %d failed."
+                % (
+                    state,
+                    count[VERIFIED],
+                    count[PARTLY],
+                    count[UNCONFIRMABLE],
+                    count[FAILED],
+                )
             )
             return ToolResult(
-                tool_name="hue_all_set",
-                content=head + "\n" + "\n".join(lines),
-                success=(n_bad == 0),
+                tool_name=TOOL_NAME,
+                content=head + "\n" + "\n".join(line for _verdict, line in verdicts),
+                success=(count[FAILED] == 0),
             )
-        except Exception as e:
-            return _fail("Hue all set error: %s" % type(e).__name__)
+        except Exception as e:  # any bridge/network problem becomes a short tool reply
+            return _fail("Hue all set error: %s" % hue_bridge.error_text(e))
