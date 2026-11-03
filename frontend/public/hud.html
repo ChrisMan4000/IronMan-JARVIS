@@ -85,7 +85,7 @@ function setFile(f){
     rd.onload=()=>{let s=String(rd.result);if(s.length>20000)s=s.slice(0,20000)+'\n[truncated]';att={kind:'file',name:f.name,data:s};showAtt()};rd.readAsText(f);
   }else add('sys','File too large (max 2 MB)');
 }
-(function(){const f=window.fetch.bind(window);window.fetch=function(u,o){try{if(location.port==='8443'&&typeof u==='string'){if(u.indexOf('http://127.0.0.1:8765')===0)u='/helper'+u.slice(21);else if(u.indexOf('http://127.0.0.1:8766')===0)u='/wake'+u.slice(21);}}catch(e){}return f(u,o)}})();
+(function(){const f=window.fetch.bind(window);window.fetch=function(u,o){try{if(location.port==='8443'&&typeof u==='string'){if(u.indexOf('http://127.0.0.1:8765')===0)u='/helper'+u.slice(21);else if(u.indexOf('http://127.0.0.1:8766')===0)u='/wake'+u.slice(21);}}catch{/* not a helper URL: leave it unchanged */}return f(u,o)}})();
 const DOCBASE=(location.port==='8443'?'/helper':'http://127.0.0.1:8765')+'/doc?f=';
 (()=>{const s=document.createElement('style');s.textContent='#log .src,#log .lnk{font-size:0.7vh;padding-left:1.6em}.src:before{content:"SOURCES > ";opacity:.6}.src a{color:#ff9a3d;margin-right:.8em;text-decoration:underline;word-break:break-all}';document.head.appendChild(s)})();
 function splitReply(r){
@@ -95,7 +95,7 @@ function splitReply(r){
     if(!m){keep.push(line);return}
     const body=m[1];
     (body.match(UR)||[]).forEach(u=>urls.push(u.replace(/[.]+$/,'')));
-    body.replace(UR,' ').split(/;|\n/).map(s=>s.replace(/^\s*(?:[-\u2022*]|\[\d+\]|\d+[.)])\s*/,'').replace(/\s*\(chunk[^)]*\)\s*$/i,'').replace(/[*`\[\]]/g,'').trim()).filter(s=>/\.[A-Za-z0-9]{2,5}$/.test(s)).forEach(f=>files.push(f));
+    body.replace(UR,' ').split(/;|\n/).map(s=>s.replace(/^\s*(?:[-\u2022*]|\[\d+\]|\d+[.)])\s*/,'').replace(/\s*\(chunk[^)]*\)\s*$/i,'').replace(/[*`[\]]/g,'').trim()).filter(s=>/\.[A-Za-z0-9]{2,5}$/.test(s)).forEach(f=>files.push(f));
   });
   const shown=keep.join('\n').trim();
   const spoken=shown.replace(new RegExp('(?:'+CONFRE.source+')[.,:;]?','gi'),'').replace(/\[\d+(?:\s*,\s*\d+)*\]/g,'').replace(/\s+/g,' ').trim();
@@ -118,7 +118,7 @@ function addSources(files,urls){
   if(urls&&urls.length){
     const d=document.createElement('div');d.className='lnk';d.style.color='#7fdcff';
     const lb=document.createElement('span');lb.textContent='LINKS > ';lb.style.opacity='.6';d.appendChild(lb);
-    urls.slice(0,5).forEach(u=>{let h=u;try{const pu=new URL(u);if(pu.protocol!=='https:'&&pu.protocol!=='http:')return;h=pu.hostname.replace(/^www\./,'')}catch(e){return}
+    urls.slice(0,5).forEach(u=>{let h=u;try{const pu=new URL(u);if(pu.protocol!=='https:'&&pu.protocol!=='http:')return;h=pu.hostname.replace(/^www\./,'')}catch{return}
       const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';a.textContent=h;a.title=u;
       a.style.cssText='color:#ff9a3d;margin-right:.8em;text-decoration:underline';d.appendChild(a)});
     log.appendChild(d);
@@ -145,13 +145,13 @@ function countQ(t){
   if(!/\bhow many\b/i.test(t)||!/\b(files?|documents?|docs?|pdfs?|papers?|reports?|books?|passages?)\b/i.test(t))return null;
   let m=t.match(/["'\u201c\u2018]([^"'\u201d\u2019]{2,60})["'\u201d\u2019]/);
   if(m)return m[1].trim();
-  m=t.match(/\b(?:word|term|phrase)\s+([\w\-]+)/i)||t.match(/\b(?:mention(?:s|ing)?|contain(?:s|ing)?|include[s]?|about)\s+(?:the\s+)?([\w\-]+)/i);
+  m=t.match(/\b(?:word|term|phrase)\s+([\w-]+)/i)||t.match(/\b(?:mention(?:s|ing)?|contain(?:s|ing)?|include[s]?|about)\s+(?:the\s+)?([\w-]+)/i);
   return m?m[1]:null;
 }
 let lastSrc={files:[],urls:[]};
 const LINKQ=/\b(links?|sources?|urls?|file ?names?|references?)\b/i;
 const HRA=/^\W*(?:please\s+)?(?:turn|switch)\s+(on|off)\s+(?:the\s+)?(?:lights?\s+(?:in|of|at)\s+)?(?:the\s+)?(.+?)(?:\s+(?:lights?|lamps?))?\W*$/i,HRB=/^\W*(?:please\s+)?(?:turn|switch)\s+(?:the\s+)?(.+?)\s+(?:lights?|lamps?)\s+(on|off)\W*$/i;
-function hueQ(t){if(!/\b(lights?|lamps?)\b/i.test(t))return null;const HRC=/^\W*(?:please\s+)?(?:turn|switch)\s+(?:the\s+)?(?:lights?|lamps?)\s+(on|off)\s+(?:in|of|at)\s+(?:the\s+)?(.+?)\W*$/i;let m=t.match(HRA),s,r;if(m){s=m[1];r=m[2]}else if(m=t.match(HRB)){r=m[1];s=m[2]}else if(m=t.match(HRC)){s=m[1];r=m[2]}else return null;const rooms=r.split(/\s*(?:,|&|\band\b)\s*/i).map(x=>x.replace(/^the\s+/i,'').trim()).filter(Boolean);if(!rooms.length||rooms.some(x=>/\b(all|every|everything|whole|house|lights?|lamps?)\b/i.test(x)))return null;return{rooms:rooms,state:s.toLowerCase()}}
+function hueQ(t){if(!/\b(lights?|lamps?)\b/i.test(t))return null;const HRC=/^\W*(?:please\s+)?(?:turn|switch)\s+(?:the\s+)?(?:lights?|lamps?)\s+(on|off)\s+(?:in|of|at)\s+(?:the\s+)?(.+?)\W*$/i;const ma=t.match(HRA),mb=!ma&&t.match(HRB),mc=!ma&&!mb&&t.match(HRC);let s,r;if(ma){s=ma[1];r=ma[2]}else if(mb){r=mb[1];s=mb[2]}else if(mc){s=mc[1];r=mc[2]}else return null;const rooms=r.split(/\s*(?:,|&|\band\b)\s*/i).map(x=>x.replace(/^the\s+/i,'').trim()).filter(Boolean);if(!rooms.length||rooms.some(x=>/\b(all|every|everything|whole|house|lights?|lamps?)\b/i.test(x)))return null;return{rooms:rooms,state:s.toLowerCase()}}
 function tadoQ(t){const R=['living room','temp sensor','kitchen','bathroom'];if(/\d/.test(t)||/\b(all|every|everything|whole|house)\b/i.test(t))return null;if(!/\b(heating|heater|radiators?|thermostats?|schedule|boost)\b/i.test(t))return null;const l=t.toLowerCase();const f=R.filter(x=>l.includes(x));if(f.length!==1)return null;let a=null;if(/\b(resume|back to (?:the )?schedule|on (?:the )?schedule|(?:stop|end|cancel) (?:the )?boost)\b/i.test(t))a='resume';else if(/\b(?:turn|switch)\b.*\boff\b/i.test(t)&&/\b(heating|heater|radiators?|thermostats?)\b/i.test(t))a='off';if(!a)return null;return{room:f[0],action:a}}
 // News questions that name a built-in feed ("3 Tagesschau headlines") skip the model: the helper runs the rss_news code directly.
 function newsQ(t){if(!/\b(news|headlines?|rss)\b/i.test(t)||/\babout\b/i.test(t))return null;const F=[['nyt',/\b(nyt|new york times)\b/i],['bbc',/\bbbc\b/i],['dw',/\b(dw|deutsche welle)\b/i],['aljazeera',/\bal ?jazeera\b/i],['tagesschau',/\btagesschau\b/i],['spiegel',/\bspiegel\b/i],['wired',/\bwired\b/i],['ars',/\bars( technica)?\b/i],['hackernews',/\bhacker ?news\b/i],['verge',/\bverge\b/i],['arxiv',/\barxiv\b/i],['nature',/\bnature\b/i],['quanta',/\bquanta\b/i]];const f=F.filter(x=>x[1].test(t));if(f.length!==1)return null;let n=5;const W={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10},d=t.match(/\b(\d{1,2})\b/),w=t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/i);if(d)n=+d[1];else if(w)n=W[w[1].toLowerCase()];return{feed:f[0][0],limit:Math.max(1,Math.min(10,n))}}
@@ -215,9 +215,9 @@ async function ask(text){
     if(!c.ok)throw new Error('Chat failed: '+c.status);
     reply=((await c.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
   }catch(e){const i=hist.indexOf(um);if(i>=0)hist.splice(i,1);throw e}
-  if(!img&&/\b(weather|forecast|temperature|news|headlines?|today|tonight|tomorrow|latest|right now|price of|stock|score|who won|exchange rate|wetter|nachrichten|aktuell|heute|morgen|kurs)\b/i.test(text)){try{await new Promise(r=>setTimeout(r,1300));const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.web)||0)>(window.lampSent||0))){const sr=await(await fetch("http://127.0.0.1:8765/search?q="+encodeURIComponent(text))).json();if(sr.ok&&sr.text){const c2=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:[{role:'system',content:'You are J.A.R.V.I.S. Current date: '+new Date().toDateString()+'. Answer the question briefly using ONLY the web results given. End with a Links: line of the result URLs.'},{role:'user',content:text+'\n\nWeb results:\n'+sr.text.slice(0,4000)}]})});if(c2.ok){const r2=((await c2.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(r2)reply=r2}}}}catch(e){}}
+  if(!img&&/\b(weather|forecast|temperature|news|headlines?|today|tonight|tomorrow|latest|right now|price of|stock|score|who won|exchange rate|wetter|nachrichten|aktuell|heute|morgen|kurs)\b/i.test(text)){try{await new Promise(r=>setTimeout(r,1300));const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.web)||0)>(window.lampSent||0))){const sr=await(await fetch("http://127.0.0.1:8765/search?q="+encodeURIComponent(text))).json();if(sr.ok&&sr.text){const c2=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:[{role:'system',content:'You are J.A.R.V.I.S. Current date: '+new Date().toDateString()+'. Answer the question briefly using ONLY the web results given. End with a Links: line of the result URLs.'},{role:'user',content:text+'\n\nWeb results:\n'+sr.text.slice(0,4000)}]})});if(c2.ok){const r2=((await c2.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(r2)reply=r2}}}}catch{/* follow-up request failed: keep the first reply */}}
   if(img)um.content=text+' [image "'+img+'" was attached here]';
-  hist.push({role:'assistant',content:reply});const pr=splitReply(reply);addJ(pr.shown);let pf=pr.files;if(pf.length){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const nw=document.createElement("div");nw.className="src";nw.style.color="#ff9a3d";nw.style.fontWeight="bold";nw.textContent="NOTE: document search did not run, sources hidden: "+pf.join("; ");log.appendChild(nw);pf=[]}}catch(e){}}addSources(pf,pr.urls);if(pf.length||pr.urls.length)lastSrc={files:pf,urls:pr.urls};
+  hist.push({role:'assistant',content:reply});const pr=splitReply(reply);addJ(pr.shown);let pf=pr.files;if(pf.length){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const nw=document.createElement("div");nw.className="src";nw.style.color="#ff9a3d";nw.style.fontWeight="bold";nw.textContent="NOTE: document search did not run, sources hidden: "+pf.join("; ");log.appendChild(nw);pf=[]}}catch{/* keep the reply without the search note */}}addSources(pf,pr.urls);if(pf.length||pr.urls.length)lastSrc={files:pf,urls:pr.urls};
   if(on)await speak(pr.spoken);
 }
 async function runText(text){state='thinking';try{await ask(text)}catch(e){add('sys',e.message)}}
@@ -242,7 +242,7 @@ function sendText(){
   if(state==='thinking'){add('sys','Still working - try again in a moment');return}
   tIn.value='';
   if(on&&state==='listening'){textPending=text;if(rec&&rec.state==='recording')rec.stop();return}
-  if(on&&state==='speaking'){textPending=text;interrupted=true;if(playing)try{playing.stop()}catch(e){};return}
+  if(on&&state==='speaking'){textPending=text;interrupted=true;if(playing)try{playing.stop()}catch{/* already stopped */};return}
   runText(text).then(()=>{if(on)listen();else state='idle'});
 }
 tChip.onclick=clearAtt;
@@ -254,9 +254,9 @@ addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{e.preventDefault();setFile(e.dataTransfer.files[0])});
 addEventListener('paste',e=>{const f=e.clipboardData&&e.clipboardData.files&&e.clipboardData.files[0];if(f)setFile(f)});
 const W1=s=>{const w=s.replace(/[^A-Za-z0-9 ]/g,"").trim();return w.length>=2&&w.length<=9&&w.indexOf(" ")<0&&!/^(you|the|uh|um)$/i.test(w)};const BARGE=0.006;let interrupted=false;
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state==='speaking'){interrupted=true;if(playing)try{playing.stop()}catch(x){}}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state==='speaking'){interrupted=true;if(playing)try{playing.stop()}catch{/* already stopped */}}});
 async function bargeStart(){
-  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch(e){return null}
+  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch{return null}
   const an=ctx.createAnalyser();an.fftSize=1024;const src=ctx.createMediaStreamSource(st);src.connect(an);
   const d=new Float32Array(1024);let loud=0;let chk=false,closed=false;
   const wav=(chs,sr)=>{let n=0;chs.forEach(c=>n+=c.length);const b=new ArrayBuffer(44+n*2),v=new DataView(b);const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
@@ -272,8 +272,8 @@ async function bargeStart(){
       if(r.ok){const tx=((await r.json()).text||'').trim();
         window.LASTH=(tx||'(empty)')+' #'+(window.NC=(window.NC||0)+1)+' '+(Date.now()-T0)+'ms';
         (window.HH=window.HH||[]).push(tx||'(empty)');if(window.HH.length>4)window.HH.shift();
-        if(!closed&&(W1(tx)||tx.split(/\s+/).length<=3&&/\b(stop|stopp|nope|top|stock|shop|step|stuff)\b/i.test(tx))){interrupted=true;if(playing)try{playing.stop()}catch(e){}}}
-    }catch(e){}
+        if(!closed&&(W1(tx)||tx.split(/\s+/).length<=3&&/\b(stop|stopp|nope|top|stock|shop|step|stuff)\b/i.test(tx))){interrupted=true;if(playing)try{playing.stop()}catch{/* already stopped */}}}
+    }catch{/* transcription failed: keep speaking */}
     window.TQ--;chk=false};
   const sp=ctx.createScriptProcessor(4096,1,1),ring=[];let cap=null;
   sp.onaudioprocess=e=>{const x=new Float32Array(e.inputBuffer.getChannelData(0));ring.push(x);if(ring.length>6)ring.shift();
@@ -283,7 +283,7 @@ async function bargeStart(){
   const timer=setInterval(()=>{an.getFloatTimeDomainData(d);let s=0;for(const v of d)s+=v*v;const r=Math.sqrt(s/d.length);
     window.BL=r;window.MICPK=Math.max((window.MICPK||0)*0.97,r);window.MICMX=Math.max(window.MICMX||0,r);loud=r>BARGE?loud+1:0;
     window.MICLD=loud;if(loud>=1&&!chk&&!closed)checkWord();},50);
-  return ()=>{closed=true;clearInterval(timer);try{sp.disconnect()}catch(e){}try{src.disconnect()}catch(e){}st.getTracks().forEach(x=>x.stop())};
+  return ()=>{closed=true;clearInterval(timer);try{sp.disconnect()}catch{/* already disconnected */}try{src.disconnect()}catch{/* already disconnected */}st.getTracks().forEach(x=>x.stop())};
 }
 async function speak(t){
   const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>]/g,'').replace(/\s+/g,' ').trim();   // links are not read aloud (markdown links keep their text)
@@ -319,16 +319,16 @@ async function speak(t){
 }
 cv.style.cursor='default';cv.onmousemove=ev=>{const rg=window.RING;cv.style.cursor=(rg&&Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)<=rg.r)?'pointer':'default'};
 cv.onclick=(ev)=>{const rg=window.RING;if(!rg||Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)>rg.r)return;
-  if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch(e){}state='idle'}
+  if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch{/* already stopped */}state='idle'}
   else{on=true;ctx=ctx||new AudioContext();listen()}
 };
 
-window.jvVoice={toggle(){if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch(x){}state='idle'}else{on=true;ctx=ctx||new AudioContext();listen()}},isOn:()=>on};// voice on/off for optional local pages
-document.addEventListener('keydown',e=>{if(e.key==='F6'){e.preventDefault();if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch(x){}state='idle'}else{on=true;ctx=ctx||new AudioContext();listen()}}});
+window.jvVoice={toggle(){if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch{/* already stopped */}state='idle'}else{on=true;ctx=ctx||new AudioContext();listen()}},isOn:()=>on};// voice on/off for optional local pages
+document.addEventListener('keydown',e=>{if(e.key==='F6'){e.preventDefault();if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch{/* already stopped */}state='idle'}else{on=true;ctx=ctx||new AudioContext();listen()}}});
 let wakeLast=null;
-setInterval(async()=>{try{const j=await(await fetch('http://127.0.0.1:8766')).json();if(wakeLast===null||j.wake_count<wakeLast){wakeLast=j.wake_count;return}if(j.wake_count>wakeLast){wakeLast=j.wake_count;if(!on){on=true;ctx=ctx||new AudioContext();listen()}}}catch(e){}},700);
+setInterval(async()=>{try{const j=await(await fetch('http://127.0.0.1:8766')).json();if(wakeLast===null||j.wake_count<wakeLast){wakeLast=j.wake_count;return}if(j.wake_count>wakeLast){wakeLast=j.wake_count;if(!on){on=true;ctx=ctx||new AudioContext();listen()}}}catch{/* wake service offline: try again next poll */}},700);
 /* ---------- live data ---------- */
-let NOG=false,hwModel=null,metrics=[],mx={},lat=0,online=false,wx=null,hw={cpu_load:0,gpu:null},hwOk=false,t00=Date.now(),fps=60,lastT=0;
+let NOG=false,metrics=[],mx={},lat=0,online=false,wx=null,hw={cpu_load:0,gpu:null},hwOk=false,t00=Date.now(),fps=60,lastT=0;
 const H={cl:[],gl:[],gt:[],pw:[],lat:[],nd:[],nu:[]};
 const push=(a,v)=>{a.push(v);if(a.length>150)a.shift()};
 function flat(o,p,out,d){if(d>3)return;for(const k in o){const v=o[k];
@@ -337,18 +337,18 @@ function flat(o,p,out,d){if(d>3)return;for(const k in o){const v=o[k];
 async function poll(){
   if(document.hidden)return;
   const t=performance.now();
-  try{await fetch('/health');lat=Math.round(performance.now()-t);online=true;push(H.lat,lat)}catch(e){online=false}
+  try{await fetch('/health');lat=Math.round(performance.now()-t);online=true;push(H.lat,lat)}catch{online=false}
   const arr=[];
-  let sj=null;for(const u of ['/v1/telemetry/stats','/v1/telemetry/energy']){try{const r=await fetch(u);if(r.ok){const j=await r.json();if(u.endsWith('/stats'))sj=j;flat(j,'',arr,0)}}catch(e){}}if(sj&&sj.total_requests>0){const q=sj.total_requests;arr.unshift(['PER_QUERY.COST_EUR',(sj.total_cost||0)/q],['PER_QUERY.ENERGY_J',(sj.total_energy_joules||0)/q],['PER_QUERY.LATENCY_S',(sj.total_latency||0)/q],['PER_QUERY.TOKENS',(sj.total_tokens||0)/q])}if(hw&&hw.bench&&hw.bench.accuracy!=null)arr.splice(Math.min(4,arr.length),0,['BENCH_ACCURACY_PCT',hw.bench.accuracy]);
+  let sj=null;for(const u of ['/v1/telemetry/stats','/v1/telemetry/energy']){try{const r=await fetch(u);if(r.ok){const j=await r.json();if(u.endsWith('/stats'))sj=j;flat(j,'',arr,0)}}catch{/* endpoint offline: skip it */}}if(sj&&sj.total_requests>0){const q=sj.total_requests;arr.unshift(['PER_QUERY.COST_EUR',(sj.total_cost||0)/q],['PER_QUERY.ENERGY_J',(sj.total_energy_joules||0)/q],['PER_QUERY.LATENCY_S',(sj.total_latency||0)/q],['PER_QUERY.TOKENS',(sj.total_tokens||0)/q])}if(hw&&hw.bench&&hw.bench.accuracy!=null)arr.splice(Math.min(4,arr.length),0,['BENCH_ACCURACY_PCT',hw.bench.accuracy]);
   arr.forEach(([k,v])=>{mx[k]=Math.max(mx[k]||1e-9,Math.abs(v))});metrics=arr.slice(0,40);mx['BENCH_ACCURACY_PCT']=100;
 }
 let hwSkip=0;
-async function hwPoll(){if(document.hidden&&(hwSkip++%5))return;try{const j=await(await fetch('http://127.0.0.1:8765')).json();hw=j;hwOk=true;try{lampApply(j)}catch(e){}
-  push(H.cl,j.cpu_load);if(j.model)MODEL=j.model;hwModel=j.model||null;if(j.net){push(H.nd,j.net.down_pct);push(H.nu,j.net.up_pct)}{const q=j.gpu||{load:0,temp:0,power:0};push(H.gl,q.load);push(H.gt,q.temp);push(H.pw,q.power)}}catch(e){hwOk=false}}
+async function hwPoll(){if(document.hidden&&(hwSkip++%5))return;try{const j=await(await fetch('http://127.0.0.1:8765')).json();hw=j;hwOk=true;try{lampApply(j)}catch{/* lamp panel not ready yet */}
+  push(H.cl,j.cpu_load);if(j.model)MODEL=j.model;if(j.net){push(H.nd,j.net.down_pct);push(H.nu,j.net.up_pct)}{const q=j.gpu||{load:0,temp:0,power:0};push(H.gl,q.load);push(H.gt,q.temp);push(H.pw,q.power)}}catch{hwOk=false}}
 poll();setInterval(poll,3000);hwPoll();setInterval(hwPoll,800);
-async function weather(){try{const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+HOME_CFG.lat+'&longitude='+HOME_CFG.lon+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&daily=precipitation_probability_max,sunshine_duration,daylight_duration&hourly=precipitation_probability,precipitation,snowfall,sunshine_duration,is_day&forecast_days=1&timezone='+encodeURIComponent(HOME_CFG.tz));const j=await r.json();wx=j.current;wx.pp=(j.daily&&j.daily.precipitation_probability_max)?j.daily.precipitation_probability_max[0]:null;wx.sun=(j.daily&&j.daily.daylight_duration&&j.daily.daylight_duration[0]>0&&j.daily.sunshine_duration&&j.daily.sunshine_duration[0]!=null)?Math.round(100*j.daily.sunshine_duration[0]/j.daily.daylight_duration[0]):null;wx.mix=wxMix(j.hourly)}catch(e){wx=null}}
+async function weather(){try{const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+HOME_CFG.lat+'&longitude='+HOME_CFG.lon+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&daily=precipitation_probability_max,sunshine_duration,daylight_duration&hourly=precipitation_probability,precipitation,snowfall,sunshine_duration,is_day&forecast_days=1&timezone='+encodeURIComponent(HOME_CFG.tz));const j=await r.json();wx=j.current;wx.pp=(j.daily&&j.daily.precipitation_probability_max)?j.daily.precipitation_probability_max[0]:null;wx.sun=(j.daily&&j.daily.daylight_duration&&j.daily.daylight_duration[0]>0&&j.daily.sunshine_duration&&j.daily.sunshine_duration[0]!=null)?Math.round(100*j.daily.sunshine_duration[0]/j.daily.daylight_duration[0]):null;wx.mix=wxMix(j.hourly)}catch{wx=null}}
 /* today's daylight hours split into sun / cloud / rain: each hour's rain chance counts as rain, the rest of the hour is split by its sunshine minutes into sun and cloud */
-function wxMix(h){try{let su=0,cl=0,ra=0,sn=0,n=0,pm=null;for(let i=0;i<h.time.length;i++){if(!h.is_day[i])continue;n++;const pp=h.precipitation_probability?h.precipitation_probability[i]:null,pr=h.precipitation[i]||0;if(pp!=null)pm=Math.max(pm||0,pp);let q=pp==null?(pr>=0.1?1:0):pp/100;if(pr>=0.1)q=Math.max(q,0.5);const f=Math.max(0,Math.min(1,(h.sunshine_duration[i]||0)/3600));ra+=q;su+=(1-q)*f;cl+=(1-q)*(1-f);if((h.snowfall[i]||0)>0)sn+=q}if(!n)return null;const t=su+cl+ra,S=Math.round(100*su/t),R=Math.round(100*ra/t);return{sun:S,rain:R,cloud:100-S-R,snow:sn>ra/2,pmax:pm}}catch(e){return null}}
+function wxMix(h){try{let su=0,cl=0,ra=0,sn=0,n=0,pm=null;for(let i=0;i<h.time.length;i++){if(!h.is_day[i])continue;n++;const pp=h.precipitation_probability?h.precipitation_probability[i]:null,pr=h.precipitation[i]||0;if(pp!=null)pm=Math.max(pm||0,pp);let q=pp==null?(pr>=0.1?1:0):pp/100;if(pr>=0.1)q=Math.max(q,0.5);const f=Math.max(0,Math.min(1,(h.sunshine_duration[i]||0)/3600));ra+=q;su+=(1-q)*f;cl+=(1-q)*(1-f);if((h.snowfall[i]||0)>0)sn+=q}if(!n)return null;const t=su+cl+ra,S=Math.round(100*su/t),R=Math.round(100*ra/t);return{sun:S,rain:R,cloud:100-S-R,snow:sn>ra/2,pmax:pm}}catch{return null}}
 weather();setInterval(weather,8000000);
 const TC={s:-1,t:'',d:''};
 const wm=c=>c==0?'CLEAR SKY':c<4?'PARTLY CLOUDY':c<50?'FOG':c<60?'DRIZZLE':c<70?'RAIN':c<80?'SNOW':c<90?'SHOWERS':'THUNDERSTORM';
@@ -367,7 +367,7 @@ async function loadMap(){try{
  polys.forEach(po=>{c2.beginPath();po.forEach(r=>{ring(r).forEach((q,i)=>{const x=q[0]+180,y=90-q[1];i?c2.lineTo(x,y):c2.moveTo(x,y)});c2.closePath()});c2.fill('evenodd')});
  const d=c2.getImageData(0,0,360,180).data;
  for(let y=0;y<180;y+=2)for(let x=0;x<360;x+=2){if(d[((y+1)*360+x+1)*4+3]>128){const lat=90-(y+1);if(lat<84&&lat>-58)MAPD.push([x+1-180,lat])}}
- mapOk=true}catch(e){mapOk=false}}
+ mapOk=true}catch{mapOk=false}}
 loadMap();
 
 /* ---------- model control (HTML overlay) ---------- */
@@ -411,8 +411,8 @@ const t=document.createElement('div');t.className='apvT';t.textContent='APPROVAL
 a.forEach(x=>{const row=document.createElement('div');row.className='apvR';const d=document.createElement('span');d.className='apvD';d.textContent=x.description+'  ['+x.id+']';
 const y=document.createElement('button');y.className='apvY';y.textContent='APPROVE';y.onclick=()=>apvAct(x.id,'approve');
 const n=document.createElement('button');n.className='apvN';n.textContent='DENY';n.onclick=()=>apvAct(x.id,'deny');
-row.append(d,y,n);apvBox.append(row)});apvBox.style.display='block'}catch(e){}}
-async function apvAct(id,what){try{await fetch('/v1/approvals/'+id+'/'+what,{method:'POST'})}catch(e){}apvKey='';apvPoll()}
+row.append(d,y,n);apvBox.append(row)});apvBox.style.display='block'}catch{/* approvals service offline: try again next poll */}}
+async function apvAct(id,what){try{await fetch('/v1/approvals/'+id+'/'+what,{method:'POST'})}catch{/* request failed: the next poll shows the real state */}apvKey='';apvPoll()}
 apvPoll();setInterval(apvPoll,2000);
 function mdlCur(){return MDL.models.find(m=>m.state==='loaded')||null}
 function mdlFmt(n){return n>=1048576?(n/1048576)+'M':Math.round(n/1024)+'k'}
@@ -446,8 +446,8 @@ function mdlFill(){
     d.textContent=(m.state==='loaded'?'\u25CF ':'\u00A0\u00A0')+m.id+'    ctx '+m.context+' / '+(m.size_gb?m.size_gb+' GB':'max '+mdlFmt(m.max));
     d.onclick=()=>{MDL.open=false;mlist.style.display='none';mdlLoad(m.id)};mlist.appendChild(d)});
 }
-async function mdlPoll(){if(document.hidden&&!MDL.loading)return;try{const j=await(await fetch(HBASE+'list')).json();MDL.models=j.models||[];MDL.loading=j.loading||null;MDL.error=j.error||null;mdlRender();if(MDL.open)mdlFill()}catch(e){}}
-async function mdlSet(kv){const c=mdlCur();if(!c)return;try{await fetch(HBASE+'set?model='+encodeURIComponent(c.id)+'&'+kv)}catch(e){}await mdlPoll()}
+async function mdlPoll(){if(document.hidden&&!MDL.loading)return;try{const j=await(await fetch(HBASE+'list')).json();MDL.models=j.models||[];MDL.loading=j.loading||null;MDL.error=j.error||null;mdlRender();if(MDL.open)mdlFill()}catch{/* helper offline: keep the last model list */}}
+async function mdlSet(kv){const c=mdlCur();if(!c)return;try{await fetch(HBASE+'set?model='+encodeURIComponent(c.id)+'&'+kv)}catch{/* helper offline: the next poll shows the real state */}await mdlPoll()}
 async function mdlLoad(id){
   try{const j=await(await fetch(HBASE+'load?model='+encodeURIComponent(id))).json();if(j.error){MDL.error=j.error}else{MDL.loading=id;MDL.error=null}}catch(e){MDL.error=e.message}
   mdlRender();let k=0;const tm=setInterval(async()=>{await mdlPoll();if(!MDL.loading||++k>120)clearInterval(tm)},2000);
@@ -508,9 +508,7 @@ o.globalAlpha=1;o.font=Math.max(8,10*u)+'px monospace';o.textAlign='right';o.fil
 BXC[k]=b=cv}
 g.globalAlpha=1;g.drawImage(b,x-14*u,y-14*u);
 g.strokeStyle=col;g.lineWidth=1.5*u;g.globalAlpha=1;
-tx(title,x+28*u,y+24*u,15*u,col);ln(x+28*u,y+34*u,x+w-18*u,y+34*u)}function boxOld(x,y,w,h,title,col){g.strokeStyle=col;g.lineWidth=1.5*u;g.globalAlpha=.55;const c=18*u;
-  g.beginPath();g.moveTo(x,y+c);g.lineTo(x+c,y);g.lineTo(x+w,y);g.lineTo(x+w,y+h-c);g.lineTo(x+w-c,y+h);g.lineTo(x,y+h);g.closePath();g.stroke();g.globalAlpha=1;
-  tx(title,x+28*u,y+24*u,15*u,col);ln(x+28*u,y+34*u,x+w-c,y+34*u)}
+tx(title,x+28*u,y+24*u,15*u,col);ln(x+28*u,y+34*u,x+w-18*u,y+34*u)}
 function spark(a,x,y,w,h,col,max,label,val){g.fillStyle='rgba(255,255,255,.04)';g.fillRect(x,y,w,h);
   tx(label,x+6*u,y+14*u,12*u,'rgba(180,230,255,.7)');tx(val,x+w-6*u,y+14*u,13*u,col,'right');
   if(a.length<2)return;g.strokeStyle=col;g.lineWidth=1.8*u;g.beginPath();
@@ -642,12 +640,11 @@ const P=(r,a)=>[cx+cs(a)*r,cy+sn(a)*r];
 const A=(r,a0,a1,w,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;arc(cx,cy,r,a0,a1)};
 const T=(r,n,len,a0,w,every,len2,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;
   for(let i=0;i<n;i++){const a=a0+i*PI*2/n,L=(every&&i%every==0)?len2:len,p=P(r,a),q=P(r+L,a);ln(p[0],p[1],q[0],q[1])}};
-const poly=(n,r,a0,w)=>{g.lineWidth=w*u;g.beginPath();for(let i=0;i<=n;i++){const p=P(r,a0+i*PI*2/n);i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])}g.stroke()};
+
 const nz=(i,k)=>0.5+0.5*sn(i*0.9+k*1.7+t/(400+k*90)*sp)*sn(i*0.37+k+t/1100);
 const ser=(a,mv)=>(i,n)=>{const j=a.length-n+i;return j>=0?a[j]/mv:0};
 const hist=(x,y,w,h,fn,col)=>{const n=Math.floor(w/(5*u));g.fillStyle=col;for(let i=0;i<n;i++){const v=cl(fn(i,n));g.globalAlpha=0.3+0.65*v;g.fillRect(x+i*5*u,y+h-v*h,3.5*u,Math.max(1,v*h))}g.globalAlpha=1};
-const area=(x,y,w,h,fn,col)=>{const n=Math.floor(w/(4*u));g.beginPath();g.moveTo(x,y+h);for(let i=0;i<n;i++)g.lineTo(x+i*4*u,y+h-cl(fn(i,n))*h);
-  g.lineTo(x+(n-1)*4*u,y+h);g.closePath();g.globalAlpha=0.3;g.fillStyle=col;g.fill();g.globalAlpha=1;g.strokeStyle=col;g.lineWidth=1.3*u;g.stroke()};
+
 
 /* dark disc + polar grid */
 g.fillStyle='rgba(0,8,14,0.55)';g.beginPath();g.arc(cx,cy,Rc+20*u,0,PI*2);g.fill();
@@ -1013,10 +1010,10 @@ tx('ACTIVITY',nx,y2+h2*0.94,13*u,dim,'center');
 requestAnimationFrame(frame);
 ;try{(function(){
 const HKEY='jarvisHist1';
-if(location.search.indexOf('fresh')>=0){try{localStorage.removeItem(HKEY)}catch(e){}}
-try{const s=JSON.parse(localStorage.getItem(HKEY)||'[]');if(Array.isArray(s)){s.forEach(function(x){if(!x||typeof x.content!=='string'||(x.role!=='user'&&x.role!=='assistant'))return;hist.push({role:x.role,content:x.content});if(x.role==='user')add('user',x.content);else addJ(splitReply(x.content).shown)})}}catch(e){}
+if(location.search.indexOf('fresh')>=0){try{localStorage.removeItem(HKEY)}catch{/* storage blocked (private window): ignore */}}
+try{const s=JSON.parse(localStorage.getItem(HKEY)||'[]');if(Array.isArray(s)){s.forEach(function(x){if(!x||typeof x.content!=='string'||(x.role!=='user'&&x.role!=='assistant'))return;hist.push({role:x.role,content:x.content});if(x.role==='user')add('user',x.content);else addJ(splitReply(x.content).shown)})}}catch{/* saved history unreadable: start empty */}
 let prev='';
-function saveHist(){try{const a=hist.slice(1).filter(function(x){return typeof x.content==='string'}).slice(-40);const j=JSON.stringify(a);if(j!==prev){localStorage.setItem(HKEY,j);prev=j}}catch(e){}}
+function saveHist(){try{const a=hist.slice(1).filter(function(x){return typeof x.content==='string'}).slice(-40);const j=JSON.stringify(a);if(j!==prev){localStorage.setItem(HKEY,j);prev=j}}catch{/* storage blocked (private window): ignore */}}
 setInterval(saveHist,2000);
 const st=document.createElement('style');
 st.textContent='#hDel{position:fixed;z-index:6;bottom:calc(6vh + 19.5vh - 30px);left:calc(50% + 21vw - 30px);width:26px;height:26px;padding:3px;background:rgba(0,10,20,.55);border:1px solid rgba(25,211,255,.4);border-radius:4px;color:#19d3ff;opacity:.55;cursor:pointer}#hDel:hover{opacity:1;color:#ff9a3d;border-color:#ff9a3d}#hDel.arm{opacity:1;color:#ff4040;border-color:#ff4040}html.cmp #hDel{bottom:calc(7.5vh + 20vh - 30px) !important;left:calc(50% + 15.5vw - 30px) !important}';
@@ -1024,47 +1021,22 @@ document.head.appendChild(st);
 const bt=document.createElement('button');bt.id='hDel';bt.title='Delete chat history';
 bt.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg>';
 let arm=0;
-bt.onclick=function(){if(!arm){arm=setTimeout(function(){arm=0;bt.classList.remove('arm');bt.title='Delete chat history'},3000);bt.classList.add('arm');bt.title='Click again to delete';return}clearTimeout(arm);arm=0;bt.classList.remove('arm');bt.title='Delete chat history';hist.length=1;while(log.firstChild)log.removeChild(log.firstChild);try{localStorage.removeItem(HKEY)}catch(e){}prev=''};
+bt.onclick=function(){if(!arm){arm=setTimeout(function(){arm=0;bt.classList.remove('arm');bt.title='Delete chat history'},3000);bt.classList.add('arm');bt.title='Click again to delete';return}clearTimeout(arm);arm=0;bt.classList.remove('arm');bt.title='Delete chat history';hist.length=1;while(log.firstChild)log.removeChild(log.firstChild);try{localStorage.removeItem(HKEY)}catch{/* storage blocked (private window): ignore */}prev=''};
 document.body.appendChild(bt);
-})()}catch(e){}
-;try{setTimeout(function(){try{var s=hist[0];if(s&&s.role==='system'){fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,max_tokens:1,messages:[{role:'system',content:s.content+' Current date: '+new Date().toDateString()+'. For news, weather and other current facts, call web_search and summarize the returned results, then end with a Links: line of the result URLs.'},{role:'user',content:'Hi'}]})}).catch(function(){})}}catch(e){}},4000)}catch(e){}
+})()}catch{/* chat history is optional: the HUD works without it */}
+;try{setTimeout(function(){try{var s=hist[0];if(s&&s.role==='system'){fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,max_tokens:1,messages:[{role:'system',content:s.content+' Current date: '+new Date().toDateString()+'. For news, weather and other current facts, call web_search and summarize the returned results, then end with a Links: line of the result URLs.'},{role:'user',content:'Hi'}]})}).catch(function(){})}}catch{/* warm-up is optional */}},4000)}catch{/* warm-up is optional */}
 </script>
-<script>
-(function(){
-return;const o=document.createElement('div');o.id='bootOv';
-const s=document.createElement('style');
-s.textContent='#bootOv{position:fixed;inset:0;z-index:100;background:#02080c;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Consolas,monospace;color:#19d3ff;transition:opacity .9s;cursor:pointer}'
-+'#bootOv svg{width:30vh;height:30vh;overflow:visible}#bootOv .a,#bootOv .b,#bootOv .c{transform-box:fill-box;transform-origin:center}'
-+'#bootOv .a{animation:bootA 6s linear infinite}#bootOv .b{animation:bootB 4s linear infinite}#bootOv .c{animation:bootC 1.4s ease-in-out infinite}'
-+'@keyframes bootA{to{transform:rotate(360deg)}}@keyframes bootB{to{transform:rotate(-360deg)}}@keyframes bootC{50%{transform:scale(1.25);opacity:.5}}'
-+'#bootOv h1{margin:3vh 0 2vh;font-size:4vh;letter-spacing:.5em;color:#ff9a3d;font-weight:normal}'
-+'#bootOv pre{margin:0;height:14vh;font-size:1.6vh;line-height:2.3vh;color:#7fdcff}'
-+'#bootOv .bar{width:30vh;height:.5vh;background:#0b2a36;margin-top:2vh}#bootOv .bar i{display:block;height:100%;width:0;background:#19d3ff;box-shadow:0 0 1vh #19d3ff;transition:width 2s linear}';
-document.head.appendChild(s);
-o.innerHTML='<svg viewBox="-100 -100 200 200" fill="none" stroke="#19d3ff" stroke-width="1.5">'
-+'<circle class="a" r="90" stroke-dasharray="40 14 4 14"/><circle class="b" r="70" stroke="#ff9a3d" stroke-dasharray="90 20"/>'
-+'<circle r="50" opacity=".5"/><circle class="c" r="22" fill="#19d3ff" fill-opacity=".25"/></svg>'
-+'<h1>J.A.R.V.I.S.</h1><pre id="bootLog"></pre><div class="bar"><i id="bootBar"></i></div>';
-document.body.appendChild(o);
-const L=['BOOT SEQUENCE STARTED','CORE SYSTEMS ........ OK','AUDIO CHANNELS ....... OK','NEURAL INTERFACE ..... OK','DISPLAY 5120 x 1440 .. OK','ALL SYSTEMS NOMINAL'];
-const log=document.getElementById('bootLog');let i=0,done=false;
-const iv=setInterval(function(){if(i<L.length){log.textContent+=L[i]+'\n';i++}},250);
-setTimeout(function(){document.getElementById('bootBar').style.width='100%'},50);
-function end(){if(done)return;done=true;clearInterval(iv);o.style.pointerEvents='none';o.style.opacity='0';setTimeout(function(){o.remove()},1000)}
-o.addEventListener('click',end);
-setTimeout(end,2200);
-})();
-</script><script>(function(){var st=window.navigator.standalone||matchMedia('(display-mode: fullscreen),(display-mode: standalone)').matches;if(st)return;function fs(){document.removeEventListener('pointerdown',fs,true);var e=document.documentElement,f=e.requestFullscreen||e.webkitRequestFullscreen;if(f&&!document.fullscreenElement&&!document.webkitFullscreenElement){try{var p=f.call(e,{navigationUI:'hide'});if(p&&p.catch)p.catch(function(){})}catch(x){}}}document.addEventListener('pointerdown',fs,true);})()</script><script>(function(){
+<script>(function(){var st=window.navigator.standalone||matchMedia('(display-mode: fullscreen),(display-mode: standalone)').matches;if(st)return;function fs(){document.removeEventListener('pointerdown',fs,true);var e=document.documentElement,f=e.requestFullscreen||e.webkitRequestFullscreen;if(f&&!document.fullscreenElement&&!document.webkitFullscreenElement){try{var p=f.call(e,{navigationUI:'hide'});if(p&&p.catch)p.catch(function(){})}catch{/* full screen not allowed here */}}}document.addEventListener('pointerdown',fs,true);})()</script><script>(function(){
 var st=window.navigator.standalone||matchMedia('(display-mode: fullscreen),(display-mode: standalone)').matches,K='jvA2hs';
-if(st||!(innerWidth<=820&&innerHeight>innerWidth*1.05))return;try{if(localStorage.getItem(K))return}catch(x){}
+if(st||!(innerWidth<=820&&innerHeight>innerWidth*1.05))return;try{if(localStorage.getItem(K))return}catch{/* storage blocked (private window): ignore */}
 var dp=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e});
 var cs=document.createElement('style');cs.textContent='#a2hs{position:fixed;z-index:30;top:8px;right:4px;width:28px;height:28px;padding:3px;background:rgba(0,16,26,.55);border:1px solid rgba(25,211,255,.35);color:#7fdcff;opacity:.85;cursor:pointer;animation:phnIn 1s ease 2.4s both}#a2hsP{position:fixed;z-index:31;left:50%;top:56px;transform:translateX(-50%);width:min(88vw,360px);box-sizing:border-box;padding:12px 14px;background:rgba(0,16,26,.94);border:1px solid #8fe6b8;color:#7fdcff;font:14px/1.5 Consolas,monospace;display:none}#a2hsP b{color:#8fe6b8;letter-spacing:.15em}#a2hsP ol{margin:.5em 0;padding-left:1.3em}#a2hsP i{color:#ff9a3d;font-style:normal}#a2hsP button{margin-top:6px;font:inherit;background:none;border:1px solid #19d3ff;color:#19d3ff;padding:4px 12px;cursor:pointer}';document.head.appendChild(cs);
 var b=document.createElement('button');b.id='a2hs';b.title='Add to Home Screen (fullscreen)';b.setAttribute('aria-label','Add to Home Screen');
 b.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
 var pn=document.createElement('div');pn.id='a2hsP';
 pn.innerHTML='<b>ADD TO HOME SCREEN</b><div>Jarvis then opens fullscreen from its own icon.</div><ol><li>Tap <i>Share</i> <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#ff9a3d" stroke-width="2" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4M5 11v9h14v-9"/></svg> (Firefox: menu, then <i>Share</i>)</li><li>Choose <i>Add to Home Screen</i>, then <i>Add</i></li><li>Open <i>JARVIS</i> from the new icon and log in once</li></ol><button>GOT IT</button>';
-function done(){try{localStorage.setItem(K,'1')}catch(x){}b.remove();pn.remove()}
+function done(){try{localStorage.setItem(K,'1')}catch{/* storage blocked (private window): ignore */}b.remove();pn.remove()}
 b.onclick=function(){if(dp){dp.prompt();dp.userChoice.then(done,done);return}pn.style.display=pn.style.display==='block'?'none':'block'};
 pn.querySelector('button').onclick=done;
-document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script>if(!(innerWidth<=820&&innerHeight>innerWidth*1.05)){document.write('<script src="hud-boot.js"><\/script>')}</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
+document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script>if(!(innerWidth<=820&&innerHeight>innerWidth*1.05)){document.write('<script src="hud-boot.js"></'+'script>')}</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
 </body></html>
