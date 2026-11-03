@@ -4,7 +4,8 @@
 <style>
 html,body{margin:0;height:100%;background:#02060b;overflow:hidden;font-family:Consolas,monospace}
 canvas{position:fixed;inset:0;width:100%;height:100%;cursor:pointer}
-#log{position:fixed;bottom:6vh;left:50%;transform:translateX(-50%);width:42vw;height:19.5vh;overflow:auto;
+:root{--log-h:19.5vh}html.cmp{--log-h:20vh}html.phn{--log-h:calc(24vh - 17px)}@supports (height:1dvh){html.phn{--log-h:calc(24dvh - 17px)}}   /* chat log height: hud-local.js changes it, #hDel follows it */
+#log{position:fixed;bottom:6vh;left:50%;transform:translateX(-50%);width:42vw;height:var(--log-h);overflow:auto;
 border:1px solid rgba(25,211,255,.3);background:rgba(0,16,26,.65);padding:.8vh 1vw;box-sizing:border-box;font-size:1.25vh;color:#7fdcff}
 #log div{margin:.4vh 0}.user{color:#fff}.user:before{content:"YOU > ";opacity:.5}
 .jarvis:before{content:"JARVIS > ";opacity:.6}.sys{color:#ff8080}
@@ -14,11 +15,11 @@ border:1px solid rgba(25,211,255,.3);background:rgba(0,16,26,.65);padding:.8vh 1
 #bar #tMic{width:40px;height:40px;flex:none;padding:5px !important;align-items:center;justify-content:center;background:rgba(0,16,26,.55);border-color:rgba(25,211,255,.35);color:#7fdcff;opacity:.85}#bar #tMic svg{width:100%;height:100%}#bar #tMic:hover{opacity:1}#bar #tMic.on{color:#ff9a3d;border-color:rgba(255,154,61,.7);opacity:1;animation:micP 1.6s ease-in-out infinite}@keyframes micP{50%{box-shadow:0 0 10px rgba(255,154,61,.55)}}html.phn #bar #tMic{width:44px;height:44px;padding:8px !important}
 #bar button:hover{border-color:#ff9a3d;color:#ff9a3d}
 #tChip{display:none;color:#ff9a3d;font:1.2vh Consolas,monospace;cursor:pointer;border:1px solid #ff9a3d;padding:.5vh .5vw;white-space:nowrap}
-</style><style>html.cmp #log{width:31vw !important;height:20vh !important;bottom:7.5vh !important;font-size:13px !important}html.cmp #log .src,html.cmp #log .lnk{font-size:11px !important}html.cmp #bar{width:31vw !important;bottom:1vh !important}html.cmp #bar input[type=text]{font-size:14px !important}html.cmp #bar button{padding:.8vh .8vw !important}html.cmp #tChip{font-size:12px !important}</style><style>
+</style><style>html.cmp #log{width:31vw !important;height:var(--log-h) !important;bottom:7.5vh !important;font-size:13px !important}html.cmp #log .src,html.cmp #log .lnk{font-size:11px !important}html.cmp #bar{width:31vw !important;bottom:1vh !important}html.cmp #bar input[type=text]{font-size:14px !important}html.cmp #bar button{padding:.8vh .8vw !important}html.cmp #tChip{font-size:12px !important}</style><style>
 #pcv{position:fixed;inset:0;width:100%;height:100%;display:none;touch-action:manipulation}
 html.phn #cv{display:none}
 html.phn #pcv{display:block}
-html.phn #log{width:94vw !important;height:calc(24vh - 17px) !important;height:calc(24dvh - 17px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px) !important;font-size:14px !important;padding:6px 10px !important;-webkit-overflow-scrolling:touch}
+html.phn #log{width:94vw !important;height:var(--log-h) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px) !important;font-size:14px !important;padding:6px 10px !important;-webkit-overflow-scrolling:touch}
 html.phn #log .src,html.phn #log .lnk{font-size:12px !important}
 html.phn #bar{width:94vw !important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px) !important;gap:6px !important}
 html.phn #bar input[type=text]{font-size:16px !important;padding:12px 10px !important}
@@ -29,9 +30,9 @@ html.phn #mname{position:fixed !important;left:50% !important;top:76px !importan
 html.phn #mset,html.phn #mstat{display:none !important}
 html.phn #mlist{position:fixed !important;left:50% !important;top:118px !important;transform:translateX(-50%);width:min(88vw,380px) !important;max-height:50vh !important;overflow:auto !important;font-size:14px !important;z-index:20 !important;text-align:center !important}html.phn #lampG{display:inline !important}html.phn #mlist div{white-space:normal !important}
 html.phn #log,html.phn #bar{animation:phnIn 1s ease 2s both}
-html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24vh - 49px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + 24dvh - 49px) !important;animation:phnIn 1s ease 2s both}
+html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + var(--log-h) - 32px) !important;animation:phnIn 1s ease 2s both}
 @keyframes phnIn{from{opacity:0}}
-</style><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
+</style><script src="hud-shared.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
 <canvas id="cv"></canvas><canvas id="pcv"></canvas><div id="log"></div>
 <div id="bar"><button id="tClip" title="Attach image or file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.3-8.3"/></svg></button><span id="tChip"></span><input type="text" id="tIn" placeholder="Type a message..." autocomplete="off"><button id="tSend" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button><button id="tMic" title="Two-way voice (F6). The wake word works too" aria-label="Voice"><svg viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="6" y="1" width="4" height="8"/><rect x="5" y="2" width="1" height="6"/><rect x="10" y="2" width="1" height="6"/><rect x="7" y="3" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="7" y="5" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="3" y="6" width="1" height="3"/><rect x="12" y="6" width="1" height="3"/><rect x="4" y="9" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/><rect x="5" y="10" width="6" height="1"/><rect x="7" y="11" width="2" height="2"/><rect x="5" y="13" width="6" height="1"/></svg></button><input type="file" id="tFile" hidden accept="image/*,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.log,.yaml,.yml,.toml,.xml,.ps1,.sh"></div>
 <script>
@@ -50,7 +51,7 @@ function putPlain(d,t){t=String(t);let p=0;
   t.replace(/https?:\/\/[^\s<>"'\])]+/g,(u,i)=>{d.appendChild(document.createTextNode(t.slice(p,i)));
     const a=document.createElement("a");a.href=u;a.target="_blank";a.rel="noopener noreferrer";a.style.color="#ff9a3d";a.textContent=u;d.appendChild(a);p=i+u.length;return u});
   d.appendChild(document.createTextNode(t.slice(p)))}
-function add(cls,t){const d=document.createElement("div");d.className=cls;putText(d,t);log.appendChild(d);trimLog();log.scrollTop=log.scrollHeight;if(cls!=="user"&&window.jvAfter)window.jvAfter()}
+function add(cls,t){const d=document.createElement("div");d.className=cls;putText(d,t);log.appendChild(d);trimLog();log.scrollTop=log.scrollHeight;if(cls!=="user")JarvisHud.logLineAdded(cls)}
 function trimLog(){while(log.childElementCount>400)log.removeChild(log.firstElementChild)}
 async function listen(){
   if(!on)return;
@@ -156,7 +157,7 @@ function tadoQ(t){const R=['living room','temp sensor','kitchen','bathroom'];if(
 // News questions that name a built-in feed ("3 Tagesschau headlines") skip the model: the helper runs the rss_news code directly.
 function newsQ(t){if(!/\b(news|headlines?|rss)\b/i.test(t)||/\babout\b/i.test(t))return null;const F=[['nyt',/\b(nyt|new york times)\b/i],['bbc',/\bbbc\b/i],['dw',/\b(dw|deutsche welle)\b/i],['aljazeera',/\bal ?jazeera\b/i],['tagesschau',/\btagesschau\b/i],['spiegel',/\bspiegel\b/i],['wired',/\bwired\b/i],['ars',/\bars( technica)?\b/i],['hackernews',/\bhacker ?news\b/i],['verge',/\bverge\b/i],['arxiv',/\barxiv\b/i],['nature',/\bnature\b/i],['quanta',/\bquanta\b/i]];const f=F.filter(x=>x[1].test(t));if(f.length!==1)return null;let n=5;const W={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10},d=t.match(/\b(\d{1,2})\b/),w=t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/i);if(d)n=+d[1];else if(w)n=W[w[1].toLowerCase()];return{feed:f[0][0],limit:Math.max(1,Math.min(10,n))}}
 async function ask(text){
-  if(!att&&window.jvAsk&&window.jvAsk(text))return;
+  if(!att&&JarvisHud.handleAsk(text))return;
   const hq=!att?hueQ(text):null;
   if(hq){
     add('user',text);hist.push({role:'user',content:text});
@@ -356,7 +357,7 @@ const norm=i=>{const m=metrics[i%Math.max(1,metrics.length)];return m?Math.min(1
 
 const MAPD=[],MC={};let mapOk=null;
 async function loadMap(){try{
- const tp=await(await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json')).json();
+ const tp=await(await fetch('vendor/world-atlas/land-110m.json')).json();   /* world-atlas 2.0.2 (ISC), kept in the project like three.js: no download at run time */
  const sc=tp.transform.scale,tl=tp.transform.translate;
  const arcs=tp.arcs.map(a=>{let x=0,y=0;return a.map(p=>{x+=p[0];y+=p[1];return [x*sc[0]+tl[0],y*sc[1]+tl[1]]})});
  const ring=ids=>{let pts=[];ids.forEach(i=>{const a=i<0?arcs[~i].slice().reverse():arcs[i];pts=pts.concat(pts.length?a.slice(1):a)});return pts};
@@ -469,7 +470,7 @@ addEventListener('resize',resize);resize();
 let u=1;const cl=v=>Math.max(0,Math.min(1,v));
 const arc=(cx,cy,r,a0,a1)=>{g.beginPath();g.arc(cx,cy,r,a0,a1);g.stroke()};
 const ln=(x0,y0,x1,y1)=>{g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,y1);g.stroke()};
-function tx(s,x,y,sz,col,al){if(window.__rec&&!window.__cap)window.__rec.set(Math.round(x)+","+Math.round(y),[String(s),x,y,sz,col,al||"left",g.globalAlpha]);if(window.__cap)return;if(window.CMP&&sz<10)sz=10;g.font=(sz)+'px Consolas,monospace';g.fillStyle=col;g.textAlign=al||'left';g.fillText(s,x,y)}
+function tx(s,x,y,sz,col,al){const CAP=JarvisHud.capture;if(CAP.texts&&!CAP.active)CAP.texts.set(Math.round(x)+","+Math.round(y),{text:String(s),x,y,size:sz,color:col,align:al||"left",alpha:g.globalAlpha});if(JarvisHud.capture.active)return;if(window.CMP&&sz<10)sz=10;g.font=(sz)+'px Consolas,monospace';g.fillStyle=col;g.textAlign=al||'left';g.fillText(s,x,y)}
 function bar(x,y,w,h,v,col){const n=28,sw=w/n;for(let i=0;i<n;i++){g.globalAlpha=i/n<v?0.55:0.1;g.fillStyle=col;g.fillRect(x+i*sw,y,sw-2*u,h)}g.globalAlpha=1}
 const BXC={};
 const FDC={idle:'rgb(60,190,235)',listening:'rgb(110,215,190)',thinking:'rgb(235,160,95)',speaking:'rgb(110,200,235)'};
@@ -532,7 +533,7 @@ for(let i=0;i<18;i++){const sx=r()*W,sy=r()*Hh,sr=(80+r()*180)*uu,gr=o.createRad
 o.lineWidth=Math.max(1,.8*uu);for(let i=0;i<32;i++){const sx=r()*W,sy=r()*Hh,an=r()*6.28,L=(40+r()*200)*uu;o.strokeStyle='rgba(0,0,0,'+(0.35+r()*0.35)+')';o.beginPath();o.moveTo(sx,sy);o.lineTo(sx+Math.cos(an)*L,sy+Math.sin(an)*L);o.stroke()}
 WOT=cv}
 g.save();const nw=window.NW||[];g.beginPath();g.rect(0,0,W,Hh);nw.forEach(a=>{if(a.length===3){g.moveTo(a[0]+a[2],a[1]);g.arc(a[0],a[1],a[2],0,6.2832)}else g.rect(a[0],a[1],a[2],a[3])});g.clip('evenodd');g.globalCompositeOperation='destination-out';g.drawImage(WOT,0,0,W,Hh);g.restore()}
-window.WEAR=function(c2,cw,ch){if(!WOT)return;const s=cw/innerWidth;c2.save();c2.setTransform(1,0,0,1,0,0);c2.scale(s,s);c2.beginPath();c2.rect(0,0,innerWidth,innerHeight);(window.NW||[]).forEach(a=>{if(a.length===3){c2.moveTo(a[0]+a[2],a[1]);c2.arc(a[0],a[1],a[2],0,6.2832)}else c2.rect(a[0],a[1],a[2],a[3])});c2.clip('evenodd');c2.setTransform(1,0,0,1,0,0);c2.globalAlpha=1;c2.drawImage(WOT,0,0,cw,ch);c2.restore()};
+JarvisHud.drawWear=function(c2,cw,ch){if(!WOT)return;const s=cw/innerWidth;c2.save();c2.setTransform(1,0,0,1,0,0);c2.scale(s,s);c2.beginPath();c2.rect(0,0,innerWidth,innerHeight);(window.NW||[]).forEach(a=>{if(a.length===3){c2.moveTo(a[0]+a[2],a[1]);c2.arc(a[0],a[1],a[2],0,6.2832)}else c2.rect(a[0],a[1],a[2],a[3])});c2.clip('evenodd');c2.setTransform(1,0,0,1,0,0);c2.globalAlpha=1;c2.drawImage(WOT,0,0,cw,ch);c2.restore()};
 const phnS={err:null,cv:null,g:null,t0:0,last:0,rot:0,act:0,sig:0,pulse:0,pts:null,sc:null,E:null,cx:0,cy:0,R:0};
 function phnInit(){
 const N=120,pts=[],sc=[];
@@ -611,10 +612,9 @@ function frameOrig(t){
   lastDraw=t;
   fps+=((1000/Math.max(1,t-lastT))-fps)*0.05;lastT=t;
   const W=innerWidth,Hh=innerHeight;u=Hh/1440;const cmp=W/Hh<2.8;if(document.documentElement.classList.contains("cmp")!==cmp)document.documentElement.classList.toggle("cmp",cmp);window.CMP=cmp;const phn=W<=820&&Hh>W*1.05;if(document.documentElement.classList.contains("phn")!==phn)document.documentElement.classList.toggle("phn",phn);window.PHN=phn;if(phn){try{phnDraw(t,W,Hh)}catch(e){phnS.err=String(e)}requestAnimationFrame(frame);return}
-  const cx=W/2,cy=Hh*0.40,R=Math.min(Hh*0.115,W*0.06);
+  const LY=JarvisHud.layout(W,Hh),cx=LY.cx,cy=LY.cy,R=LY.coreR;
   const c=COL[state],C=FDC[state],dim='rgba('+c+',0.6)';
-  const pw=W*(cmp?0.16:0.11),gap=W*(cmp?0.008:0.01),m=W*(cmp?0.01:0.015),top=Hh*0.07,h1=Hh*0.56,y2=top+h1+Hh*0.02,h2=Hh*0.93-y2;
-  const L1=m,L2=m+pw+gap,R2=W-m-pw,R1=W-m-2*pw-gap;
+  const {pw,gap,top,h1,y2,h2,L1,L2,R2,R1}=LY;   /* one layout formula for the HUD and the boot animation (hud-shared.js) */
   g.clearRect(0,0,W,Hh);g.shadowBlur=0;
   const bg=g.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,Hh)*0.6);
   bg.addColorStop(0,'rgba('+c+',0.14)');bg.addColorStop(1,'rgba(2,6,11,0)');g.fillStyle=bg;g.fillRect(0,0,W,Hh);
@@ -652,14 +652,14 @@ for(let i=1;i<=10;i++)A(RS*i*0.22,0,PI*2,1,C,0.1);
 for(let i=0;i<24;i++){const p=P(RS*0.2,i*PI/12),q=P(Rc,i*PI/12);g.globalAlpha=0.07;g.strokeStyle=C;g.lineWidth=u;ln(p[0],p[1],q[0],q[1])}
 
 /* baseline with traveling pulses */
-const xl=L2+pw+30*u,xr=R1-30*u,gl=cx-Rc-60*u,gr2=cx+Rc+60*u;
+const WG=JarvisHud.wings(LY,Rc),{xl,xr,gl,gr2}=WG;
 g.globalAlpha=0.25;g.strokeStyle=C;g.lineWidth=u;if(!cmp){ln(xl,cy,gl,cy);ln(gr2,cy,xr,cy)}
 for(let k=0;k<(cmp?0:4);k++){const f=(t/(2500/sp)+k/4)%1;g.globalAlpha=0.9;g.fillStyle=C;
   g.beginPath();g.arc(xl+(gl-xl)*f,cy,3*u,0,PI*2);g.fill();g.beginPath();g.arc(xr-(xr-gr2)*f,cy,3*u,0,PI*2);g.fill()}
 g.globalAlpha=1;
 
 /* left wing: core diagnostics */
-const x0=xl+50*u,wl=cx-Rc-130*u-x0,rh=62*u,y0=cy-3*rh;
+const {x0,wl,rh,y0}=WG;
 if(!cmp&&wl>200*u){
   tx('CORE DIAGNOSTICS // BREATH '+(B.rate/PI).toFixed(2)+' Hz',x0,y0-16*u,14*u,C);
   const rowsL=[
@@ -673,7 +673,7 @@ if(!cmp&&wl>200*u){
     hist(x0,y+18*u,wl,rh-28*u,r[1],r[2]);g.globalAlpha=0.3;g.strokeStyle=r[2];g.lineWidth=u;ln(x0,y+rh-5*u,x0+wl,y+rh-5*u);g.globalAlpha=1})}
 
 /* right wing: neural lanes */
-const x1=cx+Rc+130*u,wr=xr-50*u-x1;
+const {x1,wr}=WG;
 if(!cmp&&wr>200*u){
   tx('FAN SPEEDS // LIVE',x1,y0-16*u,14*u,C);const fa=(hw&&hw.fans)||[],FNR=[];fa.forEach(f=>{if(/^(CPU|Pump|System)/i.test(f.name)||f.rpm>0)FNR.push({n:f.name.toUpperCase(),v:f.rpm,m:4000,s:' RPM'})});if(hw&&hw.gpu&&hw.gpu.fan!=null)FNR.splice(Math.min(2,FNR.length),0,{n:'GPU FAN',v:hw.gpu.fan,m:100,s:' %'});if(hw&&hw.fans===null)tx('LIBREHARDWAREMONITOR OFFLINE',x1+wr,y0-16*u,11*u,'#ff9a3d','right');
   for(let k=0;k<6;k++){const y=y0+k*rh,col=k%2?'#ff9a3d':'#2b9bff';
@@ -850,7 +850,7 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   tx('EEG // VOICE OUTPUT',L2+28*u,y2+h2*0.55,12*u,dim);plot(wave(state==='speaking'?outAn:null),L2+28*u,y2+h2*0.55+8*u,pw-56*u,h2*0.3,'#7fdcff',t);
 
   /* R1: clock + weather */
-  const h3=Hh*0.26,hcs=h3*0.88,ns=Math.floor(Date.now()/1000);
+  const hcs=LY.hcs,ns=Math.floor(Date.now()/1000);
   if(TC.s!==ns){TC.s=ns;const now=new Date();TC.t=now.toLocaleTimeString('en-GB');TC.d=now.toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase()}
   box(R1,top,pw,hcs,'CHRONO // SESSION',C);
   tx(TC.t,R1+28*u,top+110*u,Math.min(64*u,pw/6),C);
@@ -864,7 +864,7 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   const up=Math.floor((Date.now()-t00)/1000);
   [['SESSION',String(Math.floor(up/60)).padStart(2,'0')+':'+String(up%60).padStart(2,'0')],['FPS',fps.toFixed(0)],['CPU THREADS',navigator.hardwareConcurrency||'-']].forEach(([k,v],i)=>{
     const y=top+245*u+i*30*u;tx(k,R1+28*u,y,13*u,dim);tx(String(v),R1+pw-24*u,y,13*u,C,'right')});
-  const wy=top+hcs+Hh*0.02,wh=2*h3-hcs;
+  const wy=LY.wy,wh=LY.wh;
   box(R1,wy,pw,wh,'ATMOSPHERICS // '+HOME_CFG.name.toUpperCase(),C);window.NW=[[cx,cy,R],[R1+pw*.04,top+hcs*.1,pw*.8,hcs*.3],[R1+pw*.04,wy+wh*.1,pw*.8,wh*.3]];
   if(wx){tx(Math.round(wx.temperature_2m)+'\u00B0C',R1+28*u,wy+150*u,Math.min(110*u,pw/4.2),C);
     tx(wm(wx.weather_code),R1+28*u,wy+190*u,22*u,'#ff9a3d');tx('FEELS LIKE '+Math.round(wx.apparent_temperature)+'\u00B0C',R1+28*u,wy+225*u,15*u,dim);
@@ -874,22 +874,22 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   else tx('ACQUIRING SIGNAL...',R1+28*u,wy+110*u,16*u,dim);
 {
 g.shadowBlur=0;g.globalAlpha=1;g.setLineDash([]);
-const mx0=R1+28*u,mw=2*pw+gap-56*u,my0=wy+wh+Hh*0.02,mh0=Hh*0.93-my0;
+const my0=LY.my0,mh0=LY.mh0,MA=JarvisHud.mapArea({x:R1,y:my0,w:2*pw+gap,h:mh0},u),mx0=MA.left,mw=MA.width;
 box(R1,my0,2*pw+gap,mh0,'NETWORK TRAFFIC // WORLD',C);
-const LAT0=84,LAT1=-58,mh=Math.min(mh0-60*u,mw*(LAT0-LAT1)/360),mwm=mh*360/(LAT0-LAT1),mxm=mx0+(mw-mwm)/2,mtop=my0+50*u;
+const LAT0=MA.latTop,LAT1=MA.latBottom,mh=MA.h,mwm=MA.w,mxm=MA.x,mtop=MA.top;
 const mzS0=mwm/360,mzCx=mxm+mwm/2,mzCy=mtop+mh/2,MZ=window.MZ=window.MZ||{};
-{const zp=window.__cap?[]:(hw.conns||[]).filter(q=>Number.isFinite(q.lon)&&Number.isFinite(q.lat)).slice(0,40);
+{const zp=JarvisHud.capture.active?[]:(hw.conns||[]).filter(q=>Number.isFinite(q.lon)&&Number.isFinite(q.lat)).slice(0,40);
 let za=HOME_CFG.lon,zb=HOME_CFG.lon,zc=HOME_CFG.lat,zd=HOME_CFG.lat;zp.forEach(q=>{za=Math.min(za,q.lon);zb=Math.max(zb,q.lon);zc=Math.min(zc,q.lat);zd=Math.max(zd,q.lat)});
 let tS=mzS0,tL=0,tA=13;
 if(zp.length){const sl=Math.max((zb-za)*1.3+16,30),sa=Math.max((zd-zc)*1.3+16,30*142/360);tS=Math.max(mzS0,Math.min(mwm/sl,mh/sa));tL=(za+zb)/2;tA=(zc+zd)/2}
-const zdt=Math.min(100,t-(MZ.t||t))/1000;MZ.t=t;const zk=(window.__cap||MZ.s==null)?1:1-Math.exp(-zdt*3);
+const zdt=Math.min(100,t-(MZ.t||t))/1000;MZ.t=t;const zk=(JarvisHud.capture.active||MZ.s==null)?1:1-Math.exp(-zdt*3);
 MZ.s=MZ.s==null?tS:MZ.s+(tS-MZ.s)*zk;MZ.l=MZ.l==null?tL:MZ.l+(tL-MZ.l)*zk;MZ.a=MZ.a==null?tA:MZ.a+(tA-MZ.a)*zk}
 const pj=(lon,lat)=>[mzCx+(lon-MZ.l)*MZ.s,mzCy-(lat-MZ.a)*MZ.s];
 g.save();g.beginPath();g.rect(mxm-2*u,mtop-2*u,mwm+4*u,mh+4*u);g.clip();
 g.strokeStyle=C;g.lineWidth=u;g.globalAlpha=0.08;
 for(let lo=-180;lo<=180;lo+=30){const a=pj(lo,LAT0),b=pj(lo,LAT1);ln(a[0],a[1],b[0],b[1])}
 for(let la=-30;la<=60;la+=30){const a=pj(-180,la),b=pj(180,la);ln(a[0],a[1],b[0],b[1])}
-if(window.__cap){window.__mapd=MAPD}else if(mapOk&&!window.__cap){const ds=1.7*u,sz=ds*Math.min(MZ.s/mzS0,4);g.fillStyle=C;g.globalAlpha=0.38;MAPD.forEach(d=>{const x=mzCx+(d[0]-MZ.l)*MZ.s,y=mzCy-(d[1]-MZ.a)*MZ.s;if(x>mxm-6&&x<mxm+mwm+6&&y>mtop-6&&y<mtop+mh+6)g.fillRect(x,y,sz,sz)});g.globalAlpha=1}else if(mapOk){const ds=1.7*u,kk=devicePixelRatio||1,cw=Math.ceil((mwm+ds+8)*kk),chh=Math.ceil((mh+ds+8)*kk);
+if(JarvisHud.capture.active){JarvisHud.capture.mapDots=MAPD}else if(mapOk&&!JarvisHud.capture.active){const ds=1.7*u,sz=ds*Math.min(MZ.s/mzS0,4);g.fillStyle=C;g.globalAlpha=0.38;MAPD.forEach(d=>{const x=mzCx+(d[0]-MZ.l)*MZ.s,y=mzCy-(d[1]-MZ.a)*MZ.s;if(x>mxm-6&&x<mxm+mwm+6&&y>mtop-6&&y<mtop+mh+6)g.fillRect(x,y,sz,sz)});g.globalAlpha=1}else if(mapOk){const ds=1.7*u,kk=devicePixelRatio||1,cw=Math.ceil((mwm+ds+8)*kk),chh=Math.ceil((mh+ds+8)*kk);
 if(mwm>1&&mh>1&&cw*chh<3e7){
 const key=C+'|'+kk+'|'+mxm.toFixed(2)+'|'+mtop.toFixed(2)+'|'+mwm.toFixed(2)+'|'+mh.toFixed(2)+'|'+ds.toFixed(3)+'|'+MAPD.length;
 if(MC.key!==key){const ox=(Math.floor(mxm*kk)-2)/kk,oy=(Math.floor(mtop*kk)-2)/kk,cc=MC.cv||(MC.cv=document.createElement('canvas'));
@@ -901,7 +901,7 @@ else tx(mapOk===null?'LOADING MAP...':'MAP DATA UNAVAILABLE',mx0+mw/2,mtop+mh/2,
 const home=pj(HOME_CFG.lon,HOME_CFG.lat);
 const MP=window.MP=window.MP||{last:t,ph:0};const md=Math.min(100,t-MP.last)/1000;MP.last=t;
 const nt2=hw.net||{down_mbps:0,up_mbps:0};MP.ph+=md*(0.25+Math.min(2,(nt2.down_mbps+nt2.up_mbps)/25));
-const cs2=window.__cap?[]:(hw.conns||[]).slice(0,40);
+const cs2=JarvisHud.capture.active?[]:(hw.conns||[]).slice(0,40);
 g.save();g.globalCompositeOperation='lighter';
 cs2.forEach((q,i)=>{const e=pj(q.lon,q.lat),dx=e[0]-home[0],dy=e[1]-home[1],dist=Math.hypot(dx,dy);
   const lift=Math.max(0,Math.min(mh*0.6,dist*0.5+12*u,(home[1]+e[1]-2*mtop)-4*u)),qx=(home[0]+e[0])/2,qy=(home[1]+e[1])/2-lift,col=q.n>=3?'#ff9a3d':'#19d3ff';
@@ -952,7 +952,7 @@ tx('*ASSUMES SAME TOKENS AS CLOUD MODELS',R2+28*u,top+hcs-16*u,9*u,dim);
   box(R2,wy,pw,wh,'NEURAL CORE',C);
 {
 const y2=wy,h2=wh;const nx=R2+pw/2,ny=y2+h2*0.5,nr=Math.min(h2*0.36,pw*0.44);
-if(!window.BR){
+if(!JarvisHud.brain){
   const pts=[];let sd=7;const rnd=()=>{sd=(sd*16807)%2147483647;return sd/2147483647};
   for(let i=0;i<220;i++){
     const inner=i>=180,th=Math.acos(2*rnd()-1),ph=rnd()*PI*2,rr=inner?0.35+0.35*rnd():0.9+0.2*rnd();
@@ -967,13 +967,13 @@ if(!window.BR){
     if(d.length<3||dd<d[d.length-1][1]){let p=d.length;while(p>0&&d[p-1][1]>dd)p--;d.splice(p,0,[j,dd]);if(d.length>3)d.pop()}}
     d.forEach(o=>{const k=Math.min(i,o[0])+'_'+Math.max(i,o[0]);if(!seen[k]){seen[k]=1;E.push([i,o[0]])}});
   }
-  window.BR={pts,E};
+  JarvisHud.brain={pts,E};
 }
-const {pts,E}=window.BR;
+const {pts,E}=JarvisHud.brain;
 const act=Math.min(1,Math.max(level,state==='thinking'?0.6+0.2*Math.sin(t/200):0.08));
 window.ACT=(window.ACT||0)+(act*100-(window.ACT||0))*0.1;
 const av=window.ACT/100,K=0.55;
-const BP=window.BP=window.BP||{last:t,rot:0,pulse:0,flick:0,sig:0};
+const BP=JarvisHud.brainPose=JarvisHud.brainPose||{last:t,rot:0,pulse:0,flick:0,sig:0};
 const bdt=Math.min(100,t-BP.last)/1000;BP.last=t;
 const spd=0.5+av*5;
 BP.rot+=bdt*spd*0.5;BP.pulse+=bdt*spd*3;BP.flick+=bdt*spd*4;BP.sig+=bdt*spd*0.9;
@@ -1016,7 +1016,7 @@ let prev='';
 function saveHist(){try{const a=hist.slice(1).filter(function(x){return typeof x.content==='string'}).slice(-40);const j=JSON.stringify(a);if(j!==prev){localStorage.setItem(HKEY,j);prev=j}}catch{/* storage blocked (private window): ignore */}}
 setInterval(saveHist,2000);
 const st=document.createElement('style');
-st.textContent='#hDel{position:fixed;z-index:6;bottom:calc(6vh + 19.5vh - 30px);left:calc(50% + 21vw - 30px);width:26px;height:26px;padding:3px;background:rgba(0,10,20,.55);border:1px solid rgba(25,211,255,.4);border-radius:4px;color:#19d3ff;opacity:.55;cursor:pointer}#hDel:hover{opacity:1;color:#ff9a3d;border-color:#ff9a3d}#hDel.arm{opacity:1;color:#ff4040;border-color:#ff4040}html.cmp #hDel{bottom:calc(7.5vh + 20vh - 30px) !important;left:calc(50% + 15.5vw - 30px) !important}';
+st.textContent='#hDel{position:fixed;z-index:6;bottom:calc(6vh + var(--log-h) - 30px);left:calc(50% + 21vw - 30px);width:26px;height:26px;padding:3px;background:rgba(0,10,20,.55);border:1px solid rgba(25,211,255,.4);border-radius:4px;color:#19d3ff;opacity:.55;cursor:pointer}#hDel:hover{opacity:1;color:#ff9a3d;border-color:#ff9a3d}#hDel.arm{opacity:1;color:#ff4040;border-color:#ff4040}html.cmp #hDel{bottom:calc(7.5vh + var(--log-h) - 30px) !important;left:calc(50% + 15.5vw - 30px) !important}';
 document.head.appendChild(st);
 const bt=document.createElement('button');bt.id='hDel';bt.title='Delete chat history';
 bt.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg>';
@@ -1038,5 +1038,5 @@ pn.innerHTML='<b>ADD TO HOME SCREEN</b><div>Jarvis then opens fullscreen from it
 function done(){try{localStorage.setItem(K,'1')}catch{/* storage blocked (private window): ignore */}b.remove();pn.remove()}
 b.onclick=function(){if(dp){dp.prompt();dp.userChoice.then(done,done);return}pn.style.display=pn.style.display==='block'?'none':'block'};
 pn.querySelector('button').onclick=done;
-document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script>if(!(innerWidth<=820&&innerHeight>innerWidth*1.05)){document.write('<script src="hud-boot.js"></'+'script>')}</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
+document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script>if(!document.documentElement.classList.contains('phn')){document.write('<script src="hud-boot.js"></'+'script>')}   /* parser-blocking on purpose: the boot overlay must cover the HUD before its first paint; phone layout (class set in <head>) has no boot animation */</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
 </body></html>

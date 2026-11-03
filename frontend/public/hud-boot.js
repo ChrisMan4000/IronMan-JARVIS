@@ -1,190 +1,525 @@
-/* global hw */  // hw: live hardware stats, set by hud.html when the helper answers
-(function(){
-var o=document.createElement('div');o.id='bootOv';
-o.style.cssText='position:fixed;inset:0;z-index:100;background:#02080c;cursor:pointer;transition:opacity .9s';
-var cv=document.createElement('canvas');cv.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%';
-o.appendChild(cv);document.body.appendChild(o);
-var W=cv.width=innerWidth,H=cv.height=innerHeight,x=cv.getContext('2d'),u=H/1440,PI=Math.PI,TWO=PI*2,rn=Math.random;
-var cmp=W/H<2.8,pw=W*(cmp?0.16:0.11),gap=W*(cmp?0.008:0.01),m=W*(cmp?0.01:0.015),top=H*0.07,h1=H*0.56,y2=top+h1+H*0.02,h2=H*0.93-y2;
-var L1=m,L2=m+pw+gap,R2=W-m-pw,R1=W-m-2*pw-gap,h3=H*0.26,hcs=h3*0.88,wy=top+hcs+H*0.02,wh=2*h3-hcs,my0=wy+wh+H*0.02,mh0=H*0.93-my0;
-var CX=W/2,CY=H*0.40,RS=Math.min(H*0.115,W*0.06),Rc=RS*2.1,F=H*0.9;
-var CYAN='#19d3ff',ORG='#ff9a3d',DIM='rgba(150,215,235,0.6)';
-var cl=function(v){return Math.max(0,Math.min(1,v))},eo=function(p){return 1-Math.pow(1-p,3)},sg=function(){return rn()<0.5?-1:1};
-var parts=[],stars=[];
-function P(r,a){return[Math.cos(a)*r,Math.sin(a)*r]}
-function pts(r,a0,a1,n){var L=[];for(var i=0;i<=n;i++){L.push(P(r,a0+(a1-a0)*i/n))}return L}
-function circ(r){return pts(r,0,TWO,72)}
-function rect(a,b,w,h){return[[a,b],[a+w,b],[a+w,b+h],[a,b+h]]}
-function ticks(r,n,len,every,len2){var L=[];for(var i=0;i<n;i++){var a=i*TWO/n,l=(every&&i%every==0)?len2:len;L.push([P(r,a),P(r+l,a)])}return L}
-function mk(d){d.lw=d.lw||1.5;d.al=d.al==null?1:d.al;d.col=d.col||CYAN;d.sp=d.sp||0;
-var sx=0,sy=0,n=0;function a(q){sx+=q[0];sy+=q[1];n++}
-(d.lines||[]).forEach(function(l){l.forEach(a)});(d.polys||[]).forEach(function(g){g.pts.forEach(a)});(d.dots||[]).forEach(function(g){a([g.x,g.y])});(d.texts||[]).forEach(function(g){a([g.x,g.y])});
-d.c0=n?[sx/n,sy/n]:[0,0];
-var da=rn()*TWO,ds=(0.5+rn()*0.6)*(d.wing?W*0.45:W);
-d.ts=d.wing?0.9+rn()*0.9:0.2+rn()*1.3;d.d=1.7;
-d.ax=sg()*(1.5+rn()*2.2)*TWO;d.ay=sg()*(1.5+rn()*2.2)*TWO;d.az=sg()*(1+rn()*1.5)*TWO;
-d.dx=Math.cos(da)*ds;d.dy=Math.sin(da)*ds*0.7;d.dz=F*(-0.3+rn()*1.5);
-parts.push(d)}
-for(var s0=0;s0<90;s0++)stars.push([rn()*TWO,rn(),rn()]);
-mk({polys:[{pts:circ(Rc+20*u),col:'rgba(0,8,14,0.55)'}]});
-for(let i=1;i<=10;i++)mk({lines:[circ(RS*i*0.22)],lw:1,al:0.1});
-var rl=[];for(let i=0;i<24;i++)rl.push([P(RS*0.2,i*PI/12),P(Rc,i*PI/12)]);mk({lines:rl,lw:1,al:0.07});
-var xl=L2+pw+30*u,xr=R1-30*u,gl=CX-Rc-60*u,gr2=CX+Rc+60*u,x0=xl+50*u,wl=CX-Rc-130*u-x0,rh=62*u,y0=CY-3*rh,x1=CX+Rc+130*u,wr=xr-50*u-x1;
-if(!cmp){
-mk({lines:[[[xl-CX,0],[gl-CX,0]]],lw:1,al:0.25,wing:1});mk({lines:[[[gr2-CX,0],[xr-CX,0]]],lw:1,al:0.25,wing:1});
-var LN=['CPU LOAD %','GPU LOAD %','GPU POWER W','GPU TEMP C','LINK LATENCY','SYNAPSE (SIM)'],LC=['#7fdcff','#2b9bff','#ff9a3d','#ff9a3d','#3dff9a',CYAN];
-LN.forEach(function(nm,k){var yy=y0+k*rh,ps=[],cnt=Math.floor(wl/(6*u)),v=0.5;
-for(var i=0;i<cnt;i++){v=cl(v+(rn()-0.5)*0.35);var hh=v*(rh-28*u);ps.push({pts:rect(x0+i*6*u-CX,yy+18*u+(rh-28*u)-hh-CY,3.5*u,Math.max(1,hh)),col:LC[k],al:0.3+0.65*v})}
-var tx=[{s:nm,x:x0-CX,y:yy+12*u-CY,sz:11*u,col:DIM,ta:'left'}];if(!k)tx.push({s:'CORE DIAGNOSTICS // BREATH',x:x0-CX,y:y0-16*u-CY,sz:14*u,col:CYAN,ta:'left'});
-var bl=[[x0-CX,yy+rh-5*u-CY],[x0+wl-CX,yy+rh-5*u-CY]];bl.al=0.3;
-mk({polys:ps,texts:tx,lines:[bl],col:LC[k],lw:1,wing:1})});
-var RN=['CPU FAN','PUMP FAN','GPU FAN','SYSTEM FAN #1','SYSTEM FAN #2','SYSTEM FAN #3'];
-RN.forEach(function(nm,k){var yy=y0+k*rh,col=k%2?ORG:'#2b9bff',vv=0.3+rn()*0.6;
-var tx=[{s:nm,x:x1-CX,y:yy+12*u-CY,sz:11*u,col:DIM,ta:'left'}];if(!k)tx.push({s:'FAN SPEEDS // LIVE',x:x1-CX,y:y0-16*u-CY,sz:14*u,col:CYAN,ta:'left'});
-mk({polys:[{pts:rect(x1-CX,yy+20*u-CY,wr,10*u),col:col,al:0.25},{pts:rect(x1-CX,yy+20*u-CY,wr*vv,10*u),col:col,al:0.9}],texts:tx,wing:1})})}
-mk({lines:[circ(Rc)],lw:1.5,glow:1});mk({lines:[circ(Rc+22*u)],lw:1.5,glow:1});
-mk({lines:ticks(Rc,120,6*u,5,11*u),lw:1.5,sp:0.15,glow:1});mk({lines:ticks(Rc,12,18*u,0,0),lw:2,sp:0.15,glow:1});
-['E','S','W','N'].forEach(function(ch,k){var a=k*PI/2,q=P(Rc+44*u,a);mk({texts:[{s:ch,x:q[0],y:q[1]+5*u,sz:16*u,col:CYAN,rt:a+PI/2}]})});
-var dg=[];for(var k=0;k<12;k++){if(k%3==0)continue;var a=k*PI/6,q=P(Rc+40*u,a);dg.push({s:String((k*30+90)%360).padStart(3,'0'),x:q[0],y:q[1]+4*u,sz:11*u,col:DIM,rt:a+PI/2})}mk({texts:dg});
-mk({polys:[{pts:[[-8*u,-Rc-40*u],[8*u,-Rc-40*u],[0,-Rc-26*u]]}],texts:[{s:'HDG 000',x:0,y:-Rc-52*u,sz:15*u,col:CYAN}]});
-var bz=[];for(let i=0;i<40;i++){let a=i*TWO/40,l=0.08+0.05*Math.sin(i*2.3);bz.push(pts(Rc-16*u,a,a+l,6))}
-mk({lines:bz,col:'rgb(200,225,240)',lw:9,al:0.28,sp:-0.22});
-mk({lines:[circ(Rc-30*u)],lw:1,al:0.5});mk({lines:ticks(Rc-30*u,180,-6*u,0,0),lw:1,al:0.45,sp:-0.3});
-for(let i=0;i<3;i++)mk({lines:[pts(Rc-16*u,i*2.094,i*2.094+0.35,8)],lw:9,al:0.95,glow:1,sp:0.5});
-for(let sd=0;sd<2;sd++)for(let k=0;k<4;k++){let r0=RS*(1.45+k*0.12),bl=[];
-for(let i=0;i<44;i++){let a=(i/43-0.5)*1.7+sd*PI,v=0.25+rn()*0.65,l=[P(r0,a),P(r0+RS*0.015+v*RS*0.085,a)];
-l.col=sd?(v>0.9?'#ff4d4d':'#ff9a3d'):(v>0.9?'#3dff9a':'#2b9bff');bl.push(l)}
-mk({lines:bl,lw:5-k*0.7,dash:[3*u,2*u]})}
-[['GPU',0.6,'#ff9a3d'],['VRAM',0.7,'#ff4d4d'],['CPU',0.3,'#ffd24a']].forEach(function(dd,k){var c=P(RS*1.64,PI/2+(k-1)*0.3);
-var mv=function(q){return[q[0]+c[0],q[1]+c[1]]},ring=pts(15*u,0,TWO,24).map(mv),ark=pts(15*u,-PI/2,-PI/2+TWO*dd[1],18).map(mv);ring.al=0.25;
-mk({upd:function(){var hh=(typeof hw!=='undefined')?hw:null,gg=hh&&hh.gpu,v=dd[1];if(gg){v=k==0?gg.load/100:k==1?gg.mem_used/gg.mem_total:(hh.cpu_load||0)/100}v=cl(v||0);this.lines[1]=pts(15*u,-PI/2,-PI/2+TWO*v,18).map(mv);this.texts[1].s=Math.round(v*100)+'%'},lines:[ring,ark],col:dd[2],lw:5,glow:1,dots:[{x:c[0],y:c[1],r:5*u,col:dd[2]}],texts:[{s:dd[0],x:c[0],y:c[1]+34*u,sz:10*u,col:dd[2]},{s:Math.round(dd[1]*100)+'%',x:c[0],y:c[1]+47*u,sz:10*u,col:DIM}]})});
-var cv3=[];for(let k=0;k<3;k++){let a=-PI/2+(k-1)*0.3,c=P(RS*1.64,a),ca=Math.cos(a+PI/2),sa=Math.sin(a+PI/2);
-cv3.push({pts:[[-7*u,-6*u],[7*u,-6*u],[0,8*u]].map(function(q){return[c[0]+q[0]*ca-q[1]*sa,c[1]+q[0]*sa+q[1]*ca]}),al:0.8})}
-mk({polys:cv3});
-mk({lines:[circ(RS*1.38)],lw:2,glow:1,dash:[6*u,10*u],sp:0.3});
-for(let i=0;i<3;i++)mk({lines:[pts(RS*1.30,i*2.094,i*2.094+1.3,10)],lw:4,glow:1,sp:0.5});
-mk({lines:[circ(RS*1.22)],lw:1,al:0.6});mk({lines:ticks(RS*1.22,90,-5*u,0,0),lw:1,al:0.7,sp:-0.45});
-for(let i=0;i<3;i++)mk({lines:[pts(RS*1.14,i*2.094,i*2.094+0.9,8)],lw:3,glow:1,sp:-0.6});
-var sp2=[];for(let i=0;i<96;i++){let a=i/96*TWO-PI/2;sp2.push([P(RS*0.86,a),P(RS*0.86+RS*0.05+rn()*RS*0.12,a)])}
-mk({lines:sp2,lw:2});mk({lines:[circ(RS*0.82)],lw:3,glow:1});
-mk({lines:[pts(RS*0.74,0,TWO,6)],lw:2,sp:0.2});mk({lines:[pts(RS*0.74,PI/6,PI/6+TWO,6)],lw:2,sp:-0.2});
-mk({lines:[pts(RS*0.58,0,TWO,3)],lw:1.5,sp:0.3});mk({lines:[pts(RS*0.58,PI/3,PI/3+TWO,3)],lw:1.5,sp:-0.3});
-mk({lines:[pts(RS*0.66,PI/4,PI/4+TWO,4)],lw:1.2,sp:0.25});mk({lines:[circ(RS*0.64)],lw:1.8});mk({lines:[pts(RS*0.45,0,4,24)],lw:1.8,sp:1.2});
-for(let k=0;k<7;k++){let rr=RS*(0.3+k*0.07),dir=k%2?-1:1,dt=[];for(let j=0;j<10;j++){let q=P(rr,-dir*j*0.07);dt.push({x:q[0],y:q[1],r:Math.max(0.5,3.2-j*0.25)*u,al:1-j/10,col:k%3==0?ORG:CYAN})}
-mk({dots:dt,sp:dir*1000/(700+k*180)*0.5})}
-mk({lines:[pts(RS*0.26,0,2,14)],col:ORG,lw:5,glow:1,sp:1.4});mk({lines:[pts(RS*0.26,PI,PI+2,14)],col:ORG,lw:5,glow:1,sp:1.4});mk({lines:[pts(RS*0.2,0,4,20)],col:'#ff4d4d',lw:3,glow:1,sp:-1});
-mk({lines:[circ(RS*0.3)],lw:2,al:0.5});mk({lines:[circ(RS*0.55)],lw:2,al:0.3});mk({lines:[circ(RS*0.8)],lw:2,al:0.15});
-mk({lines:[[[-RS*0.8,0],[-RS*0.3,0]],[[RS*0.3,0],[RS*0.8,0]],[[0,-RS*0.8],[0,-RS*0.3]],[[0,RS*0.3],[0,RS*0.8]]],lw:1.5});
-var st=['HELPER 8765 ... CHECKING','MODEL ... CHECKING','SERVER 8000 ... CHECKING','GPU ... CHECKING'];
-fetch('http://127.0.0.1:8765').then(function(r){return r.json()}).then(function(j){st[0]='HELPER 8765 ... OK';st[1]=j.model?'MODEL '+String(j.model).slice(0,28)+' ... LOADED':'MODEL ... NONE LOADED';st[3]=(j.gpu&&j.gpu.name)?'GPU '+String(j.gpu.name).replace('NVIDIA GeForce ','').slice(0,24)+' ... OK':'GPU ... NOT FOUND'}).catch(function(){st[0]='HELPER 8765 ... OFFLINE';st[1]='MODEL ... UNKNOWN';st[3]='GPU ... UNKNOWN'});
-fetch('/v1/telemetry/stats').then(function(r){st[2]='SERVER 8000 ... '+(r.ok?'OK':'ERROR')}).catch(function(){st[2]='SERVER 8000 ... OFFLINE'});
-function dp(d,t,gh){
-if(t<d.ts)return;
-var q=cl((t-d.ts)/d.d),e=eo(q),inv=1-e,fill=cl((t-2.4)/1);
-var a=d.ax*inv,b=d.ay*inv,c=d.az*inv,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cc=Math.cos(c),sc=Math.sin(c);
-var spin=d.sp*Math.max(0,t-d.ts-d.d),cs=Math.cos(spin),ss=Math.sin(spin),c0=d.c0,ox=d.dx*inv,oy=d.dy*inv,oz=d.dz*inv;
-function tf(pt){var X=pt[0],Y=pt[1];if(spin){var X1=X*cs-Y*ss;Y=X*ss+Y*cs;X=X1}
-var rx=X-c0[0],ry=Y-c0[1],y1=ry*ca,z1=ry*sa,x2=rx*cb+z1*sb,z2=-rx*sb+z1*cb,x3=x2*cc-y1*sc,y3=x2*sc+y1*cc;
-var k=F/Math.max(F*0.15,F+z2+oz);return[CX+(c0[0]+x3+ox)*k,CY+(c0[1]+y3+oy)*k,k]}
-var al=Math.min(1,q*4)*(0.35+0.65*fill)*(gh?0.2:1),lwk=0.4+0.6*fill;
-x.setLineDash(d.dash||[]);x.lineWidth=d.lw*u*lwk;
-if(d.glow&&fill>0.5&&!gh){x.shadowColor=d.col;x.shadowBlur=10*u}else x.shadowBlur=0;
-function path(pl){x.beginPath();pl.forEach(function(p,i){var s=tf(p);i?x.lineTo(s[0],s[1]):x.moveTo(s[0],s[1])})}
-x.strokeStyle=d.col;x.globalAlpha=al*d.al;x.beginPath();var any=false;
-(d.lines||[]).forEach(function(pl){if(pl.col||pl.al!=null)return;pl.forEach(function(p,i){var s=tf(p);i?x.lineTo(s[0],s[1]):x.moveTo(s[0],s[1])});any=true});
-if(any)x.stroke();
-(d.lines||[]).forEach(function(pl){if(!(pl.col||pl.al!=null))return;x.strokeStyle=pl.col||d.col;x.globalAlpha=al*d.al*(pl.al!=null?pl.al:1);path(pl);x.stroke()});
-x.setLineDash([]);if(gh){x.shadowBlur=0;return}
-x.shadowBlur=0;
-(d.polys||[]).forEach(function(g){path(g.pts);x.closePath();
-if(fill>0){x.globalAlpha=al*(g.al!=null?g.al:d.al)*fill;x.fillStyle=g.col||d.col;x.fill()}
-if(fill<1){x.globalAlpha=al*0.6*(1-fill);x.strokeStyle=(g.col&&g.col.charAt(0)=='#')?g.col:CYAN;x.lineWidth=u;x.stroke()}});
-(d.dots||[]).forEach(function(g){var s=tf([g.x,g.y]);x.globalAlpha=al*(g.al!=null?g.al:1);x.fillStyle=g.col||d.col;x.beginPath();x.arc(s[0],s[1],Math.max(0.5,g.r*s[2]),0,TWO);x.fill()});
-(d.texts||[]).forEach(function(g){var s=tf([g.x,g.y]);x.globalAlpha=al*(0.2+0.8*fill);x.fillStyle=g.col||d.col;x.font=Math.max(4,g.sz*s[2])+'px Consolas,monospace';x.textAlign=g.ta||'center';
-if(g.rt!=null){x.save();x.translate(s[0],s[1]);x.rotate(g.rt);x.fillText(dec(g.s,t,d.ts+d.d,0.9),0,0);x.restore()}else x.fillText(dec(g.s,t,d.ts+d.d,0.9),s[0],s[1])})}
-function title(al){x.globalAlpha=al;var ty=H*0.04;x.font=(36*u)+'px Consolas,monospace';x.textAlign='center';x.fillStyle=ORG;x.shadowColor=ORG;x.shadowBlur=14*u;x.fillText('J . A . R . V . I . S .',CX,ty);x.shadowBlur=0;
-var ws=['Just','A','Really','Very','Intelligent','System'],sz=9*u,pp=[];ws.forEach(function(w,i){pp.push([true,w[0]]);pp.push([false,w.slice(1)+(i<5?' ':'')])});
-var fnt=function(b){return(b?'bold ':'')+sz+'px Consolas,monospace'},sw=0;pp.forEach(function(q){x.font=fnt(q[0]);sw+=x.measureText(q[1]).width});
-var px=CX-sw/2;x.textAlign='left';x.fillStyle='rgba(255,154,61,.85)';pp.forEach(function(q){x.font=fnt(q[0]);x.fillText(q[1],px,ty+47*u);px+=x.measureText(q[1]).width});
-x.textAlign='center';x.font=(9*u)+'px Consolas,monospace';x.fillStyle='rgba(180,230,255,.6)';x.fillText('customized by Chris',CX,ty+59*u);x.globalAlpha=1}
-var BX=[[L1,top,pw,h1,'HARDWARE // NVIDIA RTX 5090 + CPU'],[L2,top,pw,h1,'SYSTEM DIAGNOSTICS // TELEMETRY'],[L1,y2,pw,h2,'CORE STATUS'],[L2,y2,pw,h2,'BIOMETRIC // AUDIO'],[R1,top,pw,hcs,'CHRONO // SESSION'],[R1,wy,pw,wh,'ATMOSPHERICS'],[R1,my0,2*pw+gap,mh0,'NETWORK TRAFFIC // WORLD'],[R2,top,pw,hcs,'DATA STREAM'],[R2,wy,pw,wh,'NEURAL CORE']];
-var GL='01ABCDEF#$%&*+<>/=?XYZ';
-function dec(s,t,t0,dur){s=String(s);var p=cl((t-t0)/dur);if(p>=1)return s;var n=Math.floor(s.length*p),r=s.slice(0,n);for(var i=n;i<s.length;i++){r+=s.charAt(i)==' '?' ':GL.charAt(Math.floor(rn()*GL.length))}return r}
-var BRN=[];(function(){for(var i=0;i<220;i++){var inn=i>=180,th=Math.acos(2*rn()-1),ph=rn()*TWO,rr=inn?0.35+0.35*rn():0.9+0.2*rn(),X=Math.sin(th)*Math.cos(ph)*rr*0.85,Y=Math.cos(th)*rr*0.7;if(Y<0)Y*=0.6;BRN.push([X,Y])}})();
-var snap=null,R=[],Rl=[],RG=[],capSt=0,capN=0,mdt=null,lgn=null,bgd=null,lg=document.getElementById('log'),bar=document.getElementById('bar');
-window.__rec=new Map();
-if(lg){lg.style.zIndex='101';lg.style.clipPath='inset(100% 0 0 0)'}
-if(bar){bar.style.zIndex='101';bar.style.clipPath='inset(100% 0 0 0)'}
-(function(){var b=getComputedStyle(document.body),h=getComputedStyle(document.documentElement),s=(b.backgroundImage!='none')?b:h;bgd=document.createElement('div');bgd.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%;opacity:0';bgd.style.backgroundColor=(b.backgroundColor=='rgba(0, 0, 0, 0)')?h.backgroundColor:b.backgroundColor;bgd.style.backgroundImage=s.backgroundImage;bgd.style.backgroundSize=s.backgroundSize;bgd.style.backgroundPosition=s.backgroundPosition;bgd.style.backgroundRepeat=s.backgroundRepeat;o.insertBefore(bgd,cv)})();
-function grp(e){var X=e[1],Y=e[2];for(var i=0;i<BX.length;i++){var b=BX[i];if(X>=b[0]-4&&X<=b[0]+b[2]+4&&Y>=b[1]-4&&Y<=b[1]+b[3]+8)return i}
-if(!cmp&&Y>=y0-40*u&&Y<=y0+6*rh+20*u&&((X<CX-Rc-70*u&&X>xl-10)||(X>CX+Rc+70*u&&X<xr+10)))return 9;return -1}
-function bgl(t){var a=cl((t-3.0)/0.8);if(bgd)bgd.style.opacity=a;if(a<=0)return;x.save();x.beginPath();x.rect(0,0,W,H);BX.forEach(function(b){x.rect(b[0]-6,b[1]-6,b[2]+12,b[3]+12)});if(!cmp){var by0=y0-40*u,bh0=6*rh+60*u,bl=xl-12,br0=CX+Rc+58*u;x.rect(bl,by0,CX-Rc-58*u-bl,bh0);x.rect(br0,by0,xr+12-br0,bh0)}x.clip('evenodd');x.globalAlpha=a;var gg=x.createRadialGradient(CX,CY,0,CX,CY,Math.max(W,H)*0.6);gg.addColorStop(0,'rgba(25,211,255,0.14)');gg.addColorStop(1,'rgba(2,6,11,0)');x.fillStyle=gg;x.fillRect(0,0,W,H);x.strokeStyle='rgba(25,211,255,0.045)';x.lineWidth=1;x.beginPath();for(var gx=0;gx<W;gx+=60*u){x.moveTo(gx,0);x.lineTo(gx,H)}for(var gy=0;gy<H;gy+=60*u){x.moveTo(0,gy);x.lineTo(W,gy)}x.stroke();x.restore();x.globalAlpha=1}
-function capt(t){
-if(snap||capSt==3)return;
-if(capSt==0){var rc0=window.__rec;if(rc0&&rc0.size){Rl=Array.from(rc0.values());rc0.clear()}
-if(t>=2.4&&Rl.length){R=Rl;window.__rec=null;window.__cap=true;capSt=1;capN=0}return}
-capN++;if(capN>=6){try{var rc=document.getElementById('cv');snap=document.createElement('canvas');snap.width=rc.width;snap.height=rc.height;snap.getContext('2d').drawImage(rc,0,0);RG=R.map(function(e){return[e,grp(e)]}).filter(function(q){return q[1]>=0})}catch{snap=null}window.__cap=false;capSt=3}}
-function txs(t){RG.forEach(function(q){var e=q[0],gi=q[1],s=e[0],t1=(gi==9)?3.4:3.0+gi*0.12,st2,rv;
-if(gi==9){st2=t1+0.1+Math.abs(e[1]-CX)/W*0.8;rv=true}
-else{var b=BX[gi];st2=t1+0.3+cl((e[2]-b[1])/b[3])*0.6;rv=e[2]<b[1]-6+(b[3]+12)*eo(cl((t-t1)/0.45))+4}
-if(t<st2||!rv)return;
-if(/^\d\d:\d\d:\d\d$/.test(s))s=new Date().toLocaleTimeString('en-GB');
-x.globalAlpha=Math.min(1,(t-st2)*3)*(e[6]==null?1:e[6]);x.fillStyle=e[4];x.font=e[3]+'px Consolas,monospace';x.textAlign=e[5];x.fillText(dec(s,t,st2,0.9),e[1],e[2])});x.globalAlpha=1}
-var bnr=null;
-function brain(t){var bb=BX[8],br=window.BR;if(!br||!br.pts||t<4.1)return;
-var nx=bb[0]+bb[2]/2,ny=bb[1]+bb[3]*0.5,nr=Math.min(bb[3]*0.36,bb[2]*0.44),sc=nr*1.03;
-if(!bnr)bnr=br.pts.map(function(){return[rn(),rn(),rn(),rn()]});
-var base=4.2,ay=(window.BP&&window.BP.rot)||0,ca=Math.cos(ay),sa=Math.sin(ay),c3=Math.cos(0.3),s3=Math.sin(0.3),hx=bb[0]+10*u,hy=bb[1]+42*u,hw2=bb[2]-20*u,hh2=bb[3]-68*u,pr=[];
-x.save();x.beginPath();x.rect(hx,hy,hw2,hh2);x.clip();x.globalCompositeOperation='lighter';
-var ga=cl((t-base)/1.2),gl=x.createRadialGradient(nx,ny,0,nx,ny,sc*1.3);gl.addColorStop(0,'rgba(25,211,255,'+(0.1*ga)+')');gl.addColorStop(1,'rgba(25,211,255,0)');x.globalAlpha=1;x.fillStyle=gl;x.fillRect(hx,hy,hw2,hh2);
-x.strokeStyle=CYAN;x.lineWidth=u;x.beginPath();
-br.pts.forEach(function(q,i){var r4=bnr[i],pg=cl((t-base-r4[0]*0.5)/0.85),e=eo(pg),inv=1-e;
-var x1=q[0]*ca+q[2]*sa,z1=-q[0]*sa+q[2]*ca,y2=q[1]*c3-z1*s3,z2=q[1]*s3+z1*c3,p=1/(1+z2*0.3),fx=nx+x1*sc*p,fy=ny-y2*sc*p;
-var an=(r4[3]-0.5)*7*inv,cs=Math.cos(an),sn=Math.sin(an),gx=nx+(fx-nx)*cs-(fy-ny)*sn,gy=ny+(fx-nx)*sn+(fy-ny)*cs,sx=hx+r4[1]*hw2,sy=hy+r4[2]*hh2,X=sx*inv+gx*e,Y=sy*inv+gy*e;
-pr.push([X,Y,pg]);if(pg>0&&pg<1){x.moveTo(X,Y);x.lineTo(X+(sx-X)*0.12*inv,Y+(sy-Y)*0.12*inv)}});
-x.globalAlpha=0.5;x.stroke();
-var ea=cl((t-base-0.8)/0.6)*0.3;
-if(ea>0){x.globalAlpha=ea;x.beginPath();br.E.forEach(function(e2){var a=pr[e2[0]],b=pr[e2[1]];if(a&&b){x.moveTo(a[0],a[1]);x.lineTo(b[0],b[1])}});x.stroke()}
-x.fillStyle=CYAN;
-pr.forEach(function(q,i){if(q[2]<=0)return;x.globalAlpha=Math.min(1,q[2]*4)*(i>=180?1:0.75);var s=(i>=180?2.6:2.2)*u;x.fillRect(q[0]-s/2,q[1]-s/2,s,s)});
-x.restore();x.globalAlpha=1}
-function boxes3(t){capt(t);if(!snap)return;var r=snap.width/W;
-BX.forEach(function(b,i){var w=eo(cl((t-(3.0+i*0.12))/0.45));if(w<=0)return;var sw=b[2]+12,sh=b[3]+12;x.globalAlpha=1;
-if(i==8){x.save();x.beginPath();x.rect(b[0]-6,b[1]-6,sw,sh*w);x.rect(b[0]+10*u,b[1]+42*u,b[2]-20*u,b[3]-68*u);x.clip("evenodd");x.drawImage(snap,(b[0]-6)*r,(b[1]-6)*r,sw*r,sh*w*r,b[0]-6,b[1]-6,sw,sh*w);x.restore()}else x.drawImage(snap,(b[0]-6)*r,(b[1]-6)*r,sw*r,sh*w*r,b[0]-6,b[1]-6,sw,sh*w);
-if(w<1){x.globalAlpha=0.9*(1-w);x.fillStyle=CYAN;x.fillRect(b[0],b[1]+b[3]*w,b[2],2*u)}});
-if(!cmp){var wt=eo(cl((t-3.3)/0.7));if(wt>0){var by0=y0-40*u,bh0=6*rh+60*u,bl=xl-12,bw0=(CX-Rc-58*u)-bl,br0=CX+Rc+58*u,bw1=xr+12-br0;x.globalAlpha=1;
-x.drawImage(snap,(bl+bw0*(1-wt))*r,by0*r,bw0*wt*r,bh0*r,bl+bw0*(1-wt),by0,bw0*wt,bh0);
-x.drawImage(snap,br0*r,by0*r,bw1*wt*r,bh0*r,br0,by0,bw1*wt,bh0)}}
-var md=window.__mapd;if(md&&md.length){if(!mdt){mdt=new Float32Array(md.length);for(var j=0;j<md.length;j++)mdt[j]=(md[j][0]+180)/360*0.9+rn()*0.4}
-var b6=BX[6],w6=eo(cl((t-(3.0+6*0.12))/0.45)),m0=3.0+6*0.12+0.3,mx0=b6[0]+28*u,mw=b6[2]-56*u,LA0=84,LA1=-58,mh=Math.min(b6[3]-60*u,mw*(LA0-LA1)/360),mwm=mh*360/(LA0-LA1),mxm=mx0+(mw-mwm)/2,mtop=b6[1]+50*u,ds=1.7*u,lim=b6[1]-6+(b6[3]+12)*w6;
-x.globalAlpha=0.38;x.fillStyle=CYAN;x.beginPath();
-for(var j2=0;j2<md.length;j2++){if(t<m0+mdt[j2])continue;var qy=mtop+(LA0-md[j2][1])/(LA0-LA1)*mh;if(qy>lim)continue;x.rect(mxm+(md[j2][0]+180)/360*mwm,qy,ds,ds)}x.fill()}
-brain(t);txs(t);
-if(!done){var p1=eo(cl((t-3.0)/0.45)),p2=eo(cl((t-3.15)/0.4));
-if(lg)lg.style.clipPath='inset('+(100*(1-p1)).toFixed(1)+'% 0 0 0)';
-if(bar)bar.style.clipPath='inset('+(100*(1-p2)).toFixed(1)+'% 0 0 0)';
-if(t>3.3){if(!lgn){lgn=[];[lg,bar].forEach(function(el){if(!el)return;var tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT),nd;while((nd=tw.nextNode())){if(nd.nodeValue.trim())lgn.push([nd,nd.nodeValue])}});var inp=bar&&bar.querySelector('input[type=text]');if(inp&&inp.placeholder)lgn.push([inp,inp.placeholder,1])}
-lgn.forEach(function(q){var s2=dec(q[1],t,3.4,1.0);if(q[2])q[0].placeholder=s2;else q[0].nodeValue=s2})}}
-x.globalAlpha=1}
-function rst(){window.__cap=false;window.__rec=null;if(lgn)lgn.forEach(function(q){if(q[2])q[0].placeholder=q[1];else q[0].nodeValue=q[1]});lgn=[];if(lg)lg.style.clipPath='';if(bar)bar.style.clipPath='';setTimeout(function(){if(lg)lg.style.zIndex='';if(bar)bar.style.zIndex=''},600)}
-function fr(t){
-x.setTransform(1,0,0,1,0,0);x.shadowBlur=0;x.globalAlpha=1;x.clearRect(0,0,W,H);
-bgl(t);var fo=1-cl((t-3.2)/0.6);
-if(fo>0){x.fillStyle=CYAN;stars.forEach(function(s){var z=(s[2]+t*0.25)%1,rr=z*z*W*0.45*(0.3+s[1]);x.globalAlpha=fo*0.7*z;x.fillRect(CX+Math.cos(s[0])*rr,CY+Math.sin(s[0])*rr*0.6,u*(2+z*4),u*(2+z*4))})}
-x.save();var zm=1.08-0.08*eo(cl((t-3.2)/0.8));x.translate(CX,CY);x.scale(zm,zm);x.translate(-CX,-CY);
-parts.forEach(function(d){if(d.wing)return;if(d.upd)d.upd();if(t<d.ts+d.d){dp(d,t-0.1,true);dp(d,t-0.05,true)}dp(d,t,false)});
-x.restore();x.shadowBlur=0;x.setLineDash([]);
-if(t>3.1){var ca2=cl((t-3.1)/0.4),br=0.5+0.5*Math.sin((t-3.4)*7),gr=x.createRadialGradient(CX,CY,0,CX,CY,RS*0.46);
-gr.addColorStop(0,'rgba(255,255,255,'+(0.6+0.2*br)*ca2+')');gr.addColorStop(0.4,'rgba(25,211,255,'+0.4*ca2+')');gr.addColorStop(1,'rgba(25,211,255,0)');
-x.globalAlpha=1;x.fillStyle=gr;x.beginPath();x.arc(CX,CY,RS*0.46,0,TWO);x.fill()}
-if(t>3.4){var uu=cl((t-3.4)/0.7);x.globalAlpha=(1-uu)*0.9;x.fillStyle='#fff';x.beginPath();x.arc(CX,CY,RS*0.35*(1+uu*2),0,TWO);x.fill();x.globalAlpha=1-uu;x.strokeStyle=ORG;x.lineWidth=3*u;x.beginPath();x.arc(CX,CY,RS*(0.4+uu*5),0,TWO);x.stroke()}
-var fs=Math.round(14*u);x.font=fs+'px Consolas,monospace';x.textAlign='center';x.fillStyle=CYAN;
-st.forEach(function(s,i){var tm=1.5+i*0.3;if(t>tm){x.globalAlpha=cl((t-tm)/0.2)*(1-cl((t-3.0)/0.3));x.fillText('> '+s,CX,CY+Rc+90*u+i*fs*1.5)}});
+/* global hw */  // hw: live hardware stats (let in hud.html), filled when the helper answers
+/* J.A.R.V.I.S. boot animation: the HUD's parts fly in from all sides and assemble, the core lights up, then the panels
+   of the real HUD are revealed one by one and the overlay fades out (about 6 s; a click skips it).
+   Loaded by hud.html (not on phones) right after the HUD's own script. Everything it shares with the HUD goes through
+   window.JarvisHud (hud-shared.js): the layout, the captured texts of the HUD's first frame, the brain cloud, the wear overlay.
 
-if(window.WEAR)window.WEAR(x,W,H);title(cl(t/0.5));boxes3(t);x.globalAlpha=1}
-var t0=performance.now(),done=false;
-function end(){if(done)return;done=true;rst();o.style.transition='opacity .4s';o.style.pointerEvents='none';o.style.opacity='0';setTimeout(function(){o.remove()},500)}
-function tick(now){if(!o.isConnected)return;var t=(now-t0)/1000;fr(Math.min(t,6.2));if(t>=5.9&&!done)end();requestAnimationFrame(tick)}
-o.addEventListener('click',end);
-requestAnimationFrame(tick);
+   Timeline (seconds after start):
+     0.0-2.0  pieces fly in (each starts at its own time)      1.5-3.0  status lines        2.4  HUD texts captured
+     3.0-4.2  panels unroll (one every 0.12 s), wings at 3.3   3.1-4.1  core flash          4.2  brain assembles
+     5.9      fade out (or on click)                                                         */
+(function () {
+  'use strict';
+  const overlay = document.createElement('div');
+  overlay.id = 'bootOv';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100;background:#02080c;cursor:pointer;transition:opacity .9s';
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%';
+  overlay.appendChild(canvas);
+  document.body.appendChild(overlay);
+
+  const W = canvas.width = innerWidth, H = canvas.height = innerHeight, ctx = canvas.getContext('2d');
+  const random = Math.random, PI = Math.PI, TAU = PI * 2;
+  const LAYOUT = JarvisHud.layout(W, H), u = LAYOUT.u, compact = LAYOUT.cmp;
+  const CX = LAYOUT.cx, CY = LAYOUT.cy, coreR = LAYOUT.coreR, ringR = coreR * 2.1, focal = H * 0.9;
+  const WING = JarvisHud.wings(LAYOUT, ringR);
+  const PANELS = JarvisHud.panels(LAYOUT);
+  const NETWORK = PANELS.findIndex((p) => p.id === 'network'), NEURAL = PANELS.findIndex((p) => p.id === 'neural');
+  // the two wing areas (left: core diagnostics graphs, right: fan bars), used to clip, reveal and group texts
+  const WING_TOP = WING.y0 - 40 * u, WING_HEIGHT = 6 * WING.rh + 60 * u;
+  const WING_LEFT = { x: WING.xl - 12, y: WING_TOP, w: (CX - ringR - 58 * u) - (WING.xl - 12), h: WING_HEIGHT };
+  const WING_RIGHT = { x: CX + ringR + 58 * u, y: WING_TOP, w: WING.xr + 12 - (CX + ringR + 58 * u), h: WING_HEIGHT };
+  const COLOR = {
+    cyan: '#19d3ff', orange: '#ff9a3d', dim: 'rgba(150,215,235,0.6)', sky: '#7fdcff', blue: '#2b9bff', green: '#3dff9a',
+    red: '#ff4d4d', yellow: '#ffd24a', steel: 'rgb(200,225,240)', shade: 'rgba(0,8,14,0.55)',
+  };
+  const FONT = 'px Consolas,monospace';
+  const TIME = {
+    textFill: 2.4, capture: 2.4, panels: 3.0, panelStagger: 0.12, panelUnroll: 0.45, wings: 3.3, wingTexts: 3.4, logBar: 3.15,
+    domText: 3.4, flash: 3.1, burst: 3.4, brainShown: 4.1, brain: 4.2, end: 5.9, last: 6.2,
+    status: 1.5, statusStep: 0.3, starsFade: 3.2, gridFade: 0.8,
+  };
+  const panelStart = (i) => TIME.panels + i * TIME.panelStagger;
+  const CAPTURE = { COLLECTING: 'collecting', FREEZING: 'freezing', DONE: 'done' };
+  const FREEZE_FRAMES = 6;   // frames the HUD draws its panels without texts before its canvas is copied
+  const WINGS = 'wings';     // reveal group of the texts in the wing areas (the others: a panel index)
+
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+  const randomSign = () => (random() < 0.5 ? -1 : 1);
+  const polar = (r, a) => [Math.cos(a) * r, Math.sin(a) * r];
+  function arcPoints(r, a0, a1, n) { const out = []; for (let i = 0; i <= n; i++) out.push(polar(r, a0 + (a1 - a0) * i / n)); return out; }
+  const circlePoints = (r) => arcPoints(r, 0, TAU, 72);
+  const rectPoints = (a, b, w, h) => [[a, b], [a + w, b], [a + w, b + h], [a, b + h]];
+  function tickLines(r, n, len, every, len2) {
+    const out = [];
+    for (let i = 0; i < n; i++) { const a = i * TAU / n, l = (every && i % every == 0) ? len2 : len; out.push([polar(r, a), polar(r + l, a)]); }
+    return out;
+  }
+  const inRect = (r, X, Y, pad) => X >= r.x - pad && X <= r.x + r.w + pad && Y >= r.y - pad && Y <= r.y + r.h + pad;
+
+  /* ---------- pieces: one drawing each (lines, polygons, dots, texts) that flies in on its own path ----------
+     lines: point arrays (drawn with the piece's colour) or {points, color, alpha} for a line with its own style */
+  const pieces = [], stars = [];
+  function addPiece(p) {
+    p.lineWidth = p.lineWidth || 1.5; p.alpha = p.alpha == null ? 1 : p.alpha; p.color = p.color || COLOR.cyan; p.spin = p.spin || 0;
+    let sx = 0, sy = 0, n = 0;
+    const add = (q) => { sx += q[0]; sy += q[1]; n++; };
+    (p.lines || []).forEach((l) => (Array.isArray(l) ? l : l.points).forEach(add));
+    (p.polys || []).forEach((g) => g.pts.forEach(add));
+    (p.dots || []).forEach((g) => add([g.x, g.y]));
+    (p.texts || []).forEach((g) => add([g.x, g.y]));
+    p.center = n ? [sx / n, sy / n] : [0, 0];
+    const dirAngle = random() * TAU, distance = (0.5 + random() * 0.6) * (p.wing ? W * 0.45 : W);
+    p.startAt = p.wing ? 0.9 + random() * 0.9 : 0.2 + random() * 1.3; p.flyTime = 1.7;
+    p.rotX = randomSign() * (1.5 + random() * 2.2) * TAU; p.rotY = randomSign() * (1.5 + random() * 2.2) * TAU; p.rotZ = randomSign() * (1 + random() * 1.5) * TAU;
+    p.fromX = Math.cos(dirAngle) * distance; p.fromY = Math.sin(dirAngle) * distance * 0.7; p.fromZ = focal * (-0.3 + random() * 1.5);
+    pieces.push(p);
+  }
+  for (let i = 0; i < 90; i++) stars.push({ angle: random() * TAU, spread: random(), phase: random() });
+
+  addPiece({ polys: [{ pts: circlePoints(ringR + 20 * u), col: COLOR.shade }] });
+  for (let i = 1; i <= 10; i++) addPiece({ lines: [circlePoints(coreR * i * 0.22)], lineWidth: 1, alpha: 0.1 });
+  const rays = []; for (let i = 0; i < 24; i++) rays.push([polar(coreR * 0.2, i * PI / 12), polar(ringR, i * PI / 12)]);
+  addPiece({ lines: rays, lineWidth: 1, alpha: 0.07 });
+  if (!compact) {
+    addPiece({ lines: [[[WING.xl - CX, 0], [WING.gl - CX, 0]]], lineWidth: 1, alpha: 0.25, wing: 1 });
+    addPiece({ lines: [[[WING.gr2 - CX, 0], [WING.xr - CX, 0]]], lineWidth: 1, alpha: 0.25, wing: 1 });
+    const graphs = [['CPU LOAD %', COLOR.sky], ['GPU LOAD %', COLOR.blue], ['GPU POWER W', COLOR.orange], ['GPU TEMP C', COLOR.orange], ['LINK LATENCY', COLOR.green], ['SYNAPSE (SIM)', COLOR.cyan]];
+    graphs.forEach(([name, color], k) => {
+      const rowY = WING.y0 + k * WING.rh, bars = [], count = Math.floor(WING.wl / (6 * u));
+      let v = 0.5;
+      for (let i = 0; i < count; i++) {
+        v = clamp01(v + (random() - 0.5) * 0.35);
+        const bh = v * (WING.rh - 28 * u);
+        bars.push({ pts: rectPoints(WING.x0 + i * 6 * u - CX, rowY + 18 * u + (WING.rh - 28 * u) - bh - CY, 3.5 * u, Math.max(1, bh)), col: color, al: 0.3 + 0.65 * v });
+      }
+      const texts = [{ s: name, x: WING.x0 - CX, y: rowY + 12 * u - CY, sz: 11 * u, col: COLOR.dim, ta: 'left' }];
+      if (!k) texts.push({ s: 'CORE DIAGNOSTICS // BREATH', x: WING.x0 - CX, y: WING.y0 - 16 * u - CY, sz: 14 * u, col: COLOR.cyan, ta: 'left' });
+      const baseline = { points: [[WING.x0 - CX, rowY + WING.rh - 5 * u - CY], [WING.x0 + WING.wl - CX, rowY + WING.rh - 5 * u - CY]], alpha: 0.3 };
+      addPiece({ polys: bars, texts, lines: [baseline], color, lineWidth: 1, wing: 1 });
+    });
+    ['CPU FAN', 'PUMP FAN', 'GPU FAN', 'SYSTEM FAN #1', 'SYSTEM FAN #2', 'SYSTEM FAN #3'].forEach((name, k) => {
+      const rowY = WING.y0 + k * WING.rh, color = k % 2 ? COLOR.orange : COLOR.blue, level = 0.3 + random() * 0.6;
+      const texts = [{ s: name, x: WING.x1 - CX, y: rowY + 12 * u - CY, sz: 11 * u, col: COLOR.dim, ta: 'left' }];
+      if (!k) texts.push({ s: 'FAN SPEEDS // LIVE', x: WING.x1 - CX, y: WING.y0 - 16 * u - CY, sz: 14 * u, col: COLOR.cyan, ta: 'left' });
+      addPiece({ polys: [{ pts: rectPoints(WING.x1 - CX, rowY + 20 * u - CY, WING.wr, 10 * u), col: color, al: 0.25 }, { pts: rectPoints(WING.x1 - CX, rowY + 20 * u - CY, WING.wr * level, 10 * u), col: color, al: 0.9 }], texts, wing: 1 });
+    });
+  }
+  addPiece({ lines: [circlePoints(ringR)], lineWidth: 1.5, glow: 1 }); addPiece({ lines: [circlePoints(ringR + 22 * u)], lineWidth: 1.5, glow: 1 });
+  addPiece({ lines: tickLines(ringR, 120, 6 * u, 5, 11 * u), lineWidth: 1.5, spin: 0.15, glow: 1 }); addPiece({ lines: tickLines(ringR, 12, 18 * u, 0, 0), lineWidth: 2, spin: 0.15, glow: 1 });
+  ['E', 'S', 'W', 'N'].forEach((ch, k) => { const a = k * PI / 2, q = polar(ringR + 44 * u, a); addPiece({ texts: [{ s: ch, x: q[0], y: q[1] + 5 * u, sz: 16 * u, col: COLOR.cyan, rt: a + PI / 2 }] }); });
+  const degrees = [];
+  for (let k = 0; k < 12; k++) {
+    if (k % 3 == 0) continue;
+    const a = k * PI / 6, q = polar(ringR + 40 * u, a);
+    degrees.push({ s: String((k * 30 + 90) % 360).padStart(3, '0'), x: q[0], y: q[1] + 4 * u, sz: 11 * u, col: COLOR.dim, rt: a + PI / 2 });
+  }
+  addPiece({ texts: degrees });
+  addPiece({ polys: [{ pts: [[-8 * u, -ringR - 40 * u], [8 * u, -ringR - 40 * u], [0, -ringR - 26 * u]] }], texts: [{ s: 'HDG 000', x: 0, y: -ringR - 52 * u, sz: 15 * u, col: COLOR.cyan }] });
+  const bezel = []; for (let i = 0; i < 40; i++) { const a = i * TAU / 40, l = 0.08 + 0.05 * Math.sin(i * 2.3); bezel.push(arcPoints(ringR - 16 * u, a, a + l, 6)); }
+  addPiece({ lines: bezel, color: COLOR.steel, lineWidth: 9, alpha: 0.28, spin: -0.22 });
+  addPiece({ lines: [circlePoints(ringR - 30 * u)], lineWidth: 1, alpha: 0.5 }); addPiece({ lines: tickLines(ringR - 30 * u, 180, -6 * u, 0, 0), lineWidth: 1, alpha: 0.45, spin: -0.3 });
+  for (let i = 0; i < 3; i++) addPiece({ lines: [arcPoints(ringR - 16 * u, i * 2.094, i * 2.094 + 0.35, 8)], lineWidth: 9, alpha: 0.95, glow: 1, spin: 0.5 });
+  for (let side = 0; side < 2; side++) {
+    for (let k = 0; k < 4; k++) {
+      const r0 = coreR * (1.45 + k * 0.12), ticks = [];
+      for (let i = 0; i < 44; i++) {
+        const a = (i / 43 - 0.5) * 1.7 + side * PI, v = 0.25 + random() * 0.65;
+        const color = side ? (v > 0.9 ? COLOR.red : COLOR.orange) : (v > 0.9 ? COLOR.green : COLOR.blue);
+        ticks.push({ points: [polar(r0, a), polar(r0 + coreR * 0.015 + v * coreR * 0.085, a)], color });
+      }
+      addPiece({ lines: ticks, lineWidth: 5 - k * 0.7, dash: [3 * u, 2 * u] });
+    }
+  }
+  // live gauges: GPU load, graphics memory, processor load (from hud.html's hw when the helper answers)
+  const gaugeValue = [(s) => s.gpu && s.gpu.load / 100, (s) => s.gpu && s.gpu.mem_used / s.gpu.mem_total, (s) => (s.cpu_load || 0) / 100];
+  [['GPU', 0.6, COLOR.orange], ['VRAM', 0.7, COLOR.red], ['CPU', 0.3, COLOR.yellow]].forEach(([label, start, color], k) => {
+    const c = polar(coreR * 1.64, PI / 2 + (k - 1) * 0.3), move = (q) => [q[0] + c[0], q[1] + c[1]];
+    const ring = { points: arcPoints(15 * u, 0, TAU, 24).map(move), alpha: 0.25 }, arc = arcPoints(15 * u, -PI / 2, -PI / 2 + TAU * start, 18).map(move);
+    addPiece({
+      update() {
+        const stats = (typeof hw !== 'undefined') ? hw : null;
+        const live = stats && gaugeValue[k](stats);
+        const v = clamp01((live == null || live === false || Number.isNaN(live)) ? start : live);
+        this.lines[1] = arcPoints(15 * u, -PI / 2, -PI / 2 + TAU * v, 18).map(move); this.texts[1].s = Math.round(v * 100) + '%';
+      },
+      lines: [ring, arc], color, lineWidth: 5, glow: 1, dots: [{ x: c[0], y: c[1], r: 5 * u, col: color }],
+      texts: [{ s: label, x: c[0], y: c[1] + 34 * u, sz: 10 * u, col: color }, { s: Math.round(start * 100) + '%', x: c[0], y: c[1] + 47 * u, sz: 10 * u, col: COLOR.dim }],
+    });
+  });
+  const chevrons = [];
+  for (let k = 0; k < 3; k++) {
+    const a = -PI / 2 + (k - 1) * 0.3, c = polar(coreR * 1.64, a), ca = Math.cos(a + PI / 2), sa = Math.sin(a + PI / 2);
+    chevrons.push({ pts: [[-7 * u, -6 * u], [7 * u, -6 * u], [0, 8 * u]].map((q) => [c[0] + q[0] * ca - q[1] * sa, c[1] + q[0] * sa + q[1] * ca]), al: 0.8 });
+  }
+  addPiece({ polys: chevrons });
+  addPiece({ lines: [circlePoints(coreR * 1.38)], lineWidth: 2, glow: 1, dash: [6 * u, 10 * u], spin: 0.3 });
+  for (let i = 0; i < 3; i++) addPiece({ lines: [arcPoints(coreR * 1.30, i * 2.094, i * 2.094 + 1.3, 10)], lineWidth: 4, glow: 1, spin: 0.5 });
+  addPiece({ lines: [circlePoints(coreR * 1.22)], lineWidth: 1, alpha: 0.6 }); addPiece({ lines: tickLines(coreR * 1.22, 90, -5 * u, 0, 0), lineWidth: 1, alpha: 0.7, spin: -0.45 });
+  for (let i = 0; i < 3; i++) addPiece({ lines: [arcPoints(coreR * 1.14, i * 2.094, i * 2.094 + 0.9, 8)], lineWidth: 3, glow: 1, spin: -0.6 });
+  const spikes = []; for (let i = 0; i < 96; i++) { const a = i / 96 * TAU - PI / 2; spikes.push([polar(coreR * 0.86, a), polar(coreR * 0.86 + coreR * 0.05 + random() * coreR * 0.12, a)]); }
+  addPiece({ lines: spikes, lineWidth: 2 }); addPiece({ lines: [circlePoints(coreR * 0.82)], lineWidth: 3, glow: 1 });
+  addPiece({ lines: [arcPoints(coreR * 0.74, 0, TAU, 6)], lineWidth: 2, spin: 0.2 }); addPiece({ lines: [arcPoints(coreR * 0.74, PI / 6, PI / 6 + TAU, 6)], lineWidth: 2, spin: -0.2 });
+  addPiece({ lines: [arcPoints(coreR * 0.58, 0, TAU, 3)], lineWidth: 1.5, spin: 0.3 }); addPiece({ lines: [arcPoints(coreR * 0.58, PI / 3, PI / 3 + TAU, 3)], lineWidth: 1.5, spin: -0.3 });
+  addPiece({ lines: [arcPoints(coreR * 0.66, PI / 4, PI / 4 + TAU, 4)], lineWidth: 1.2, spin: 0.25 }); addPiece({ lines: [circlePoints(coreR * 0.64)], lineWidth: 1.8 }); addPiece({ lines: [arcPoints(coreR * 0.45, 0, 4, 24)], lineWidth: 1.8, spin: 1.2 });
+  for (let k = 0; k < 7; k++) {
+    const r = coreR * (0.3 + k * 0.07), dir = k % 2 ? -1 : 1, trail = [];
+    for (let j = 0; j < 10; j++) { const q = polar(r, -dir * j * 0.07); trail.push({ x: q[0], y: q[1], r: Math.max(0.5, 3.2 - j * 0.25) * u, al: 1 - j / 10, col: k % 3 == 0 ? COLOR.orange : COLOR.cyan }); }
+    addPiece({ dots: trail, spin: dir * 1000 / (700 + k * 180) * 0.5 });
+  }
+  addPiece({ lines: [arcPoints(coreR * 0.26, 0, 2, 14)], color: COLOR.orange, lineWidth: 5, glow: 1, spin: 1.4 }); addPiece({ lines: [arcPoints(coreR * 0.26, PI, PI + 2, 14)], color: COLOR.orange, lineWidth: 5, glow: 1, spin: 1.4 }); addPiece({ lines: [arcPoints(coreR * 0.2, 0, 4, 20)], color: COLOR.red, lineWidth: 3, glow: 1, spin: -1 });
+  addPiece({ lines: [circlePoints(coreR * 0.3)], lineWidth: 2, alpha: 0.5 }); addPiece({ lines: [circlePoints(coreR * 0.55)], lineWidth: 2, alpha: 0.3 }); addPiece({ lines: [circlePoints(coreR * 0.8)], lineWidth: 2, alpha: 0.15 });
+  addPiece({ lines: [[[-coreR * 0.8, 0], [-coreR * 0.3, 0]], [[coreR * 0.3, 0], [coreR * 0.8, 0]], [[0, -coreR * 0.8], [0, -coreR * 0.3]], [[0, coreR * 0.3], [0, coreR * 0.8]]], lineWidth: 1.5 });
+
+  /* ---------- status lines under the core: what is already running ---------- */
+  const status = ['HELPER 8765 ... CHECKING', 'MODEL ... CHECKING', 'SERVER 8000 ... CHECKING', 'GPU ... CHECKING'];
+  fetch(JarvisHud.helperUrl()).then((r) => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then((j) => {
+    status[0] = 'HELPER 8765 ... OK';
+    status[1] = j.model ? 'MODEL ' + String(j.model).slice(0, 28) + ' ... LOADED' : 'MODEL ... NONE LOADED';
+    status[3] = (j.gpu && j.gpu.name) ? 'GPU ' + String(j.gpu.name).replace('NVIDIA GeForce ', '').slice(0, 24) + ' ... OK' : 'GPU ... NOT FOUND';
+  }).catch((e) => {
+    // a network error means the helper is not running; anything else (HTTP status, broken JSON) is an error of a running helper
+    status[0] = 'HELPER 8765 ... ' + (e instanceof TypeError ? 'OFFLINE' : 'ERROR'); status[1] = 'MODEL ... UNKNOWN'; status[3] = 'GPU ... UNKNOWN';
+  });
+  fetch('/v1/telemetry/stats').then((r) => { status[2] = 'SERVER 8000 ... ' + (r.ok ? 'OK' : 'ERROR'); }).catch(() => { status[2] = 'SERVER 8000 ... OFFLINE'; });
+
+  /* ---------- drawing ---------- */
+  const SCRAMBLE_CHARS = '01ABCDEF#$%&*+<>/=?XYZ';
+  function scramble(s, t, t0, dur) {
+    // text that "decodes" from random characters to s between t0 and t0 + dur
+    s = String(s);
+    const p = clamp01((t - t0) / dur);
+    if (p >= 1) return s;
+    const n = Math.floor(s.length * p);
+    let r = s.slice(0, n);
+    for (let i = n; i < s.length; i++) r += s.charAt(i) == ' ' ? ' ' : SCRAMBLE_CHARS.charAt(Math.floor(random() * SCRAMBLE_CHARS.length));
+    return r;
+  }
+
+  function drawPiece(p, t, ghost) {
+    // one piece at time t: flies in rotated and far away, then spins in place; a ghost is a faint motion trail
+    if (t < p.startAt) return;
+    const q = clamp01((t - p.startAt) / p.flyTime), e = easeOut(q), inv = 1 - e, fill = clamp01((t - TIME.textFill) / 1);
+    const a = p.rotX * inv, b = p.rotY * inv, c = p.rotZ * inv, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+    const spin = p.spin * Math.max(0, t - p.startAt - p.flyTime), cs = Math.cos(spin), ss = Math.sin(spin), c0 = p.center, ox = p.fromX * inv, oy = p.fromY * inv, oz = p.fromZ * inv;
+    function project(pt) {
+      let X = pt[0], Y = pt[1];
+      if (spin) { const X1 = X * cs - Y * ss; Y = X * ss + Y * cs; X = X1; }
+      const rx = X - c0[0], ry = Y - c0[1], y1 = ry * ca, z1 = ry * sa, x2 = rx * cb + z1 * sb, z2 = -rx * sb + z1 * cb, x3 = x2 * cc - y1 * sc, y3 = x2 * sc + y1 * cc;
+      const k = focal / Math.max(focal * 0.15, focal + z2 + oz);
+      return [CX + (c0[0] + x3 + ox) * k, CY + (c0[1] + y3 + oy) * k, k];
+    }
+    function tracePath(points) { points.forEach((pt, i) => { const s = project(pt); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); }); }
+    const al = Math.min(1, q * 4) * (0.35 + 0.65 * fill) * (ghost ? 0.2 : 1), widthK = 0.4 + 0.6 * fill;
+    ctx.setLineDash(p.dash || []); ctx.lineWidth = p.lineWidth * u * widthK;
+    if (p.glow && fill > 0.5 && !ghost) { ctx.shadowColor = p.color; ctx.shadowBlur = 10 * u; } else ctx.shadowBlur = 0;
+    const lines = p.lines || [];
+    // plain lines in one stroke, then the lines with their own colour or alpha
+    ctx.strokeStyle = p.color; ctx.globalAlpha = al * p.alpha; ctx.beginPath();
+    let any = false;
+    lines.forEach((l) => { if (Array.isArray(l)) { tracePath(l); any = true; } });
+    if (any) ctx.stroke();
+    lines.forEach((l) => {
+      if (Array.isArray(l)) return;
+      ctx.strokeStyle = l.color || p.color; ctx.globalAlpha = al * p.alpha * (l.alpha != null ? l.alpha : 1);
+      ctx.beginPath(); tracePath(l.points); ctx.stroke();
+    });
+    ctx.setLineDash([]); ctx.shadowBlur = 0;
+    if (ghost) return;
+    (p.polys || []).forEach((g) => {
+      ctx.beginPath(); tracePath(g.pts); ctx.closePath();
+      if (fill > 0) { ctx.globalAlpha = al * (g.al != null ? g.al : p.alpha) * fill; ctx.fillStyle = g.col || p.color; ctx.fill(); }
+      if (fill < 1) { ctx.globalAlpha = al * 0.6 * (1 - fill); ctx.strokeStyle = (g.col && g.col.charAt(0) == '#') ? g.col : COLOR.cyan; ctx.lineWidth = u; ctx.stroke(); }
+    });
+    (p.dots || []).forEach((g) => {
+      const s = project([g.x, g.y]);
+      ctx.globalAlpha = al * (g.al != null ? g.al : 1); ctx.fillStyle = g.col || p.color;
+      ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(0.5, g.r * s[2]), 0, TAU); ctx.fill();
+    });
+    (p.texts || []).forEach((g) => {
+      const s = project([g.x, g.y]);
+      ctx.globalAlpha = al * (0.2 + 0.8 * fill); ctx.fillStyle = g.col || p.color; ctx.font = Math.max(4, g.sz * s[2]) + FONT; ctx.textAlign = g.ta || 'center';
+      const text = scramble(g.s, t, p.startAt + p.flyTime, 0.9);
+      if (g.rt != null) { ctx.save(); ctx.translate(s[0], s[1]); ctx.rotate(g.rt); ctx.fillText(text, 0, 0); ctx.restore(); } else ctx.fillText(text, s[0], s[1]);
+    });
+  }
+
+  function drawTitle(al) {
+    ctx.globalAlpha = al;
+    const ty = H * 0.04;
+    ctx.font = (36 * u) + FONT; ctx.textAlign = 'center'; ctx.fillStyle = COLOR.orange; ctx.shadowColor = COLOR.orange; ctx.shadowBlur = 14 * u;
+    ctx.fillText('J . A . R . V . I . S .', CX, ty); ctx.shadowBlur = 0;
+    // "Just A Really Very Intelligent System" with the first letters in bold
+    const words = ['Just', 'A', 'Really', 'Very', 'Intelligent', 'System'], size = 9 * u, parts = [];
+    words.forEach((w, i) => { parts.push([true, w[0]]); parts.push([false, w.slice(1) + (i < 5 ? ' ' : '')]); });
+    const font = (bold) => (bold ? 'bold ' : '') + size + FONT;
+    let width = 0;
+    parts.forEach(([bold, s]) => { ctx.font = font(bold); width += ctx.measureText(s).width; });
+    let px = CX - width / 2;
+    ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,154,61,.85)';
+    parts.forEach(([bold, s]) => { ctx.font = font(bold); ctx.fillText(s, px, ty + 47 * u); px += ctx.measureText(s).width; });
+    ctx.textAlign = 'center'; ctx.font = (9 * u) + FONT; ctx.fillStyle = 'rgba(180,230,255,.6)'; ctx.fillText('customized by Chris', CX, ty + 59 * u);
+    ctx.globalAlpha = 1;
+  }
+
+  /* ---------- hand-over to the real HUD ---------- */
+  const capture = JarvisHud.capture;
+  let captureState = CAPTURE.COLLECTING, freezeCount = 0, snapshot = null, collected = [], textReveal = [];
+  let mapDelays = null, brainSeeds = null, domTexts = null, done = false;
+  const log = document.getElementById('log'), bar = document.getElementById('bar');
+  capture.texts = new Map();
+  [log, bar].forEach((el) => { if (el) { el.style.zIndex = '101'; el.style.clipPath = 'inset(100% 0 0 0)'; } });
+  const background = document.createElement('div');   // the page background, faded in behind the panels
+  (function copyPageBackground() {
+    const b = getComputedStyle(document.body), h = getComputedStyle(document.documentElement), s = (b.backgroundImage != 'none') ? b : h;
+    background.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;opacity:0';
+    background.style.backgroundColor = (b.backgroundColor == 'rgba(0, 0, 0, 0)') ? h.backgroundColor : b.backgroundColor;
+    background.style.backgroundImage = s.backgroundImage; background.style.backgroundSize = s.backgroundSize;
+    background.style.backgroundPosition = s.backgroundPosition; background.style.backgroundRepeat = s.backgroundRepeat;
+    overlay.insertBefore(background, canvas);
+  })();
+
+  function revealGroup(rec) {
+    // which panel (index) or wing reveals this text, or null for texts outside all of them
+    for (let i = 0; i < PANELS.length; i++) { const p = PANELS[i]; if (rec.x >= p.x - 4 && rec.x <= p.x + p.w + 4 && rec.y >= p.y - 4 && rec.y <= p.y + p.h + 8) return i; }
+    if (!compact && (inRect(WING_LEFT, rec.x, rec.y, 0) || inRect(WING_RIGHT, rec.x, rec.y, 0))) return WINGS;
+    return null;
+  }
+
+  function drawGrid(t) {
+    // background glow and grid, outside the panels (the panels come from the HUD snapshot)
+    const a = clamp01((t - TIME.panels) / TIME.gridFade);
+    background.style.opacity = a;
+    if (a <= 0) return;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H);
+    PANELS.forEach((p) => ctx.rect(p.x - 6, p.y - 6, p.w + 12, p.h + 12));
+    if (!compact) [WING_LEFT, WING_RIGHT].forEach((r) => ctx.rect(r.x, r.y, r.w, r.h));
+    ctx.clip('evenodd'); ctx.globalAlpha = a;
+    const glow = ctx.createRadialGradient(CX, CY, 0, CX, CY, Math.max(W, H) * 0.6);
+    glow.addColorStop(0, 'rgba(25,211,255,0.14)'); glow.addColorStop(1, 'rgba(2,6,11,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(25,211,255,0.045)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let gx = 0; gx < W; gx += 60 * u) { ctx.moveTo(gx, 0); ctx.lineTo(gx, H); }
+    for (let gy = 0; gy < H; gy += 60 * u) { ctx.moveTo(0, gy); ctx.lineTo(W, gy); }
+    ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  function captureHud(t) {
+    // 1. collect the texts the HUD draws; 2. at TIME.capture ask the HUD to draw without texts for a few frames; 3. copy its canvas
+    if (captureState == CAPTURE.DONE) return;
+    if (captureState == CAPTURE.COLLECTING) {
+      if (capture.texts && capture.texts.size) { collected = Array.from(capture.texts.values()); capture.texts.clear(); }
+      if (t >= TIME.capture && collected.length) { capture.texts = null; capture.active = true; captureState = CAPTURE.FREEZING; freezeCount = 0; }
+      return;
+    }
+    if (++freezeCount < FREEZE_FRAMES) return;
+    const hudCanvas = document.getElementById('cv');
+    if (hudCanvas) {
+      snapshot = document.createElement('canvas'); snapshot.width = hudCanvas.width; snapshot.height = hudCanvas.height;
+      snapshot.getContext('2d').drawImage(hudCanvas, 0, 0);
+      textReveal = collected.map((rec) => ({ rec, group: revealGroup(rec) })).filter((q) => q.group !== null);
+    }   // no HUD canvas: the panels are not replayed, the HUD shows them itself when the overlay fades
+    capture.active = false; captureState = CAPTURE.DONE;
+  }
+
+  function drawRevealedTexts(t) {
+    // the HUD's texts, decoded line by line while their panel unrolls
+    textReveal.forEach(({ rec, group }) => {
+      let s = rec.text, shownAt, visible;
+      if (group === WINGS) { shownAt = TIME.wingTexts + 0.1 + Math.abs(rec.x - CX) / W * 0.8; visible = true; }
+      else {
+        const p = PANELS[group], t1 = panelStart(group);
+        shownAt = t1 + 0.3 + clamp01((rec.y - p.y) / p.h) * 0.6;
+        visible = rec.y < p.y - 6 + (p.h + 12) * easeOut(clamp01((t - t1) / TIME.panelUnroll)) + 4;
+      }
+      if (t < shownAt || !visible) return;
+      if (/^\d\d:\d\d:\d\d$/.test(s)) s = new Date().toLocaleTimeString('en-GB');
+      ctx.globalAlpha = Math.min(1, (t - shownAt) * 3) * (rec.alpha == null ? 1 : rec.alpha);
+      ctx.fillStyle = rec.color; ctx.font = rec.size + FONT; ctx.textAlign = rec.align;
+      ctx.fillText(scramble(s, t, shownAt, 0.9), rec.x, rec.y);
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBrain(t) {
+    // the neural core's point cloud (made by hud.html) flies together inside its panel
+    const panel = PANELS[NEURAL], brain = JarvisHud.brain;
+    if (!brain || !brain.pts || t < TIME.brainShown) return;
+    const nx = panel.x + panel.w / 2, ny = panel.y + panel.h * 0.5, nr = Math.min(panel.h * 0.36, panel.w * 0.44), sc = nr * 1.03;
+    if (!brainSeeds) brainSeeds = brain.pts.map(() => [random(), random(), random(), random()]);
+    const start = TIME.brain, rot = (JarvisHud.brainPose && JarvisHud.brainPose.rot) || 0, ca = Math.cos(rot), sa = Math.sin(rot), c3 = Math.cos(0.3), s3 = Math.sin(0.3);
+    const hx = panel.x + 10 * u, hy = panel.y + 42 * u, hw2 = panel.w - 20 * u, hh2 = panel.h - 68 * u, projected = [];
+    ctx.save(); ctx.beginPath(); ctx.rect(hx, hy, hw2, hh2); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+    const ga = clamp01((t - start) / 1.2), glow = ctx.createRadialGradient(nx, ny, 0, nx, ny, sc * 1.3);
+    glow.addColorStop(0, 'rgba(25,211,255,' + (0.1 * ga) + ')'); glow.addColorStop(1, 'rgba(25,211,255,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = glow; ctx.fillRect(hx, hy, hw2, hh2);
+    ctx.strokeStyle = COLOR.cyan; ctx.lineWidth = u; ctx.beginPath();
+    brain.pts.forEach((q, i) => {
+      const seed = brainSeeds[i], pg = clamp01((t - start - seed[0] * 0.5) / 0.85), e = easeOut(pg), inv = 1 - e;
+      const x1 = q[0] * ca + q[2] * sa, z1 = -q[0] * sa + q[2] * ca, y2 = q[1] * c3 - z1 * s3, z2 = q[1] * s3 + z1 * c3, persp = 1 / (1 + z2 * 0.3), fx = nx + x1 * sc * persp, fy = ny - y2 * sc * persp;
+      const an = (seed[3] - 0.5) * 7 * inv, cs = Math.cos(an), sn = Math.sin(an), gx = nx + (fx - nx) * cs - (fy - ny) * sn, gy = ny + (fx - nx) * sn + (fy - ny) * cs;
+      const sx = hx + seed[1] * hw2, sy = hy + seed[2] * hh2, X = sx * inv + gx * e, Y = sy * inv + gy * e;
+      projected.push([X, Y, pg]);
+      if (pg > 0 && pg < 1) { ctx.moveTo(X, Y); ctx.lineTo(X + (sx - X) * 0.12 * inv, Y + (sy - Y) * 0.12 * inv); }
+    });
+    ctx.globalAlpha = 0.5; ctx.stroke();
+    const edgeAlpha = clamp01((t - start - 0.8) / 0.6) * 0.3;
+    if (edgeAlpha > 0) {
+      ctx.globalAlpha = edgeAlpha; ctx.beginPath();
+      brain.E.forEach(([i, j]) => { const a = projected[i], b = projected[j]; if (a && b) { ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); } });
+      ctx.stroke();
+    }
+    ctx.fillStyle = COLOR.cyan;
+    projected.forEach((q, i) => {
+      if (q[2] <= 0) return;
+      const inner = i >= 180, s = (inner ? 2.6 : 2.2) * u;   // the last 40 points are the inner core
+      ctx.globalAlpha = Math.min(1, q[2] * 4) * (inner ? 1 : 0.75); ctx.fillRect(q[0] - s / 2, q[1] - s / 2, s, s);
+    });
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  function drawPanels(t) {
+    // the copied HUD panels unroll from the top, one after the other, with a bright edge
+    const r = snapshot.width / W;
+    PANELS.forEach((p, i) => {
+      const w = easeOut(clamp01((t - panelStart(i)) / TIME.panelUnroll));
+      if (w <= 0) return;
+      const sw = p.w + 12, sh = p.h + 12;
+      ctx.globalAlpha = 1;
+      if (i == NEURAL) {   // its inner area stays open: the brain is drawn there live
+        ctx.save(); ctx.beginPath(); ctx.rect(p.x - 6, p.y - 6, sw, sh * w); ctx.rect(p.x + 10 * u, p.y + 42 * u, p.w - 20 * u, p.h - 68 * u); ctx.clip('evenodd');
+        ctx.drawImage(snapshot, (p.x - 6) * r, (p.y - 6) * r, sw * r, sh * w * r, p.x - 6, p.y - 6, sw, sh * w); ctx.restore();
+      } else ctx.drawImage(snapshot, (p.x - 6) * r, (p.y - 6) * r, sw * r, sh * w * r, p.x - 6, p.y - 6, sw, sh * w);
+      if (w < 1) { ctx.globalAlpha = 0.9 * (1 - w); ctx.fillStyle = COLOR.cyan; ctx.fillRect(p.x, p.y + p.h * w, p.w, 2 * u); }
+    });
+    if (!compact) {
+      const wt = easeOut(clamp01((t - TIME.wings) / 0.7));
+      if (wt > 0) {   // the wings open sideways from the core
+        const L = WING_LEFT, R = WING_RIGHT;
+        ctx.globalAlpha = 1;
+        ctx.drawImage(snapshot, (L.x + L.w * (1 - wt)) * r, L.y * r, L.w * wt * r, L.h * r, L.x + L.w * (1 - wt), L.y, L.w * wt, L.h);
+        ctx.drawImage(snapshot, R.x * r, R.y * r, R.w * wt * r, R.h * r, R.x, R.y, R.w * wt, R.h);
+      }
+    }
+  }
+
+  function drawMapDots(t) {
+    // the world map's dots appear west to east while the network panel unrolls
+    const dots = capture.mapDots;
+    if (!dots || !dots.length) return;
+    if (!mapDelays) { mapDelays = new Float32Array(dots.length); for (let j = 0; j < dots.length; j++) mapDelays[j] = (dots[j][0] + 180) / 360 * 0.9 + random() * 0.4; }
+    const p = PANELS[NETWORK], area = JarvisHud.mapArea(p, u), shown = easeOut(clamp01((t - panelStart(NETWORK)) / TIME.panelUnroll));
+    const start = panelStart(NETWORK) + 0.3, size = 1.7 * u, limit = p.y - 6 + (p.h + 12) * shown;
+    ctx.globalAlpha = 0.38; ctx.fillStyle = COLOR.cyan; ctx.beginPath();
+    for (let j = 0; j < dots.length; j++) {
+      if (t < start + mapDelays[j]) continue;
+      const qy = area.top + (area.latTop - dots[j][1]) / (area.latTop - area.latBottom) * area.h;
+      if (qy > limit) continue;
+      ctx.rect(area.x + (dots[j][0] + 180) / 360 * area.w, qy, size, size);
+    }
+    ctx.fill();
+  }
+
+  function revealChatAndBar(t) {
+    // the real chat log and input bar unroll too, their texts decoding like the panels'
+    const p1 = easeOut(clamp01((t - TIME.panels) / TIME.panelUnroll)), p2 = easeOut(clamp01((t - TIME.logBar) / 0.4));
+    if (log) log.style.clipPath = 'inset(' + (100 * (1 - p1)).toFixed(1) + '% 0 0 0)';
+    if (bar) bar.style.clipPath = 'inset(' + (100 * (1 - p2)).toFixed(1) + '% 0 0 0)';
+    if (t <= TIME.wings) return;
+    if (!domTexts) {
+      domTexts = [];
+      [log, bar].forEach((el) => {
+        if (!el) return;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) if (node.nodeValue.trim()) domTexts.push({ node, text: node.nodeValue, placeholder: false });
+      });
+      const input = bar && bar.querySelector('input[type=text]');
+      if (input && input.placeholder) domTexts.push({ node: input, text: input.placeholder, placeholder: true });
+    }
+    domTexts.forEach((d) => { const s = scramble(d.text, t, TIME.domText, 1.0); if (d.placeholder) d.node.placeholder = s; else d.node.nodeValue = s; });
+  }
+
+  function drawHandOver(t) {
+    captureHud(t);
+    if (captureState != CAPTURE.DONE) return;
+    if (snapshot) drawPanels(t);
+    drawMapDots(t);
+    drawBrain(t);
+    drawRevealedTexts(t);
+    if (!done) revealChatAndBar(t);
+    ctx.globalAlpha = 1;
+  }
+
+  function restoreHud() {
+    capture.active = false; capture.texts = null;
+    if (domTexts) domTexts.forEach((d) => { if (d.placeholder) d.node.placeholder = d.text; else d.node.nodeValue = d.text; });
+    domTexts = [];
+    [log, bar].forEach((el) => { if (el) el.style.clipPath = ''; });
+    setTimeout(() => [log, bar].forEach((el) => { if (el) el.style.zIndex = ''; }), 600);
+  }
+
+  function drawFrame(t) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.clearRect(0, 0, W, H);
+    drawGrid(t);
+    const starFade = 1 - clamp01((t - TIME.starsFade) / 0.6);
+    if (starFade > 0) {   // star tunnel
+      ctx.fillStyle = COLOR.cyan;
+      stars.forEach((s) => {
+        const z = (s.phase + t * 0.25) % 1, rr = z * z * W * 0.45 * (0.3 + s.spread);
+        ctx.globalAlpha = starFade * 0.7 * z; ctx.fillRect(CX + Math.cos(s.angle) * rr, CY + Math.sin(s.angle) * rr * 0.6, u * (2 + z * 4), u * (2 + z * 4));
+      });
+    }
+    ctx.save();
+    const zoom = 1.08 - 0.08 * easeOut(clamp01((t - TIME.starsFade) / 0.8));
+    ctx.translate(CX, CY); ctx.scale(zoom, zoom); ctx.translate(-CX, -CY);
+    pieces.forEach((p) => {
+      if (p.wing) return;   // the wings come from the HUD snapshot
+      if (p.update) p.update();
+      if (t < p.startAt + p.flyTime) { drawPiece(p, t - 0.1, true); drawPiece(p, t - 0.05, true); }
+      drawPiece(p, t, false);
+    });
+    ctx.restore(); ctx.shadowBlur = 0; ctx.setLineDash([]);
+    if (t > TIME.flash) {   // the core lights up and pulses
+      const ca2 = clamp01((t - TIME.flash) / 0.4), pulse = 0.5 + 0.5 * Math.sin((t - TIME.burst) * 7), gr = ctx.createRadialGradient(CX, CY, 0, CX, CY, coreR * 0.46);
+      gr.addColorStop(0, 'rgba(255,255,255,' + (0.6 + 0.2 * pulse) * ca2 + ')'); gr.addColorStop(0.4, 'rgba(25,211,255,' + 0.4 * ca2 + ')'); gr.addColorStop(1, 'rgba(25,211,255,0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(CX, CY, coreR * 0.46, 0, TAU); ctx.fill();
+    }
+    if (t > TIME.burst) {   // white flash and an orange shock ring
+      const b = clamp01((t - TIME.burst) / 0.7);
+      ctx.globalAlpha = (1 - b) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(CX, CY, coreR * 0.35 * (1 + b * 2), 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1 - b; ctx.strokeStyle = COLOR.orange; ctx.lineWidth = 3 * u; ctx.beginPath(); ctx.arc(CX, CY, coreR * (0.4 + b * 5), 0, TAU); ctx.stroke();
+    }
+    const fs = Math.round(14 * u);
+    ctx.font = fs + FONT; ctx.textAlign = 'center'; ctx.fillStyle = COLOR.cyan;
+    status.forEach((s, i) => {
+      const tm = TIME.status + i * TIME.statusStep;
+      if (t > tm) { ctx.globalAlpha = clamp01((t - tm) / 0.2) * (1 - clamp01((t - TIME.panels) / 0.3)); ctx.fillText('> ' + s, CX, CY + ringR + 90 * u + i * fs * 1.5); }
+    });
+    if (JarvisHud.drawWear) JarvisHud.drawWear(ctx, W, H);
+    drawTitle(clamp01(t / 0.5));
+    drawHandOver(t);
+    ctx.globalAlpha = 1;
+  }
+
+  const t0 = performance.now();
+  function finish() {
+    if (done) return;
+    done = true; restoreHud();
+    overlay.style.transition = 'opacity .4s'; overlay.style.pointerEvents = 'none'; overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 500);
+  }
+  function tick(now) {
+    if (!overlay.isConnected) return;
+    const t = (now - t0) / 1000;
+    try { drawFrame(Math.min(t, TIME.last)); }
+    catch (e) { console.error('boot animation stopped:', e); finish(); return; }   // never leave the HUD covered
+    if (t >= TIME.end && !done) finish();
+    requestAnimationFrame(tick);
+  }
+  overlay.addEventListener('click', finish);
+  requestAnimationFrame(tick);
 })();
