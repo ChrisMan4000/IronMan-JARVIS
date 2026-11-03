@@ -37,3 +37,16 @@ def test_links_file_round_trip(tmp_path, monkeypatch):
     assert got["at"] > 0 and len(got["urls"]) == 3
     links.write_text("not-a-time\n", encoding="utf-8")
     assert helper_stats.read_web_links() is None
+
+
+def test_result_links_skip_pictures_and_redirects():
+    text = (
+        "https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396 "
+        "https://www.accuweather.com/images/weathericons/v2a/34.svg "
+        "https://www.accuweather.com/web-api/three-day-redirect?key=226396&target= "
+        "https://example.org/logo.PNG?x=1 https://weather.com/tokyo"
+    )
+    assert tool_marks.result_links(text) == [
+        "https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396",
+        "https://weather.com/tokyo",
+    ]

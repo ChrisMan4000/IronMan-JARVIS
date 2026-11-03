@@ -18,6 +18,11 @@ JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
 WEB_LINKS_FILE = os.path.join(JARVIS_DIR, "tool-web_search-links.txt")
 MAX_LINKS = 3
 _URL = re.compile(r"https?://[^\s\"'<>()\[\]{}|\\^`]+")
+# pictures, styles, scripts and redirect helpers in page text are no use as links
+_NOT_A_PAGE = re.compile(
+    r"\.(svg|png|jpe?g|gif|webp|ico|css|js|woff2?)(\?|#|$)|/redirect|[?&]redirect=|/web-api/",
+    re.IGNORECASE,
+)
 
 
 def result_links(text: str, limit: int = MAX_LINKS) -> list[str]:
@@ -25,6 +30,8 @@ def result_links(text: str, limit: int = MAX_LINKS) -> list[str]:
     links: list[str] = []
     for url in _URL.findall(text or ""):
         url = url.rstrip(".,;:!?")
+        if _NOT_A_PAGE.search(url):
+            continue
         if url not in links:
             links.append(url)
         if len(links) == limit:
