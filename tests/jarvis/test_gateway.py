@@ -92,8 +92,9 @@ def test_everything_else_needs_a_login(gw):
 
 
 def test_public_icons_skip_the_login(gw):
-    # No backend runs in the test, so a public path gets past the login check to a 502.
-    assert gw.get("/hud.webmanifest").status_code == 502
+    # A public path gets past the login check: 502 when no HUD web server runs, 200 when
+    # Jarvis is running on this PC (never 401 or a redirect to the login page).
+    assert gw.get("/hud.webmanifest", follow_redirects=False).status_code in (200, 502)
     assert gw.post("/hud.webmanifest").status_code == 401  # only GET/HEAD are public
 
 

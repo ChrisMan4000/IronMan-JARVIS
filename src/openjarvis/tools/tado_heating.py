@@ -73,6 +73,8 @@ def open_tado_api() -> Any:
     """
     if Tado is None:
         raise RuntimeError("PyTado is not installed (install-jarvis.ps1 adds it)")
+    if not os.path.exists(TOKEN_FILE):  # PyTado itself would only fail later, unclearly
+        raise FileNotFoundError(TOKEN_FILE)
     _quiet_pytado_loggers()  # PyTado's loggers exist once its modules are imported
     return Tado(token_file_path=TOKEN_FILE)  # passes calls on to the logged-in API
 

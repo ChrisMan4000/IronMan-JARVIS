@@ -198,3 +198,10 @@ def test_login_script_saves_the_token_where_the_tool_reads_it(monkeypatch):
     monkeypatch.setattr(tado_login.webbrowser, "open", lambda url: False)
     tado_login.main()
     assert made == {"token": tado.TOKEN_FILE, "activated": True}
+
+
+def test_missing_login_says_not_logged_in(tmp_path, monkeypatch):
+    monkeypatch.setattr(tado, "TOKEN_FILE", str(tmp_path / "tado-token.json"))
+    monkeypatch.setattr(tado, "Tado", object)  # PyTado present, but no login yet
+    result = tado.TadoHeatingTool().execute(action="status")
+    assert not result.success and "not logged in" in result.content
