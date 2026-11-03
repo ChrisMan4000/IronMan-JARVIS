@@ -129,9 +129,16 @@ if (-not (Wait-For "http://127.0.0.1:$JarvisServerPort/health" "Jarvis")) { Exit
 
 # --- Step 4: wait for the HUD web server (started by the Services tab), then open the browser
 if (-not (Wait-For "http://localhost:5173/" "Frontend")) { Exit-WithMessage "The HUD web server did not start. Look at %USERPROFILE%\.openjarvis\logs\vite-5173.err.log." }
-Start-Process "http://localhost:5173/"
-Start-Sleep -Seconds 2
-Start-Process "http://localhost:5173/hud.html"
+# both pages in ONE browser start: two quick "open this address" calls lose the second page while the browser is still starting
+$pages = "http://localhost:5173/", "http://localhost:5173/hud.html"
+$browser = $null
+try {
+  $progId = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' -ErrorAction Stop).ProgId
+  $open = (Get-ItemProperty "Registry::HKEY_CLASSES_ROOT\$progId\shell\open\command" -ErrorAction Stop).'(default)'
+  if ($open -match '^"([^"]+\.exe)"' -or $open -match '^(\S+\.exe)') { $browser = $Matches[1] }
+} catch { Write-JarvisLog "default browser not found, the pages are opened one by one: $($_.Exception.Message)" }
+if ($browser -and (Test-Path $browser)) { Start-Process $browser -ArgumentList $pages }
+else { Start-Process $pages[0]; Start-Sleep -Seconds 5; Start-Process $pages[1] }
 
 # --- Step 5: minimise the terminal windows and remember them, so Stop Jarvis can close them even when their title has changed
 Import-JarvisWindowApi
