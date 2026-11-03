@@ -9,18 +9,18 @@ from __future__ import annotations
 
 import ctypes
 import functools
-import ipaddress
 import json
 import logging
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - fixed programs only (netstat, nvidia-smi, lms) by full path
 import threading
 import time
 import urllib.request
 from collections.abc import Callable
 from ctypes import wintypes
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -29,20 +29,18 @@ LINK_MBPS = 250  # your DSL line speed (250 Mbps)
 JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
 BITS_PER_MEGABIT = 1e6
 BYTES_PER_GB = 1e9
-CO2_REFRESH, CO2_RETRY = 6 * 3600, 600  # seconds
+SECONDS_PER_HOUR = 3600
+CO2_REFRESH = 6 * SECONDS_PER_HOUR  # a new weekly value is checked 4 times a day
+CO2_RETRY = 600  # seconds after a failed download
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW: no console flashes when calling lms
 LMSTUDIO_MODELS_URL = "http://localhost:1234/api/v0/models"
-FANS_URL = (
-    "http://127.0.0.1:8085/data.json"  # LibreHardwareMonitor web server (read-only)
-)
-CO2_URLS = (
-    "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt",
-    "https://gml.noaa.gov/aftp/products/trends/co2/co2_weekly_mlo.txt",
-)
+FANS_URL = "http://127.0.0.1:8085/data.json"  # LibreHardwareMonitor (read-only)
+CO2_URL = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt"
+CO2_URL_MIRROR = "https://gml.noaa.gov/aftp/products/trends/co2/co2_weekly_mlo.txt"
+CO2_URLS = (CO2_URL, CO2_URL_MIRROR)
 GPU_QUERY = (
     "name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed"
 )
-GEO_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dbip.mmdb")
 
 
 @functools.lru_cache(maxsize=None)
@@ -54,23 +52,46 @@ def program(name: str) -> str:
     return shutil.which(name) or name
 
 
-# Shared data returned by GET /
-stats: dict[str, Any] = {
-    "co2": None,
-    "model": None,
-    "model_gb": None,
-    "conns": [],
-    "cpu_load": 0,
-    "cpu_temp": None,
-    "gpu": None,
-    "net": {
-        "down_pct": 0,
-        "up_pct": 0,
-        "down_mbps": 0,
-        "up_mbps": 0,
-        "link_mbps": LINK_MBPS,
-    },
-}
+class LiveStats:
+    """The live values returned by GET /. The sampling threads write single values,
+    HTTP threads read a copy; one lock keeps a reader from seeing a half update."""
+
+    def __init__(self, initial: dict[str, Any]) -> None:
+        self._lock = threading.Lock()
+        self._data = dict(initial)
+
+    def set(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._data[key] = value
+
+    def get(self, key: str) -> Any:
+        with self._lock:
+            return self._data.get(key)
+
+    def snapshot(self) -> dict[str, Any]:
+        """A copy for one answer (values are replaced, never changed in place)."""
+        with self._lock:
+            return dict(self._data)
+
+
+live = LiveStats(
+    {
+        "co2": None,
+        "model": None,
+        "model_gb": None,
+        "conns": [],
+        "cpu_load": 0,
+        "cpu_temp": None,
+        "gpu": None,
+        "net": {
+            "down_pct": 0,
+            "up_pct": 0,
+            "down_mbps": 0,
+            "up_mbps": 0,
+            "link_mbps": LINK_MBPS,
+        },
+    }
+)
 
 
 # -------------------------------------------------------------- CPU / network / GPU
@@ -94,7 +115,9 @@ def cpu_times() -> tuple[int, int]:
 
 def net_bytes() -> tuple[int, int] | None:
     """(received, sent) bytes since boot, read from 'netstat -e'."""
-    out = subprocess.check_output([program("netstat"), "-e"], text=True, timeout=5)
+    out = subprocess.check_output(  # nosec B603 - fixed program and arguments
+        [program("netstat"), "-e"], text=True, timeout=5
+    )
     for line in out.splitlines():
         m = re.match(r"^\s*\S+\s+(\d+)\s+(\d+)\s*$", line)
         if m:
@@ -136,7 +159,7 @@ def parse_gpu(line: str) -> dict[str, Any]:
 
 def read_gpu() -> dict[str, Any] | None:
     try:
-        out = subprocess.check_output(
+        out = subprocess.check_output(  # nosec B603 - fixed program and arguments
             [
                 program("nvidia-smi"),
                 "--query-gpu=" + GPU_QUERY,
@@ -162,122 +185,45 @@ def sampler() -> None:
             if prev_cpu:
                 idle, total = cur[0] - prev_cpu[0], cur[1] - prev_cpu[1]
                 if total > 0:
-                    stats["cpu_load"] = round(100 * (1 - idle / total), 1)
+                    live.set("cpu_load", round(100 * (1 - idle / total), 1))
             prev_cpu = cur
         except (OSError, AttributeError) as exc:  # not Windows, or the call failed once
             logger.debug("cpu sample failed: %s", exc)
         try:
             now_net, now_t = net_bytes(), time.time()
             if now_net and prev_net:
-                stats["net"] = net_speed(prev_net, now_net, now_t - prev_t)
+                live.set("net", net_speed(prev_net, now_net, now_t - prev_t))
             prev_net, prev_t = now_net, now_t
         except (OSError, subprocess.SubprocessError) as exc:
-            logger.debug("network sample failed: %s", exc)
-        stats["gpu"] = read_gpu()
+            logger.debug("network sample failed, measuring again: %s", exc)
+            prev_net = None  # the next speed must not span the failed sample
+        live.set("gpu", read_gpu())
         time.sleep(1)
 
 
-# ---------------------------------------------------------- connections (world map)
-geo: dict[str, dict[str, Any]] = {}
-_geo_reader: Any = None
+# ------------------------------------------------------------------ model size
+@dataclass
+class _ModelSize:
+    """Size of the loaded model, remembered per model (unknown sizes asked again)."""
+
+    model: str | None = None
+    gb: float | None = None
+    asked_at: float = 0.0
 
 
-def open_geo_db() -> None:
-    """Open the offline location database (no data leaves this PC); none = no dots."""
-    global _geo_reader
-    try:
-        import maxminddb
-
-        _geo_reader = maxminddb.open_database(GEO_DB)
-    except (ImportError, OSError, ValueError) as exc:
-        logger.debug("no location database: %s", exc)
-        _geo_reader = None
-
-
-def public_ips(netstat_output: str) -> dict[str, int]:
-    """Public IPs with established TCP connections, with a count each."""
-    ips: dict[str, int] = {}
-    for line in netstat_output.splitlines():
-        p = line.split()
-        if len(p) >= 4 and p[0] == "TCP" and p[3] == "ESTABLISHED":
-            ip = p[2].rsplit(":", 1)[0].strip("[]")
-            try:
-                a = ipaddress.ip_address(ip)
-            except ValueError:
-                continue
-            if a.is_private or a.is_loopback or a.is_link_local or a.is_multicast:
-                continue
-            ips[ip] = ips.get(ip, 0) + 1
-    return ips
-
-
-def locate(record: dict[str, Any] | None) -> dict[str, Any]:
-    """Map entry from one location record ({"bad": 1} when it has no position)."""
-    r = record or {}
-    loc = r.get("location") or {}
-    if "latitude" not in loc or "longitude" not in loc:
-        return {"bad": 1}
-    return {
-        "lat": loc["latitude"],
-        "lon": loc["longitude"],
-        "country": (r.get("country") or {}).get("names", {}).get("en", ""),
-        "city": (r.get("city") or {}).get("names", {}).get("en", ""),
-        "org": "",
-    }
-
-
-def geo_lookup(ips: list[str]) -> None:
-    for ip in ips:
-        try:
-            geo[ip] = locate(_geo_reader.get(ip) if _geo_reader else None)
-        except ValueError:  # not an address the database understands
-            geo[ip] = {"bad": 1}
-
-
-def connections_snapshot(ips: dict[str, int]) -> list[dict[str, Any]]:
-    return [
-        {
-            "ip": i,
-            "n": n,
-            "lat": geo[i]["lat"],
-            "lon": geo[i]["lon"],
-            "country": geo[i].get("country", ""),
-            "city": geo[i].get("city", ""),
-            "org": geo[i].get("org", ""),
-        }
-        for i, n in ips.items()
-        if i in geo and "lat" in geo[i]
-    ]
-
-
-def conn_step() -> None:
-    """Refresh the connection list for the map."""
-    ips = public_ips(
-        subprocess.check_output(
-            [program("netstat"), "-n", "-p", "tcp"], text=True, timeout=8
-        )
-    )
-    new = [i for i in ips if i not in geo]
-    if new:
-        geo_lookup(new)
-    stats["conns"] = connections_snapshot(ips)
-
-
-# --------------------------------------------------------- loaded model (LM Studio)
-_size_cache: dict[str, Any] = {"id": None, "gb": None, "t": 0.0}
+_size = _ModelSize()
 
 
 def model_size_gb(mid: str | None) -> float | None:
     """Size of the loaded model in GB from 'lms ps --json' (cached per model)."""
     if not mid:
         return None
-    if _size_cache["id"] == mid and (
-        _size_cache["gb"] is not None or time.time() - _size_cache["t"] < 30
-    ):
-        return _size_cache["gb"]
-    _size_cache.update(id=mid, t=time.time(), gb=None)
+    recent = time.time() - _size.asked_at < 30  # unknown sizes: ask again after 30 s
+    if _size.model == mid and (_size.gb is not None or recent):
+        return _size.gb
+    _size.model, _size.asked_at, _size.gb = mid, time.time(), None
     try:
-        out = subprocess.run(
+        out = subprocess.run(  # nosec B603 - fixed program and arguments
             [program("lms"), "ps", "--json"],
             capture_output=True,
             text=True,
@@ -286,10 +232,11 @@ def model_size_gb(mid: str | None) -> float | None:
         ).stdout
         for m in json.loads(out):
             if m.get("identifier") == mid or m.get("modelKey") == mid:
-                _size_cache["gb"] = round(m["sizeBytes"] / BYTES_PER_GB, 1)
+                _size.gb = round(m["sizeBytes"] / BYTES_PER_GB, 1)
     except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
-        logger.debug("lms ps failed: %s", exc)
-    return _size_cache["gb"]
+        logger.debug("lms ps failed, size unknown for now: %s", exc)
+        return None
+    return _size.gb
 
 
 def loaded_llm(models: list[dict[str, Any]]) -> str | None:
@@ -305,10 +252,11 @@ def model_step() -> None:
     """Which LLM is loaded in LM Studio, and its size."""
     try:
         with urllib.request.urlopen(LMSTUDIO_MODELS_URL, timeout=4) as r:  # nosec B310 - fixed local URL
-            stats["model"] = loaded_llm(json.load(r).get("data", []))
+            model = loaded_llm(json.load(r).get("data", []))
     except (OSError, ValueError):  # LM Studio not running
-        stats["model"] = None
-    stats["model_gb"] = model_size_gb(stats["model"])
+        model = None
+    live.set("model", model)
+    live.set("model_gb", model_size_gb(model))
 
 
 # ----------------------------------------------------------------- CO2 value (NOAA)
@@ -339,9 +287,10 @@ def co2_loop() -> None:
                 with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310 - fixed NOAA https URLs
                     value = latest_co2(r.read().decode())
             except (OSError, UnicodeDecodeError) as exc:
-                logger.debug("co2 download failed: %s", exc)
+                logger.debug("co2 download from %s failed: %s", url, exc)
+                continue  # try the mirror
             if value:
-                stats["co2"] = value
+                live.set("co2", value)
                 break
         time.sleep(CO2_REFRESH if value else CO2_RETRY)
 
@@ -357,11 +306,14 @@ def _read_number(path: str) -> float:
 
 def tools_step() -> None:
     """When web_search / oracle_search last ran (for the two HUD lights)."""
-    stats["tools"] = {
-        "now": time.time(),
-        "web": _read_number(os.path.join(JARVIS_DIR, "tool-web_search.txt")),
-        "doc": _read_number(os.path.join(JARVIS_DIR, "tool-oracle_search.txt")),
-    }
+    live.set(
+        "tools",
+        {
+            "now": time.time(),
+            "web": _read_number(os.path.join(JARVIS_DIR, "tool-web_search.txt")),
+            "doc": _read_number(os.path.join(JARVIS_DIR, "tool-oracle_search.txt")),
+        },
+    )
 
 
 def bench_step() -> None:
@@ -369,9 +321,10 @@ def bench_step() -> None:
     try:
         with open(os.path.join(JARVIS_DIR, "bench-result.json"), encoding="utf-8") as f:
             d = json.load(f)
-        stats["bench"] = {k: d.get(k) for k in ("accuracy", "passed", "total", "time")}
+        keys = ("accuracy", "passed", "total", "time")
+        live.set("bench", {k: d.get(k) for k in keys})
     except (OSError, ValueError):
-        stats["bench"] = None
+        live.set("bench", None)
 
 
 def fan_speeds(
@@ -393,9 +346,9 @@ def fan_speeds(
 def fans_step() -> None:
     try:
         with urllib.request.urlopen(FANS_URL, timeout=3) as r:  # nosec B310 - fixed local URL
-            stats["fans"] = fan_speeds(json.loads(r.read().decode("utf-8")))
+            live.set("fans", fan_speeds(json.loads(r.read().decode("utf-8"))))
     except (OSError, ValueError):  # LibreHardwareMonitor not running
-        stats["fans"] = None
+        live.set("fans", None)
 
 
 # ---------------------------------------------------------------------------- loops
@@ -420,11 +373,9 @@ def every(seconds: float, step: Callable[[], None]) -> Callable[[], None]:
 
 
 def start() -> None:
-    """Start every sampling loop in the background."""
-    open_geo_db()
+    """Start every sampling loop in the background (the world map: helper_geo.start)."""
     loops = [
         sampler,
-        every(5, conn_step),
         every(3, model_step),
         co2_loop,
         every(1, tools_step),

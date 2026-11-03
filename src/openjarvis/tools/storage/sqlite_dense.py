@@ -15,6 +15,11 @@ import threading
 from pathlib import Path
 from typing import Any
 
+try:  # needed only once embeddings are used (SQLite search works without it)
+    import numpy as np
+except ImportError:
+    np = None
+
 from openjarvis.core.registry import MemoryRegistry
 from openjarvis.tools import rag_cache
 from openjarvis.tools.storage._stubs import RetrievalResult
@@ -39,8 +44,8 @@ class LMStudioEmbedder(Embedder):
 
     def embed(self, texts: list[str]) -> Any:
         """Rows of L2-normalized float32 vectors, one per text (shape (n, dim))."""
-        import numpy as np  # optional dependency, only needed once embeddings are used
-
+        if np is None:
+            raise RuntimeError("numpy is needed for memory embeddings")
         if not texts:
             return np.zeros((0, self.dim()), dtype=np.float32)
         rows: list[list[float]] = []

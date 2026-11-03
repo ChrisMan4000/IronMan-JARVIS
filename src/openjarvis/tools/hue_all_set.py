@@ -78,7 +78,7 @@ class HueAllSetTool(BaseTool):
                 except Exception:
                     # A refused room is reported as FAILED; the others still switch.
                     sent[gid] = False
-            time.sleep(hue_bridge.READ_BACK_DELAY)
+            time.sleep(hue_bridge.ROOM_READ_BACK_DELAY)
             lights = hue_bridge.request("/lights")
             verdicts = [
                 room_verdict(name, ids, lights, sent[gid], want_on)

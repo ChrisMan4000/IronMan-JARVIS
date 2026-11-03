@@ -11,7 +11,10 @@ expects. Set the password with:  python tools\\gateway.py --set-password
 Files (never share them): %USERPROFILE%\\.openjarvis\\gateway\\{cert,key}.pem, auth.json
 """
 
+from __future__ import annotations
+
 import argparse
+import getpass
 import hashlib
 import hmac
 import json
@@ -19,14 +22,18 @@ import os
 import secrets
 import sys
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TypedDict
 from urllib.parse import parse_qs
 
 import httpx
 import uvicorn
+from helper_http import HELPER_URL  # tools\\helper_http.py (stdlib only)
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
+from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
     RedirectResponse,
@@ -40,11 +47,16 @@ GATEWAY_DIR = Path(
 )
 AUTH_FILE = GATEWAY_DIR / "auth.json"
 COOKIE = "jarvis_gw"
-SESSION_SECONDS = 30 * 24 * 3600
+SECONDS_PER_DAY = 24 * 60 * 60
+SESSION_SECONDS = 30 * SECONDS_PER_DAY  # a login lasts 30 days
 PBKDF2_ITERATIONS = 200000
 MIN_PASSWORD = 4
 MAX_TRIES = 5  # wrong passwords in a row before a lockout
 LOCKOUT_SECONDS = 300
+# The services behind the gateway (all on this PC only).
+WAKE_URL = "http://127.0.0.1:8766"
+SERVER_URL = "http://127.0.0.1:8000"
+VITE_URL = "http://localhost:5173"  # also the HUD origin the helper trusts
 # Headers that belong to one connection and must not be passed on by a proxy.
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -68,12 +80,17 @@ PUBLIC_PATHS = {
     "/favicon.ico",
 }
 
-_failed_logins: dict[str, list[float]] = {}  # ip -> [wrong tries, locked until]
-_client: httpx.AsyncClient | None = None
+
+class GatewayAuth(TypedDict):
+    """auth.json: salt and hash of the password, secret that signs the cookies."""
+
+    salt: str
+    hash: str
+    secret: str
 
 
 # ------------------------------------------------------------------------- password
-def load_auth() -> dict | None:
+def load_auth() -> GatewayAuth | None:
     try:
         return json.loads(AUTH_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):  # no password set yet, or a damaged file
@@ -84,7 +101,7 @@ def hash_password(pw: str, salt: bytes) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, PBKDF2_ITERATIONS)
 
 
-def password_matches(auth: dict | None, pw: str) -> bool:
+def password_matches(auth: GatewayAuth | None, pw: str) -> bool:
     if not auth:
         return False
     return hmac.compare_digest(
@@ -92,7 +109,7 @@ def password_matches(auth: dict | None, pw: str) -> bool:
     )
 
 
-def new_auth(pw: str) -> dict:
+def new_auth(pw: str) -> GatewayAuth:
     """Salt, password hash and a fresh cookie secret (so old logins stop working)."""
     salt = os.urandom(16)
     return {
@@ -102,9 +119,14 @@ def new_auth(pw: str) -> dict:
     }
 
 
-def set_password() -> int:
-    import getpass
+def _write_atomic(path: Path, text: str) -> None:
+    """Write fully to a .tmp file, then swap it in: never a half-written file."""
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
+
+def set_password() -> int:
     p1 = getpass.getpass(
         "New gateway password (at least %d characters): " % MIN_PASSWORD
     )
@@ -116,11 +138,7 @@ def set_password() -> int:
         print("Too short (minimum %d). Nothing saved." % MIN_PASSWORD)
         return 1
     GATEWAY_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = AUTH_FILE.with_suffix(
-        ".tmp"
-    )  # write fully, then swap: never a half-written file
-    tmp.write_text(json.dumps(new_auth(p1)), encoding="utf-8")
-    tmp.replace(AUTH_FILE)
+    _write_atomic(AUTH_FILE, json.dumps(new_auth(p1)))
     print("Password saved. All old logins are now invalid.")
     return 0
 
@@ -132,13 +150,13 @@ def sign(secret: str, expires: object) -> str:
     ).hexdigest()
 
 
-def make_cookie(auth: dict) -> str:
+def make_cookie(auth: GatewayAuth) -> str:
     """Cookie "<expiry>.<signature>": only valid until expiry, with this secret."""
     expires = int(time.time()) + SESSION_SECONDS
     return f"{expires}.{sign(auth['secret'], expires)}"
 
 
-def cookie_valid(auth: dict | None, cookie: str) -> bool:
+def cookie_valid(auth: GatewayAuth | None, cookie: str) -> bool:
     if not auth or "." not in cookie:
         return False
     expires, signature = cookie.split(".", 1)
@@ -150,25 +168,45 @@ def cookie_valid(auth: dict | None, cookie: str) -> bool:
     return hmac.compare_digest(signature, sign(auth["secret"], expires))
 
 
-def authed(request) -> bool:
+def authed(request: Request) -> bool:
     return cookie_valid(load_auth(), request.cookies.get(COOKIE, ""))
 
 
 # -------------------------------------------------------------------------- lockout
-def locked_out(ip: str) -> bool:
-    return _failed_logins.get(ip, [0, 0])[1] > time.time()
+class LoginLockout:
+    """Wrong passwords per address; MAX_TRIES in a row lock it for LOCKOUT_SECONDS.
+
+    Only the gateway's one event loop uses it, so it needs no lock.
+    """
+
+    def __init__(self) -> None:
+        self._tries: dict[str, int] = {}
+        self._locked_until: dict[str, float] = {}
+
+    def clear(self) -> None:
+        self._tries.clear()
+        self._locked_until.clear()
+
+    def locked_out(self, ip: str) -> bool:
+        return self._locked_until.get(ip, 0.0) > time.time()
+
+    def record_failure(self, ip: str) -> None:
+        tries = self._tries.get(ip, 0) + 1
+        if tries >= MAX_TRIES:
+            self._tries.pop(ip, None)
+            self._locked_until[ip] = time.time() + LOCKOUT_SECONDS
+        else:
+            self._tries[ip] = tries
+
+    def record_success(self, ip: str) -> None:
+        self._tries.pop(ip, None)
+        self._locked_until.pop(ip, None)
 
 
-def record_failure(ip: str) -> None:
-    """Count a wrong password; the MAX_TRIES-th one locks the address for a while."""
-    tries = _failed_logins.get(ip, [0, 0])[0] + 1
-    _failed_logins[ip] = (
-        [0, time.time() + LOCKOUT_SECONDS] if tries >= MAX_TRIES else [tries, 0]
-    )
-
-
-def record_success(ip: str) -> None:
-    _failed_logins.pop(ip, None)
+lockout = LoginLockout()
+locked_out = lockout.locked_out
+record_failure = lockout.record_failure
+record_success = lockout.record_success
 
 
 # ---------------------------------------------------------------------------- pages
@@ -197,7 +235,7 @@ def login_page(message: str = "", status: int = 200) -> HTMLResponse:
     )
 
 
-async def login(request):
+async def login(request: Request) -> Response:
     ip = request.client.host if request.client else "?"
     if request.method == "GET":
         return login_page()
@@ -222,7 +260,7 @@ async def login(request):
     return resp
 
 
-async def logout(request):
+async def logout(request: Request) -> Response:
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(COOKIE, path="/")
     return resp
@@ -233,19 +271,19 @@ def backend_for(path: str) -> tuple[str, str, dict[str, str]]:
     """(backend base url, path at the backend, headers the backend must see)."""
     if path == "/helper" or path.startswith("/helper/"):
         return (
-            "http://127.0.0.1:8765",
+            HELPER_URL,
             path[len("/helper") :] or "/",
-            {"host": "127.0.0.1:8765", "origin": "http://localhost:5173"},
+            {"host": "127.0.0.1:8765", "origin": VITE_URL},
         )
     if path == "/wake" or path.startswith("/wake/"):
         return (
-            "http://127.0.0.1:8766",
+            WAKE_URL,
             path[len("/wake") :] or "/",
             {"host": "127.0.0.1:8766"},
         )
     if path.startswith("/v1") or path == "/health" or path.startswith("/api/"):
-        return "http://127.0.0.1:8000", path, {"host": "localhost:8000"}
-    return "http://localhost:5173", path, {"host": "localhost:5173"}
+        return SERVER_URL, path, {"host": "localhost:8000"}
+    return VITE_URL, path, {"host": "localhost:5173"}
 
 
 def forwarded_headers(
@@ -261,7 +299,7 @@ def forwarded_headers(
     return hdrs
 
 
-async def proxy(request):
+async def proxy(request: Request) -> Response:
     public = request.method in ("GET", "HEAD") and request.url.path in PUBLIC_PATHS
     path = (
         "/jarvis-icon-180.png"
@@ -275,14 +313,15 @@ async def proxy(request):
     base, backend_path, forced = backend_for(path)
     url = base + backend_path + (("?" + request.url.query) if request.url.query else "")
     body = None if request.method in ("GET", "HEAD") else request.stream()
+    client: httpx.AsyncClient = request.app.state.client
     try:
-        req = _client.build_request(
+        req = client.build_request(
             request.method,
             url,
             headers=forwarded_headers(dict(request.headers), forced),
             content=body,
         )
-        r = await _client.send(req, stream=True)
+        r = await client.send(req, stream=True)
     except httpx.HTTPError as e:
         return Response("backend not reachable: " + type(e).__name__, status_code=502)
     out = {k: v for k, v in r.headers.items() if k.lower() not in HOP_BY_HOP_HEADERS}
@@ -297,14 +336,14 @@ async def proxy(request):
 
 
 @asynccontextmanager
-async def lifespan(app):
-    global _client
-    _client = httpx.AsyncClient(
-        timeout=httpx.Timeout(900.0, connect=5.0),
+async def lifespan(app: Starlette) -> AsyncIterator[None]:
+    """One shared HTTP client for all forwarded requests, closed on shutdown."""
+    app.state.client = httpx.AsyncClient(
+        timeout=httpx.Timeout(900.0, connect=5.0),  # long answers from the model
         limits=httpx.Limits(max_connections=100),
     )
     yield
-    await _client.aclose()
+    await app.state.client.aclose()
 
 
 app = Starlette(
@@ -321,17 +360,17 @@ app = Starlette(
 )
 
 
-def main() -> None:
+def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set-password", action="store_true")
     ap.add_argument("--port", type=int, default=8443)
     ap.add_argument("--no-tls", action="store_true", help="test only")
     args = ap.parse_args()
     if args.set_password:
-        sys.exit(set_password())
+        return set_password()
     if not load_auth():
         print("No password set. Run:  python tools\\gateway.py --set-password")
-        sys.exit(1)
+        return 1
     tls = (
         {}
         if args.no_tls
@@ -341,7 +380,8 @@ def main() -> None:
         }
     )
     uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning", **tls)  # nosec B104 - LAN access is the point
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

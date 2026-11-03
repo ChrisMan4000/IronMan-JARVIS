@@ -6,21 +6,41 @@ which the HUD shows. Run it with Jarvis running:
   uv run --no-sync python tools\\bench.py
 """
 
+from __future__ import annotations
+
 import json
 import os
 import time
 import urllib.request
+from typing import Any, TypedDict
+
+from helper_http import HELPER_URL
 
 JARVIS_DIR = os.path.expanduser("~/.openjarvis")
 TOOL_LOG = os.path.join(JARVIS_DIR, "tool-calls.txt")
 RESULT_FILE = os.path.join(JARVIS_DIR, "bench-result.json")
 QUESTIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench.json")
-HELPER_URL = "http://127.0.0.1:8765"
 CHAT_URL = "http://127.0.0.1:8000/v1/chat/completions"
 LOG_SETTLE_SECONDS = 1.5  # the server writes tool-calls.txt just after answering
 
 
-def post_json(url, body):
+class BenchCase(TypedDict):
+    """One question of bench.json: the tool it needs ("" = none) and expected text."""
+
+    q: str
+    tool: str
+    expect: str
+
+
+class CaseResult(TypedDict):
+    q: str
+    ok: bool
+    tool_ok: bool
+    expect_ok: bool
+    called: list[str]
+
+
+def post_json(url: str, body: dict[str, Any]) -> Any:
     req = urllib.request.Request(
         url, json.dumps(body).encode(), {"Content-Type": "application/json"}
     )
@@ -28,12 +48,12 @@ def post_json(url, body):
         return json.load(r)
 
 
-def get_json(url):
+def get_json(url: str) -> Any:
     with urllib.request.urlopen(url, timeout=10) as r:  # nosec B310 - fixed local URL
         return json.load(r)
 
 
-def tool_log_lines():
+def tool_log_lines() -> list[str]:
     try:
         with open(TOOL_LOG, errors="replace") as f:
             return f.read().splitlines()
@@ -41,12 +61,12 @@ def tool_log_lines():
         return []
 
 
-def tools_called(new_lines):
+def tools_called(new_lines: list[str]) -> list[str]:
     """Tool names from tool-calls.txt lines ("<time> <tool> ...")."""
     return sorted({line.split()[1] for line in new_lines if len(line.split()) > 1})
 
 
-def grade(case, answer, called):
+def grade(case: BenchCase, answer: str, called: list[str]) -> CaseResult:
     """Pass/fail of one question: the right tool (or none) and the expected text."""
     tool_ok = (case["tool"] in called) if case["tool"] else not called
     expect_ok = (case["expect"].lower() in answer.lower()) if case["expect"] else True
@@ -59,7 +79,7 @@ def grade(case, answer, called):
     }
 
 
-def ask(model, question):
+def ask(model: str, question: str) -> str:
     try:
         reply = post_json(
             CHAT_URL,
@@ -71,7 +91,7 @@ def ask(model, question):
         return "ERROR " + str(e)[:80]
 
 
-def summary(results, model):
+def summary(results: list[CaseResult], model: str) -> dict[str, Any]:
     passed = sum(r["ok"] for r in results)
     return {
         "accuracy": round(100.0 * passed / len(results), 1),
@@ -83,11 +103,11 @@ def summary(results, model):
     }
 
 
-def main():
+def main() -> None:
     model = get_json(HELPER_URL)["model"]
     with open(QUESTIONS_FILE, encoding="utf-8") as f:
         cases = json.load(f)
-    results = []
+    results: list[CaseResult] = []
     for n, case in enumerate(cases, 1):
         before = len(tool_log_lines())
         answer = ask(model, case["q"])
@@ -101,8 +121,9 @@ def main():
             % (r["tool_ok"], r["expect_ok"], r["called"]),
         )
     out = summary(results, model)
-    with open(RESULT_FILE, "w", encoding="utf-8") as f:
+    with open(RESULT_FILE + ".tmp", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1)
+    os.replace(RESULT_FILE + ".tmp", RESULT_FILE)  # the HUD never reads half a file
     print("ACCURACY: %s%% (%d of %d)" % (out["accuracy"], out["passed"], out["total"]))
 
 

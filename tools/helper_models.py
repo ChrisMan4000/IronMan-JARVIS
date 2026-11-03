@@ -10,11 +10,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - only LM Studio's lms, by its full path (helper_stats.program)
 import threading
 import time
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass, field
 from typing import Any
 
 from helper_http import Handler, need_trusted, query, send
@@ -23,8 +24,9 @@ from helper_stats import (
     JARVIS_DIR,
     LMSTUDIO_MODELS_URL,
     NO_WINDOW,
+    every,
+    live,
     program,
-    stats,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,10 +42,21 @@ PROBE_RETRY_AFTER = 300  # seconds before a failed capability check is tried aga
 _set_lock = threading.Lock()
 _caps_lock = threading.Lock()
 _load_lock = threading.Lock()  # one "is it busy? then start" decision at a time
-_load_state: dict[str, Any] = {"loading": None, "error": None}
-_probing: dict[str, Any] = {"model": None}
-_probe_failed: dict[str, float] = {}
-_sizes: dict[str, Any] = {"t": 0.0, "m": {}}
+
+
+@dataclass
+class _ModelWork:
+    """What the helper is doing with LM Studio right now (shared by all threads)."""
+
+    loading: str | None = None  # model being loaded, None when idle
+    error: str | None = None  # error of the last load
+    probing: str | None = None  # model whose switches are being tested
+    probe_failed: dict[str, float] = field(default_factory=dict)  # model -> time
+    sizes_at: float = 0.0  # when 'lms ls' was last read
+    sizes: dict[str, float] = field(default_factory=dict)  # modelKey -> GB
+
+
+work = _ModelWork()
 
 
 # ----------------------------------------------------------------- saved json files
@@ -101,7 +114,8 @@ def settings_from_query(q: dict[str, str]) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------ LM Studio
 def _lms(*args: str, timeout: float) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    """Run LM Studio's command line tool (full path, argument list, no shell)."""
+    return subprocess.run(  # nosec B603 - fixed program, arguments from this file or known model ids
         [program("lms"), *args],
         capture_output=True,
         text=True,
@@ -112,18 +126,19 @@ def _lms(*args: str, timeout: float) -> subprocess.CompletedProcess:
 
 def model_sizes() -> dict[str, float]:
     """modelKey -> size in GB from 'lms ls --json' (refreshed every 2 minutes)."""
-    if time.time() - _sizes["t"] > 120:
-        _sizes["t"] = time.time()
+    if time.time() - work.sizes_at > 120:
+        work.sizes_at = time.time()
         try:
             listed = json.loads(_lms("ls", "--json", timeout=15).stdout)
-            _sizes["m"] = {
+            work.sizes = {
                 m["modelKey"]: round(m["sizeBytes"] / BYTES_PER_GB, 1)
                 for m in listed
                 if m.get("modelKey") and m.get("sizeBytes")
             }
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
-            logger.debug("lms ls failed: %s", exc)
-    return _sizes["m"]
+            logger.debug("lms ls failed, keeping the last known sizes: %s", exc)
+            return work.sizes
+    return work.sizes
 
 
 def list_models() -> list[dict[str, Any]]:
@@ -147,7 +162,7 @@ def list_models() -> list[dict[str, Any]]:
         row["caps"] = (
             {"reasoning": c["reasoning"], "thinking": c["thinking"]} if c else None
         )
-        row["probing"] = _probing["model"] == m["id"]
+        row["probing"] = work.probing == m["id"]
         out.append(row)
     return out
 
@@ -155,33 +170,25 @@ def list_models() -> list[dict[str, Any]]:
 def _do_load(mid: str, ctx: int) -> None:
     """Unload everything, then load one model with its saved context (in a thread)."""
     try:
-        subprocess.run(
-            [program("lms"), "unload", "--all"], timeout=60, capture_output=True
-        )
-        r = subprocess.run(
-            [program("lms"), "load", mid, "-c", str(ctx), "-y"],
-            timeout=300,
-            capture_output=True,
-            text=True,
-        )
+        _lms("unload", "--all", timeout=60)
+        r = _lms("load", mid, "-c", str(ctx), "-y", timeout=300)
         if r.returncode != 0:
-            _load_state["error"] = ((r.stderr or "") + (r.stdout or ""))[
-                -200:
-            ] or "load failed"
+            work.error = ((r.stderr or "") + (r.stdout or ""))[-200:] or "load failed"
     except (OSError, subprocess.SubprocessError) as e:
-        _load_state["error"] = str(e)[:200]
+        work.error = str(e)[:200]
     finally:
-        _load_state["loading"] = None
+        work.loading = None
 
 
 def start_load(mid: str) -> dict[str, Any]:
     """Start loading a model unless a load is already running."""
     with _load_lock:
-        if _load_state["loading"]:
+        if work.loading:
             return {"error": "busy"}
         ctx = get_setting(mid)["context"]
-        _load_state.update(
-            loading=mid, error=None
+        work.loading, work.error = (
+            mid,
+            None,
         )  # set before the thread starts: no double load
     threading.Thread(target=_do_load, args=(mid, ctx), daemon=True).start()
     return {"loading": mid, "context": ctx}
@@ -197,8 +204,8 @@ def serve_model_api(h: Handler) -> None:
         if op == "list":
             res = {
                 "models": list_models(),
-                "loading": _load_state["loading"],
-                "error": _load_state["error"],
+                "loading": work.loading,
+                "error": work.error,
             }
         elif op in ("set", "load"):
             mid = q.get("model", "")
@@ -248,7 +255,7 @@ def switch_matters(off: tuple[int, bool], on: tuple[int, bool]) -> bool:
 
 def probe_model(model: str) -> None:
     """Test both switches (off and on) and save the result in hud-model-caps.json."""
-    _probing["model"] = model
+    work.probing = model
     try:
         r_off = _probe_call(model, {"reasoning_effort": "none"})
         r_on = _probe_call(model, {"reasoning_effort": "medium"})
@@ -276,27 +283,25 @@ def probe_model(model: str) -> None:
     ) as exc:  # model busy or unloaded mid-test
         logger.debug("capability check of %s failed: %s", model, exc)
     finally:
-        _probing["model"] = None
+        work.probing = None
 
 
 def caps_step() -> None:
     """Test a newly loaded model once (retry a failed test after a few minutes)."""
-    m = stats.get("model")
+    m = live.get("model")
     if (
         not m
-        or _probing["model"]
+        or work.probing
         or m in read_caps()
-        or time.time() - _probe_failed.get(m, 0) <= PROBE_RETRY_AFTER
+        or time.time() - work.probe_failed.get(m, 0) <= PROBE_RETRY_AFTER
     ):
         return
     probe_model(m)
     if m not in read_caps():
-        _probe_failed[m] = time.time()
+        work.probe_failed[m] = time.time()
 
 
 def start() -> None:
-    from helper_stats import every
-
     def delayed() -> None:
         time.sleep(5)  # let the model loop find the loaded model first
         every(5, caps_step)()

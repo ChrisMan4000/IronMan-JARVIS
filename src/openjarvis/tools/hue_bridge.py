@@ -15,6 +15,11 @@ import time
 import urllib.request
 from typing import Any
 
+try:  # Windows only: the user's saved environment variables
+    import winreg
+except ImportError:
+    winreg = None
+
 from openjarvis.tools import device_log
 
 logger = logging.getLogger(__name__)
@@ -24,6 +29,7 @@ KEY_FILE = os.path.join(_JARVIS_DIR, "hue-key.txt")  # app key: never print or s
 LOG_FILE = os.path.join(_JARVIS_DIR, "hue-set-log.txt")
 TIMEOUT = 5  # seconds per bridge request
 ROOM_FILLER = ("the", "light", "lights", "lamp", "lamps", "room")
+BRIDGE_API_URL = "http://{host}/api/{key}{path}"  # the bridge's local v1 API
 _HOST_RE = re.compile(r"[A-Za-z0-9.\-]+(:\d{1,5})?")
 
 
@@ -43,9 +49,7 @@ def bridge_address() -> str:
     addr = os.environ.get("HUE_BRIDGE_IP", "").strip()
     if addr:
         return addr
-    try:
-        import winreg
-    except ImportError:  # not Windows
+    if winreg is None:  # not Windows
         return ""
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
@@ -82,7 +86,7 @@ def request(path: str, body: dict[str, Any] | None = None) -> Any:
     if not _HOST_RE.fullmatch(addr):
         raise HueBridgeError("HUE_BRIDGE_IP is not a plain host name or IP address")
     req = urllib.request.Request(
-        "http://%s/api/%s%s" % (addr, _app_key(), path),
+        BRIDGE_API_URL.format(host=addr, key=_app_key(), path=path),
         data=None if body is None else json.dumps(body).encode("utf-8"),
         method="GET" if body is None else "PUT",
         headers={"Content-Type": "application/json"},
@@ -214,7 +218,7 @@ def room_lights(group_id: str) -> tuple[list[str], dict[str, dict[str, Any]]]:
     return ids, request("/lights")
 
 
-READ_BACK_DELAY = 1.0  # seconds before the lights report their new state
+ROOM_READ_BACK_DELAY = 1.0  # seconds before the lights report their new state
 
 
 def read_back_report(
@@ -226,7 +230,7 @@ def read_back_report(
     The room's own any_on is not used: the bridge echoes the request there even when
     all its lights are unreachable.
     """
-    time.sleep(READ_BACK_DELAY)
+    time.sleep(ROOM_READ_BACK_DELAY)
     ids, lights = room_lights(group_id)
     verdict, line = room_verdict(room, ids, lights, True, want_on)
     text = "Sent: %s %s. Bridge reply: %s. Read back light by light: %s." % (

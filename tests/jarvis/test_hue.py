@@ -23,15 +23,15 @@ from openjarvis.tools.hue_all_set import (
     HueAllSetTool,
     room_verdict,
 )
+from openjarvis.tools.hue_colors import hex_to_xy, xy_to_hex
 from openjarvis.tools.hue_execute import HueExecuteTool
 from openjarvis.tools.hue_light import (
     HueLightTool,
+    LampChange,
     find_lamp,
-    hex_to_xy,
     lamp_capabilities,
     lamp_info,
     set_lamp,
-    xy_to_hex,
 )
 from openjarvis.tools.hue_light_list import lamp_report
 from openjarvis.tools.hue_lights import room_report
@@ -269,7 +269,7 @@ def test_find_lamp(name, room_ids, expected):
 
 
 def test_set_lamp_body(bridge):
-    set_lamp("12", bri=50, color="red", kelvin=None)
+    set_lamp("12", LampChange(bri=50, color="red"))
     path, body = bridge.puts[-1]
     assert (
         path == "/lights/12/state"
@@ -277,10 +277,10 @@ def test_set_lamp_body(bridge):
         and body["bri"] == 127
         and len(body["xy"]) == 2
     )
-    set_lamp("16", on=False)
+    set_lamp("16", LampChange(on=False))
     assert bridge.puts[-1] == ("/lights/16/state", {"on": False})
     with pytest.raises(ValueError):
-        set_lamp("12", color="mauve-ish")
+        set_lamp("12", LampChange(color="mauve-ish"))
 
 
 def test_hue_light_tool(bridge):

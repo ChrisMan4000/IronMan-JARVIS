@@ -20,6 +20,12 @@ import time
 from datetime import timedelta
 from typing import Any
 
+try:  # installed by the installer; without it the tool answers "not set up"
+    from PyTado.interface.interface import Tado
+    from PyTado.types import OverlayMode, Power
+except ImportError:
+    Tado = OverlayMode = Power = None
+
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
 from openjarvis.tools import device_log
@@ -34,7 +40,7 @@ BOOST_TEMP = 25.0
 BOOST_MIN = 30
 BOOST_RANGE = (5, 120)  # allowed boost minutes
 READ_BACK_TRIES = 3  # Tado's cloud often needs a few seconds to show a change
-READ_BACK_DELAY = 2.0  # seconds between read-back tries
+TADO_READ_BACK_DELAY = 2.0  # seconds between read-back tries
 ZONE_FILLER = re.compile(r"\b(the|heating|radiators?|thermostats?|valves?)\b")
 CHANGE_ACTIONS = ("set", "boost", "off", "resume")
 
@@ -65,8 +71,8 @@ def open_tado_api() -> Any:
 
     Raises FileNotFoundError when there is no token yet; PyTado errors pass through.
     """
-    from PyTado.interface.interface import Tado
-
+    if Tado is None:
+        raise RuntimeError("PyTado is not installed (install-jarvis.ps1 adds it)")
     _quiet_pytado_loggers()  # PyTado's loggers exist once its modules are imported
     return Tado(token_file_path=TOKEN_FILE)  # passes calls on to the logged-in API
 
@@ -107,10 +113,6 @@ def describe_zone(z: Any) -> str:
     if not z.available:
         text += " (NOT AVAILABLE)"
     return text
-
-
-def _log_change(text: str) -> None:
-    device_log.append_change(LOG_FILE, text)
 
 
 def _result(text: str, ok: bool = True) -> ToolResult:
@@ -193,8 +195,6 @@ class TadoHeatingTool(BaseTool):
 
         Raises InputError before anything is sent when an input is wrong.
         """
-        from PyTado.types import OverlayMode, Power
-
         if action == "set":
             temp = _temperature(params.get("temperature"))
             api.set_zone_overlay(zid, OverlayMode.MANUAL, set_temp=temp)
@@ -233,9 +233,11 @@ class TadoHeatingTool(BaseTool):
                 return _result(why, False)
             zid = zone_id(zone)
             sent, temp = self._send(api, action, zid, params)
-            _log_change("%s | %s | %s" % (action, zone.name, sent))
+            device_log.append_change(
+                LOG_FILE, "%s | %s | %s" % (action, zone.name, sent)
+            )
             for _ in range(READ_BACK_TRIES):
-                time.sleep(READ_BACK_DELAY)
+                time.sleep(TADO_READ_BACK_DELAY)
                 now = next(z for z in api.get_zones() if zone_id(z) == zid)
                 ok = matches(action, now, temp)
                 if ok:

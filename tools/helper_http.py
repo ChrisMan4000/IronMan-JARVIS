@@ -19,8 +19,16 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 PORT = 8765
-ALLOWED_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
-ALLOWED_HOSTS = ("127.0.0.1:%d" % PORT, "localhost:%d" % PORT)
+ALLOWED_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")  # the HUD page
+
+
+def local_hosts(port: int) -> tuple[str, ...]:
+    """The Host headers a service on this PC accepts (also used by wake_service)."""
+    return ("127.0.0.1:%d" % port, "localhost:%d" % port)
+
+
+ALLOWED_HOSTS = local_hosts(PORT)
+HELPER_URL = "http://127.0.0.1:%d" % PORT  # how other scripts on this PC reach it
 
 Handler = BaseHTTPRequestHandler
 Route = Callable[[Handler], Any]

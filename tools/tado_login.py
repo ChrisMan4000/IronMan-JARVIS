@@ -5,17 +5,16 @@
 The installer runs this too and keeps its output in the install log.
 """
 
-import os
+from __future__ import annotations
+
 import webbrowser
 
-# Same file as openjarvis.tools.tado_heating.TOKEN_FILE; not imported from there because
-# that loads the whole tools package and slows down the installer's login step.
-TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "tado-token.json")
+from PyTado.interface.interface import Tado
+
+from openjarvis.tools.tado_heating import TOKEN_FILE  # the file the Tado tool reads
 
 
-def main():
-    from PyTado.interface.interface import Tado
-
+def main() -> None:
     tado = Tado(token_file_path=TOKEN_FILE)
     print("Status:", tado.device_activation_status(), flush=True)
     url = tado.device_verification_url()

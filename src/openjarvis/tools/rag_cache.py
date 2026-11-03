@@ -18,10 +18,13 @@ import os
 import threading
 import time
 import urllib.request
-from typing import TYPE_CHECKING, Any, TypedDict
+from dataclasses import dataclass, field
+from typing import Any, TypedDict
 
-if TYPE_CHECKING:
+try:  # installed with the document search; this module's readers need it
     import numpy as np
+except ImportError:
+    np = None
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,7 @@ def _from_disk(row: dict[str, Any]) -> Passage:
 
 def _rebuild_shard(index_json: str, npy: str, jsonl: str) -> int:
     """Write one shard's vectors and passages (via .tmp files: never half-written)."""
-    import numpy as np
+    _need_numpy()
 
     with open(index_json, encoding="utf-8") as f:
         items = json.load(f)["items"]
@@ -130,20 +133,45 @@ def refresh(verbose: bool = True) -> int:
     return rebuilt
 
 
+def _need_numpy() -> None:
+    if np is None:
+        raise RuntimeError("numpy is needed for the document cache")
+
+
 # ---------------------------------------------------------------------------- reading
-_lock = threading.Lock()
-_index: dict[str, Any] = {"sig": None, "vectors": None, "passages": []}
-_texts: dict[str, Any] = {"sig": None, "passages": []}
-_last_refresh = {"at": 0.0}
+@dataclass
+class _LoadedCache:
+    """What is in memory: the vectors and passages, the passage texts alone, and
+    their shard signatures (file names + times), so a changed shard is reloaded."""
+
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    index_sig: tuple[tuple[str, float], ...] | None = None
+    vectors: Any = None
+    passages: list[Passage] = field(default_factory=list)
+    texts_sig: tuple[tuple[str, float], ...] | None = None
+    texts: list[Passage] = field(default_factory=list)
+    refreshed_at: float = 0.0
+    lowered_source: list[Passage] | None = (
+        None  # passages the lower-case copy was made from
+    )
+    lowered: list[str] = field(default_factory=list)
+
+    def forget(self) -> None:
+        """Drop everything, so the next call reads the cache folder again."""
+        self.index_sig = self.texts_sig = self.lowered_source = None
+        self.refreshed_at = 0.0
+
+
+_loaded = _LoadedCache()
 
 
 def _maybe_refresh(every: float) -> None:
-    if time.time() - _last_refresh["at"] > every:
+    if time.time() - _loaded.refreshed_at > every:
         try:
             refresh(verbose=False)
         except OSError as exc:  # cache folder not writable: keep serving the old cache
-            logger.debug("rag cache refresh failed: %s", exc)
-        _last_refresh["at"] = time.time()
+            logger.debug("rag cache refresh failed, serving the old cache: %s", exc)
+        _loaded.refreshed_at = time.time()
 
 
 def _shards(ext: str) -> tuple[list[str], tuple[tuple[str, float], ...]]:
@@ -160,12 +188,12 @@ def load_index(
     refresh_every: float = REFRESH_EVERY,
 ) -> tuple[np.ndarray, list[Passage]]:
     """All passage vectors (one row each) and passages; reloaded on change."""
-    import numpy as np
+    _need_numpy()
 
-    with _lock:
+    with _loaded.lock:
         _maybe_refresh(refresh_every)
         files, sig = _shards(".npy")
-        if sig != _index["sig"]:
+        if sig != _loaded.index_sig:
             passages: list[Passage] = []
             vectors = []
             for npy in files:
@@ -176,21 +204,21 @@ def load_index(
                 if vectors
                 else np.zeros((0, 0), dtype=np.float32)
             )
-            _index.update(sig=sig, vectors=matrix, passages=passages)
-        return _index["vectors"], _index["passages"]
+            _loaded.index_sig, _loaded.vectors, _loaded.passages = sig, matrix, passages
+        return _loaded.vectors, _loaded.passages
 
 
 def load_passages(refresh_every: float = REFRESH_EVERY) -> list[Passage]:
     """Only the passage texts (no vectors: much less memory); reloaded on change."""
-    with _lock:
+    with _loaded.lock:
         _maybe_refresh(refresh_every)
         files, sig = _shards(".jsonl")
-        if sig != _texts["sig"]:
+        if sig != _loaded.texts_sig:
             passages: list[Passage] = []
             for jsonl in files:
                 passages.extend(_read_passages(jsonl))
-            _texts.update(sig=sig, passages=passages)
-        return _texts["passages"]
+            _loaded.texts_sig, _loaded.texts = sig, passages
+        return _loaded.texts
 
 
 def embed_batch(texts: list[str], timeout: float = 60.0) -> list[list[float]]:
@@ -211,7 +239,7 @@ def embed_batch(texts: list[str], timeout: float = 60.0) -> list[list[float]]:
 
 def embed_query(text: str, timeout: float = 60.0) -> np.ndarray:
     """The question as a normalized vector from the LM Studio embedding model."""
-    import numpy as np
+    _need_numpy()
 
     vector = np.array(embed_batch([text], timeout)[0], dtype=np.float32)
     return vector / np.linalg.norm(vector)
@@ -221,7 +249,7 @@ def search(
     query: str, k: int = 4, min_score: float = 0.0, timeout: float = 60.0
 ) -> list[tuple[float, Passage]]:
     """The k passages closest in meaning to the query, best first, >= min_score."""
-    import numpy as np
+    _need_numpy()
 
     vectors, passages = load_index()
     if not passages:
@@ -235,16 +263,12 @@ def search(
     ]
 
 
-_lowered: dict[str, Any] = {
-    "source": None,
-    "texts": [],
-}  # lower-case texts, made once per load
-
-
 def _lower_texts(passages: list[Passage]) -> list[str]:
-    if _lowered["source"] is not passages:
-        _lowered.update(source=passages, texts=[p["text"].lower() for p in passages])
-    return _lowered["texts"]
+    """Lower-case passage texts, made once per loaded passage list."""
+    if _loaded.lowered_source is not passages:
+        _loaded.lowered_source = passages
+        _loaded.lowered = [p["text"].lower() for p in passages]
+    return _loaded.lowered
 
 
 def count_documents(

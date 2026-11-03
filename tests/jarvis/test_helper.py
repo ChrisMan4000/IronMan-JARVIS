@@ -18,6 +18,7 @@ if TOOLS not in sys.path:
     sys.path.append(TOOLS)
 
 import helper_docs  # noqa: E402
+import helper_geo  # noqa: E402
 import helper_http  # noqa: E402
 import helper_models  # noqa: E402
 import helper_stats  # noqa: E402
@@ -155,7 +156,7 @@ def test_public_ips_skips_local_addresses():
   TCP    [::1]:5173             [::1]:51004            ESTABLISHED
   TCP    192.168.2.20:51005     151.101.1.69:443       TIME_WAIT
 """
-    assert helper_stats.public_ips(netstat) == {"140.82.112.4": 2}
+    assert helper_geo.public_ips(netstat) == {"140.82.112.4": 2}
 
 
 def test_locate():
@@ -163,14 +164,14 @@ def test_locate():
         "location": {"latitude": 52.5, "longitude": 13.4},
         "country": {"names": {"en": "Germany"}},
     }
-    assert helper_stats.locate(rec) == {
+    assert helper_geo.locate(rec) == {
         "lat": 52.5,
         "lon": 13.4,
         "country": "Germany",
         "city": "",
         "org": "",
     }
-    assert helper_stats.locate(None) == {"bad": 1}
+    assert helper_geo.locate(None) == {"bad": 1}
 
 
 def test_latest_co2_skips_missing_weeks():
@@ -261,7 +262,7 @@ def test_only_one_model_load_at_a_time(monkeypatch, tmp_path):
     def slow_load(mid, ctx):
         started.append(mid)
         release.wait(2)
-        helper_models._load_state["loading"] = None
+        helper_models.work.loading = None
 
     monkeypatch.setattr(helper_models, "_do_load", slow_load)
     results = []
@@ -295,7 +296,7 @@ def oracle(tmp_path, monkeypatch):
     except OSError:
         pass
     monkeypatch.setattr(helper_docs, "DOC_ROOT", str(root))
-    helper_docs._doc_idx["t"] = 0.0
+    helper_docs.doc_index.forget()
     return root
 
 
@@ -351,13 +352,15 @@ def test_news_limit():
 
 
 def test_private_routes_old_and_new_style(monkeypatch):
-    monkeypatch.setitem(
-        sys.modules, "hwstats_private", SimpleNamespace(routes=lambda: {"/a": 1})
+    monkeypatch.setattr(hwstats, "hwstats_private", None)  # no private file
+    assert hwstats.private_routes() == {}
+    monkeypatch.setattr(
+        hwstats, "hwstats_private", SimpleNamespace(routes=lambda: {"/a": 1})
     )
     assert hwstats.private_routes() == {"/a": 1}
     seen = {}
-    monkeypatch.setitem(
-        sys.modules,
+    monkeypatch.setattr(
+        hwstats,
         "hwstats_private",
         SimpleNamespace(setup=lambda g: seen.update(g) or {"/b": 2}),
     )

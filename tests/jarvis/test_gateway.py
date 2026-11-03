@@ -28,7 +28,7 @@ def gw(tmp_path, monkeypatch):
     monkeypatch.setattr(gateway, "AUTH_FILE", auth_file)
     monkeypatch.setattr(gateway, "PBKDF2_ITERATIONS", 1000)  # keep the tests fast
     auth_file.write_text(json.dumps(gateway.new_auth(PASSWORD)), encoding="utf-8")
-    gateway._failed_logins.clear()
+    gateway.lockout.clear()
     with TestClient(gateway.app, base_url="https://testserver") as client:
         yield client
 
@@ -57,7 +57,7 @@ def test_cookie_is_signed_and_expires(monkeypatch):
 
 
 def test_lockout_after_five_wrong_tries(monkeypatch):
-    gateway._failed_logins.clear()
+    gateway.lockout.clear()
     for _ in range(gateway.MAX_TRIES - 1):
         gateway.record_failure("10.0.0.7")
     assert not gateway.locked_out("10.0.0.7")

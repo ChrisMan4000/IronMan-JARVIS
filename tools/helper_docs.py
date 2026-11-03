@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import threading
 import time
 from typing import Any
 
 from helper_http import Handler, query, send
+
+from openjarvis.tools import rag_cache
 
 DOC_ROOT = os.environ.get("JARVIS_DOC_ROOT") or os.path.join(
     os.path.expanduser("~"), "Documents", "ORACLE"
@@ -27,18 +30,34 @@ ACTIVE_TYPES = {
     "application/javascript",
     "text/javascript",
 }
-_doc_idx: dict[str, Any] = {"t": 0.0, "map": {}}
 
 
-def _doc_map() -> dict[str, str]:
-    """Lower-case file name -> full path for every file in the ORACLE folder."""
-    if time.time() - _doc_idx["t"] > DOC_MAP_REFRESH:
-        names: dict[str, str] = {}
-        for root, _dirs, files in os.walk(DOC_ROOT):
-            for f in files:
-                names.setdefault(f.lower(), os.path.join(root, f))
-        _doc_idx.update(t=time.time(), map=names)
-    return _doc_idx["map"]
+class DocIndex:
+    """Lower-case file name -> full path of every ORACLE file, re-read every
+    DOC_MAP_REFRESH seconds (one walk at a time, readers get a finished map)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._read_at = 0.0
+        self._names: dict[str, str] = {}
+
+    def forget(self) -> None:
+        """Walk the folder again on the next lookup."""
+        with self._lock:
+            self._read_at = 0.0
+
+    def names(self) -> dict[str, str]:
+        with self._lock:
+            if time.time() - self._read_at > DOC_MAP_REFRESH:
+                names: dict[str, str] = {}
+                for root, _dirs, files in os.walk(DOC_ROOT):
+                    for f in files:
+                        names.setdefault(f.lower(), os.path.join(root, f))
+                self._names, self._read_at = names, time.time()
+            return self._names
+
+
+doc_index = DocIndex()
 
 
 def inside_root(path: str) -> bool:
@@ -56,7 +75,7 @@ def find_doc(name: str | None) -> str | None:
     name = (name or "").strip().lower()
     if not name:
         return None
-    names = _doc_map()
+    names = doc_index.names()
     path = names.get(name)
     if not path:
         hits = [p for k, p in names.items() if name in k or k in name]
@@ -93,8 +112,6 @@ def serve_doc(h: Handler) -> None:
 
 def count_word(word: str) -> dict[str, Any]:
     """How many documents / passages contain the word, plus the top 15 documents."""
-    from openjarvis.tools import rag_cache
-
     passages, files = rag_cache.count_documents(
         [word], rag_cache.load_passages(COUNT_REFRESH)
     )

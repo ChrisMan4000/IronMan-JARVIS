@@ -168,3 +168,33 @@ def test_status_lists_every_zone(fake):
     assert len(lines) == 4 and lines[0].startswith(
         "Living Room: now 19.5 C, target 20.0 C, power ON"
     )
+
+
+def test_login_script_saves_the_token_where_the_tool_reads_it(monkeypatch):
+    """tools/tado_login.py: device login with the tool's own token file."""
+    from pathlib import Path
+
+    pytest.importorskip("PyTado")
+    tools = str(Path(__file__).resolve().parents[2] / "tools")
+    monkeypatch.syspath_prepend(tools)
+    import tado_login
+
+    made = {}
+
+    class FakeTado:
+        def __init__(self, token_file_path):
+            made["token"] = token_file_path
+
+        def device_activation_status(self):
+            return "PENDING"
+
+        def device_verification_url(self):
+            return "https://login.example/device"
+
+        def device_activation(self):
+            made["activated"] = True
+
+    monkeypatch.setattr(tado_login, "Tado", FakeTado)
+    monkeypatch.setattr(tado_login.webbrowser, "open", lambda url: False)
+    tado_login.main()
+    assert made == {"token": tado.TOKEN_FILE, "activated": True}

@@ -40,9 +40,7 @@ def library(tmp_path, monkeypatch):
     (shard / "index.json").write_text(json.dumps({"items": items}), encoding="utf-8")
     monkeypatch.setattr(rag_cache, "SRC", str(src))
     monkeypatch.setattr(rag_cache, "OUT", str(out))
-    for cache in (rag_cache._index, rag_cache._texts):
-        cache["sig"] = None
-    monkeypatch.setitem(rag_cache._last_refresh, "at", 0.0)
+    rag_cache._loaded.forget()
     monkeypatch.setattr(
         rag_cache,
         "embed_query",
@@ -103,7 +101,7 @@ def test_search_orders_by_meaning_and_drops_weak_hits(library):
 def test_empty_cache_finds_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(rag_cache, "SRC", str(tmp_path / "none"))
     monkeypatch.setattr(rag_cache, "OUT", str(tmp_path / "cache"))
-    rag_cache._index["sig"] = None
+    rag_cache._loaded.forget()
     assert rag_cache.search("anything") == []
 
 

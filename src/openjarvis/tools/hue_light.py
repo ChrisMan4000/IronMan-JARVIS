@@ -4,43 +4,34 @@ What it can do per lamp: on/off, brightness 1-100 %, a colour (name or #hex, onl
 colour lamps) and a white temperature in kelvin (only on lamps with white tones).
 It reads the lamp back after 0.6 s and reports "Verified: YES/NO".
 Lamp names are the ones from the Hue app (hue_light_list shows them).
-The lamp helpers here (lamp_info, set_lamp, find_lamp) are also used by the local
-home-world helper.
+The lamp helpers here (lamp_info, set_lamp + LampChange, find_lamp) are also used
+by the local home-world helper.
 """
 
 from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from typing import Any, TypedDict
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
 from openjarvis.tools import hue_bridge
 from openjarvis.tools._stubs import BaseTool, ToolSpec
+from openjarvis.tools.hue_colors import (
+    COLORS,
+    hex_to_xy,
+    kelvin_to_mired,
+    white_hex,
+    xy_to_hex,
+)
 
 TOOL_NAME = "hue_light"
-COLORS = {
-    "red": "#ff2a1a",
-    "orange": "#ff8a1a",
-    "yellow": "#ffd21a",
-    "green": "#2aff4a",
-    "cyan": "#1affe8",
-    "blue": "#1a4aff",
-    "purple": "#8a2aff",
-    "violet": "#8a2aff",
-    "pink": "#ff4ab4",
-    "magenta": "#ff1aff",
-    "white": "#ffffff",
-    "warm": "#ffd6a0",
-    "warm white": "#ffd6a0",
-}
 LAMP_FILLER = ("the", "light", "lights", "lamp", "lamps", "hue", "my", "in", "on", "at")
 READ_BACK_DELAY = 0.6  # seconds before a single lamp reports its new state
 BRI_MAX = 254  # the bridge's brightness scale is 1-254
 PERCENT_TO_BRI = BRI_MAX / 100
-MIRED_PER_KELVIN = 1_000_000  # colour temperature: mired = 1,000,000 / kelvin
-CT_RANGE = (153, 500)  # mired range of Hue white lamps (about 6500 K to 2000 K)
 
 
 class LampCapabilities(TypedDict):
@@ -64,42 +55,6 @@ def _fail(msg: str) -> ToolResult:
     return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
 
 
-def _srgb_to_linear(c: float) -> float:
-    return ((c + 0.055) / 1.055) ** 2.4 if c > 0.04045 else c / 12.92
-
-
-def _linear_to_srgb(c: float) -> float:
-    return 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
-
-
-def hex_to_xy(h: str) -> list[float]:
-    """#rrggbb -> CIE xy as the Hue bridge expects it (black gives neutral white)."""
-    h = h.lstrip("#")
-    r, g, b = (_srgb_to_linear(int(h[i : i + 2], 16) / 255) for i in (0, 2, 4))
-    x = r * 0.664511 + g * 0.154324 + b * 0.162028
-    y = r * 0.283881 + g * 0.668433 + b * 0.047685
-    z = r * 0.000088 + g * 0.072310 + b * 0.986039
-    s = x + y + z
-    return [round(x / s, 4), round(y / s, 4)] if s > 0 else [0.3227, 0.329]
-
-
-def xy_to_hex(xy: list[float]) -> str:
-    """CIE xy -> #rrggbb at full brightness, for showing a lamp's colour."""
-    x, y = xy
-    if y <= 0:
-        return "#ffffff"
-    big_y = 1.0
-    big_x, big_z = big_y / y * x, big_y / y * (1 - x - y)
-    r = big_x * 1.656492 - big_y * 0.354851 - big_z * 0.255038
-    g = -big_x * 0.707196 + big_y * 1.655397 + big_z * 0.036152
-    b = big_x * 0.051713 - big_y * 0.121364 + big_z * 1.011530
-    m = max(r, g, b, 1e-6)
-    return "#" + "".join(
-        "%02x" % int(max(0.0, min(1.0, _linear_to_srgb(max(0.0, c / m)))) * 255)
-        for c in (r, g, b)
-    )
-
-
 def lamp_capabilities(lamp: dict[str, Any]) -> LampCapabilities:
     """What a lamp can do, judged from the fields its state reports."""
     st = lamp.get("state", {})
@@ -110,10 +65,7 @@ def _display_hex(state: dict[str, Any], c: LampCapabilities) -> str:
     if c["color"] and state.get("colormode") == "xy":
         return xy_to_hex(state.get("xy", [0.32, 0.33]))
     if c["ct"]:
-        kelvin = MIRED_PER_KELVIN / max(CT_RANGE[0], state.get("ct", 366))
-        return (
-            "#ffd6a0" if kelvin < 3200 else ("#fff1dc" if kelvin < 4800 else "#e8f0ff")
-        )
+        return white_hex(state.get("ct", 366))
     return "#ffe2b0"
 
 
@@ -131,37 +83,46 @@ def lamp_info(lid: str, lamp: dict[str, Any]) -> LampInfo:
     }
 
 
-def set_lamp(
-    lid: str,
-    on: bool | None = None,
-    bri: float | str | None = None,
-    color: str = "",
-    kelvin: float | str | None = None,
-) -> list[dict[str, Any]]:
-    """Send one state change to a lamp; return the bridge's per-field success entries.
+@dataclass(frozen=True)
+class LampChange:
+    """One change for one lamp; None or "" leaves that part as it is.
 
     bri is 1-100 %, color a name from COLORS or #rrggbb, kelvin 2000-6500; brightness,
-    colour or kelvin also switch the lamp on. Raises ValueError for an unknown colour,
-    hue_bridge.HueBridgeError when the bridge refuses, OSError on network trouble.
+    colour or kelvin also switch the lamp on.
     """
+
+    on: bool | None = None
+    bri: float | str | None = None
+    color: str = ""
+    kelvin: float | str | None = None
+
+
+def lamp_state_body(change: LampChange) -> dict[str, Any]:
+    """The bridge's state body for a change. Raises ValueError for an unknown colour."""
     body: dict[str, Any] = {}
-    if on is not None:
-        body["on"] = bool(on)
-    if bri is not None:
-        body["bri"] = max(1, min(BRI_MAX, round(float(bri) * PERCENT_TO_BRI)))
-        body.setdefault("on", True)
-    if color:
-        hx = COLORS.get(color.lower().strip(), color.strip())
+    if change.on is not None:
+        body["on"] = bool(change.on)
+    if change.bri is not None:
+        body["bri"] = max(1, min(BRI_MAX, round(float(change.bri) * PERCENT_TO_BRI)))
+    if change.color:
+        hx = COLORS.get(change.color.lower().strip(), change.color.strip())
         if not (hx.startswith("#") and len(hx) == 7):
             raise ValueError("unknown colour")
         body["xy"] = hex_to_xy(hx)
+    if change.kelvin:
+        body["ct"] = kelvin_to_mired(float(change.kelvin))
+    if body.keys() & {"bri", "xy", "ct"}:
         body.setdefault("on", True)
-    if kelvin:
-        body["ct"] = max(
-            CT_RANGE[0], min(CT_RANGE[1], round(MIRED_PER_KELVIN / float(kelvin)))
-        )
-        body.setdefault("on", True)
-    return hue_bridge.request("/lights/%s/state" % lid, body)
+    return body
+
+
+def set_lamp(lid: str, change: LampChange) -> list[dict[str, Any]]:
+    """Send one state change to a lamp; return the bridge's per-field success entries.
+
+    Raises ValueError for an unknown colour, hue_bridge.HueBridgeError when the bridge
+    refuses, OSError on network trouble.
+    """
+    return hue_bridge.request("/lights/%s/state" % lid, lamp_state_body(change))
 
 
 def find_lamp(
@@ -293,7 +254,7 @@ class HueLightTool(BaseTool):
             problem = _unsupported(lights[lid], color, kelvin, bri)
             if problem:
                 return _fail(problem)
-            reply = set_lamp(lid, want_on, bri, color, kelvin)
+            reply = set_lamp(lid, LampChange(want_on, bri, color, kelvin))
             text, ok = _read_back_report(lid, reply, want_on)
             return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
         except Exception as e:  # any bridge/network problem becomes a short tool reply
