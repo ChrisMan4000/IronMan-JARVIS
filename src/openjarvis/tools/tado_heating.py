@@ -1,18 +1,21 @@
 """Tado heating tool: read and control the Tado radiator valves through Tado's cloud.
 
-Actions: status, set, boost, off, resume. Every change is read back and verified.
+Actions: status, set, boost, off, resume. Every change is read back; success means
+the read-back confirmed it (Tado's cloud can lag, so it is checked a few times).
 
-Security notes (2026-10-14):
+Security rules:
 - Temperatures are checked with a strict range test that also rejects NaN / infinity.
 - The login token file is only read here, never printed or logged.
 - Changes are logged to tado-set-log.txt (action, zone, result - no secrets).
 """
+
 from __future__ import annotations
 
 import logging
-import os
 import math
+import os
 import re
+import sys
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -21,58 +24,83 @@ from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
+logger = logging.getLogger(__name__)
+
+TOOL_NAME = "tado_heating"
 TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "tado-token.json")
 LOG_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "tado-set-log.txt")
-MIN_TEMP = 5.0   # lowest allowed target (deg C)
+MIN_TEMP = 5.0  # lowest allowed target (deg C)
 MAX_TEMP = 25.0  # highest allowed target (deg C)
 BOOST_TEMP = 25.0
 BOOST_MIN = 30
+BOOST_RANGE = (5, 120)  # allowed boost minutes
+READ_BACK_TRIES = 3  # Tado's cloud often needs a few seconds to show a change
+READ_BACK_DELAY = 2.0  # seconds between read-back tries
+ZONE_FILLER = re.compile(r"\b(the|heating|radiators?|thermostats?|valves?)\b")
+CHANGE_ACTIONS = ("set", "boost", "off", "resume")
 
 
-# ---------------------------------------------------------------- helpers
-def _valid_temp(t) -> bool:
-    """True only for a real number between MIN_TEMP and MAX_TEMP (NaN and infinity are refused)."""
-    return isinstance(t, (int, float)) and math.isfinite(t) and MIN_TEMP <= t <= MAX_TEMP
+def _valid_temp(t: object) -> bool:
+    """True only for a real number from MIN_TEMP to MAX_TEMP (NaN, infinity refused)."""
+    return (
+        isinstance(t, (int, float)) and math.isfinite(t) and MIN_TEMP <= t <= MAX_TEMP
+    )
 
 
-def _api():
-    """Open the Tado API with the saved token and silence PyTado's debug logging."""
-    from PyTado.interface.interface import Tado
+def _quiet_pytado_loggers() -> None:
+    """Silence PyTado's debug output.
 
-    t = Tado(token_file_path=TOKEN_FILE)
-    t._ensure_api_initialized()
-    import sys
-
+    PyTado builds its own Logger objects with their own handler and level, outside the
+    logging.getLogger() tree, so a parent logger level does not reach them: they have
+    to be found in PyTado's modules.
+    """
     for mod_name, mod in list(sys.modules.items()):
         if mod_name.startswith("PyTado") and mod is not None:
             for obj in list(vars(mod).values()):
                 if isinstance(obj, logging.Logger):
                     obj.setLevel(logging.WARNING)
-    return t._api
 
 
-def _find(zones, text):
-    """Find one zone by name (exact, else unique partial). Returns (zone, error_text)."""
-    q = str(text or "").lower().strip()
-    q = re.sub(r"\b(the|heating|radiators?|thermostats?|valves?)\b", " ", q)
-    q = " ".join(q.split())
+def open_tado_api() -> Any:
+    """Tado client logged in with the saved token (tools\\tado_login.py creates it).
+
+    Raises FileNotFoundError when there is no token yet; PyTado errors pass through.
+    """
+    from PyTado.interface.interface import Tado
+
+    _quiet_pytado_loggers()  # PyTado's loggers exist once its modules are imported
+    return Tado(token_file_path=TOKEN_FILE)  # passes calls on to the logged-in API
+
+
+def zone_id(zone: Any) -> int:
+    """PyTado keeps the zone id only in a private attribute; read it in one place."""
+    return zone._id
+
+
+def find_zone(zones: list[Any], text: object) -> tuple[Any | None, str]:
+    """Zone by spoken name (exact, else unique partial): (zone, "") or (None, why)."""
+    wanted = " ".join(ZONE_FILLER.sub(" ", str(text or "").lower().strip()).split())
     names = ", ".join(z.name for z in zones)
-    exact = [z for z in zones if z.name.lower() == q]
+    exact = [z for z in zones if z.name.lower() == wanted]
     if len(exact) == 1:
-        return exact[0], None
+        return exact[0], ""
     if len(exact) > 1:
         return None, "Several zones share that name. Zones: " + names
-    part = [z for z in zones if q and q in z.name.lower()]
-    if len(part) == 1:
-        return part[0], None
+    partial = [z for z in zones if wanted and wanted in z.name.lower()]
+    if len(partial) == 1:
+        return partial[0], ""
     return None, "No such zone. Zones: " + names
 
 
-def _desc(z):
+def describe_zone(z: Any) -> str:
     """One readable line describing a zone."""
-    pw = getattr(z.power, "value", z.power)
+    power = getattr(z.power, "value", z.power)
     text = "%s: now %s C, target %s C, power %s, heating %s%%" % (
-        z.name, z.current_temp, z.target_temp, pw, z.heating_power_percentage,
+        z.name,
+        z.current_temp,
+        z.target_temp,
+        power,
+        z.heating_power_percentage,
     )
     text += ", manual override" if z.overlay_active else ", following schedule"
     if z.open_window:
@@ -82,15 +110,60 @@ def _desc(z):
     return text
 
 
-# ---------------------------------------------------------------- the tool
-@ToolRegistry.register("tado_heating")
+def _log_change(text: str) -> None:
+    """Append one line to tado-set-log.txt."""
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write("%s %s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), text))
+    except OSError as exc:  # the log is a convenience; never block the change
+        logger.debug("tado change log not written: %s", exc)
+
+
+def _result(text: str, ok: bool = True) -> ToolResult:
+    return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
+
+
+class InputError(ValueError):
+    """The request cannot be sent as given; the message goes back to the user."""
+
+
+def _temperature(raw: object, default: float | None = None) -> float:
+    """A valid target temperature; InputError explains what is wrong."""
+    try:
+        temp = float(raw if raw not in (None, "") else default)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise InputError(
+            "Temperature missing." if default is None else "Bad temperature or minutes."
+        ) from None
+    if not _valid_temp(temp):
+        raise InputError(
+            "Temperature must be between %s and %s C." % (MIN_TEMP, MAX_TEMP)
+        )
+    return temp
+
+
+def matches(action: str, zone: Any, temp: float | None) -> bool:
+    """Does a zone read back from Tado show the requested change?"""
+    if action in ("set", "boost"):
+        target = zone.target_temp
+        return (
+            bool(zone.overlay_active)
+            and target is not None
+            and abs(float(target) - temp) < 0.1
+        )
+    if action == "off":
+        return str(getattr(zone.power, "value", zone.power)) == "OFF"
+    return not zone.overlay_active  # resume: back on the schedule
+
+
+@ToolRegistry.register(TOOL_NAME)
 class TadoHeatingTool(BaseTool):
-    tool_id = "tado_heating"
+    tool_id = TOOL_NAME
 
     @property
     def spec(self) -> ToolSpec:
         return ToolSpec(
-            name="tado_heating",
+            name=TOOL_NAME,
             description=(
                 "ALWAYS call this tool when the user asks about or wants to"
                 " change the Tado radiators, heating or room temperature."
@@ -119,77 +192,74 @@ class TadoHeatingTool(BaseTool):
             category="smart-home",
         )
 
-    def _log(self, text):
-        """Append one line to tado-set-log.txt (failures are ignored)."""
-        try:
-            with open(LOG_FILE, "a", encoding="utf-8") as f:
-                f.write("%s %s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), text))
-        except Exception:
-            pass
+    def _send(
+        self, api: Any, action: str, zid: int, params: dict[str, Any]
+    ) -> tuple[str, float | None]:
+        """Check the inputs, send the change: (what was sent, target temp or None).
 
-    def _res(self, text, ok=True):
-        return ToolResult(tool_name="tado_heating", content=text, success=ok)
+        Raises InputError before anything is sent when an input is wrong.
+        """
+        from PyTado.types import OverlayMode, Power
+
+        if action == "set":
+            temp = _temperature(params.get("temperature"))
+            api.set_zone_overlay(zid, OverlayMode.MANUAL, set_temp=temp)
+            return "set to %s C until resumed" % temp, temp
+        if action == "boost":
+            temp = _temperature(params.get("temperature"), BOOST_TEMP)
+            try:
+                mins = int(params.get("minutes") or BOOST_MIN)
+            except (TypeError, ValueError):
+                raise InputError("Bad temperature or minutes.") from None
+            if not BOOST_RANGE[0] <= mins <= BOOST_RANGE[1]:
+                raise InputError("Minutes must be between %s and %s." % BOOST_RANGE)
+            api.set_zone_overlay(
+                zid, OverlayMode.TIMER, set_temp=temp, duration=timedelta(minutes=mins)
+            )
+            return "boost to %s C for %s min" % (temp, mins), temp
+        if action == "off":
+            api.set_zone_overlay(zid, OverlayMode.MANUAL, power=Power.OFF)
+            return "heating off until resumed", None
+        api.reset_zone_overlay(zid)
+        return "back to schedule", None
 
     def execute(self, **params: Any) -> ToolResult:
         action = str(params.get("action", "")).lower().strip()
         try:
-            api = _api()
+            api = open_tado_api()
             zones = api.get_zones()
             if action == "status":  # read-only
-                return self._res("\n".join(_desc(z) for z in zones))
-            if action not in ("set", "boost", "off", "resume"):
-                return self._res("Unknown action. Use status, set, boost, off or resume.", False)
-            z, err = _find(zones, params.get("room"))
-            if z is None:
-                return self._res(err, False)
-            zid = z._id
-            temp = None
-            mins = None
-            from PyTado.types import OverlayMode, Power
-
-            # Send the change (inputs are checked first).
-            if action == "set":
-                try:
-                    temp = float(params.get("temperature"))
-                except Exception:
-                    return self._res("Temperature missing.", False)
-                if not _valid_temp(temp):
-                    return self._res("Temperature must be between %s and %s C." % (MIN_TEMP, MAX_TEMP), False)
-                api.set_zone_overlay(zid, OverlayMode.MANUAL, set_temp=temp)
-                sent = "set to %s C until resumed" % temp
-            elif action == "boost":
-                try:
-                    temp = float(params.get("temperature") or BOOST_TEMP)
-                    mins = int(params.get("minutes") or BOOST_MIN)
-                except Exception:
-                    return self._res("Bad temperature or minutes.", False)
-                if not _valid_temp(temp):
-                    return self._res("Temperature must be between %s and %s C." % (MIN_TEMP, MAX_TEMP), False)
-                if mins < 5 or mins > 120:
-                    return self._res("Minutes must be between 5 and 120.", False)
-                api.set_zone_overlay(zid, OverlayMode.TIMER, set_temp=temp, duration=timedelta(minutes=mins))
-                sent = "boost to %s C for %s min" % (temp, mins)
-            elif action == "off":
-                api.set_zone_overlay(zid, OverlayMode.MANUAL, power=Power.OFF)
-                sent = "heating off until resumed"
-            else:
-                api.reset_zone_overlay(zid)
-                sent = "back to schedule"
-            self._log("%s | %s | %s" % (action, z.name, sent))
-
-            # Read the zone back from Tado and report whether it matches.
-            time.sleep(2.0)
-            z2 = [x for x in api.get_zones() if x._id == zid][0]
-            pw = str(getattr(z2.power, "value", z2.power))
-            if action in ("set", "boost"):
-                ok = bool(z2.overlay_active) and z2.target_temp is not None and abs(float(z2.target_temp) - temp) < 0.1
-            elif action == "off":
-                ok = pw == "OFF"
-            else:
-                ok = not z2.overlay_active
+                return _result("\n".join(describe_zone(z) for z in zones))
+            if action not in CHANGE_ACTIONS:
+                return _result(
+                    "Unknown action. Use status, set, boost, off or resume.", False
+                )
+            zone, why = find_zone(zones, params.get("room"))
+            if zone is None:
+                return _result(why, False)
+            zid = zone_id(zone)
+            sent, temp = self._send(api, action, zid, params)
+            _log_change("%s | %s | %s" % (action, zone.name, sent))
+            for _ in range(READ_BACK_TRIES):
+                time.sleep(READ_BACK_DELAY)
+                now = next(z for z in api.get_zones() if zone_id(z) == zid)
+                ok = matches(action, now, temp)
+                if ok:
+                    break
             text = "Sent: %s %s. Read back from Tado: %s. Verified: %s" % (
-                z.name, sent, _desc(z2), "YES" if ok else "NO (Tado may need a few more seconds)",
+                zone.name,
+                sent,
+                describe_zone(now),
+                "YES" if ok else "NO (Tado may need a few more seconds)",
             )
-            return self._res(text, True)
-        except Exception as e:
-            return self._res("Tado error: %s" % type(e).__name__, False)
+            return _result(text, ok)
+        except InputError as e:
+            return _result(str(e), False)
+        except FileNotFoundError:
+            return _result(
+                "Tado is not logged in yet. Run: uv run --no-sync python"
+                " tools\\tado_login.py",
+                False,
+            )
+        except Exception as e:  # PyTado and network errors become a short tool reply
+            return _result("Tado error: %s" % type(e).__name__, False)
