@@ -31,6 +31,7 @@ FinishedHeadingLabel=Setup finished
 [Files]
 Source: "..\*"; DestDir: "{app}"; Excludes: "installer\*,.git\*,IronMan-JARVIS-Installer.exe"; Flags: recursesubdirs createallsubdirs
 Source: "list-llms.ps1"; Flags: dontcopy
+Source: "..\tools\jarvis-common.ps1"; Flags: dontcopy
 Source: "..\tools\voice-rec.ps1"; Flags: dontcopy
 Source: "..\tools\model-search.ps1"; Flags: dontcopy
 
@@ -44,9 +45,6 @@ const
   CCyan   = $FFD319;   { #19d3ff }
   COrange = $3D9AFF;   { #ff9a3d }
   CText   = $F5E9BF;   { #bfe9f5 }
-  T1Text  = 'About 1.5 GB   lmstudio-community/Qwen3.5-2B-GGUF   (small and fast, for PCs without a graphics card)';
-  T2Text  = 'About 6.7 GB   google/gemma-4-12b-qat   (good balance for 12-16 GB graphics cards)';
-  T3Text  = 'About 14.6 GB   google/gemma-4-26b-a4b-qat   (best quality, needs about 24 GB GPU memory)';
   K1Text  = 'Kokoro   (one size only, 82 million parameters; light, runs on any PC, about 0.3 GB)';
   K2Text  = 'Chatterbox   (more natural, can copy a voice; NVIDIA graphics card, about 4 GB graphics memory, several GB download)';
 
@@ -96,6 +94,10 @@ var
   HasNvidia: Boolean;
   ModelInfo, VoiceInfo: TNewStaticText;
   ModelKeys: TArrayOfString;
+  { filled from the helper scripts' output, so the lists live only in tools\jarvis-common.ps1:
+    TIER lines of list-llms.ps1 (index 1-3) and WOPT lines of voice-rec.ps1 (index 0-4) }
+  TierIds, TierKeys, TierGbs, TierTexts: TArrayOfString;
+  WhisperIds, WhisperTexts: TArrayOfString;
   Lbls: array of TNewStaticText;
   CheckList: array of TNewCheckBox;
   RadioList: array of TNewRadioButton;
@@ -340,35 +342,16 @@ begin
   end;
 end;
 
-{ Whisper sizes (same list as tools\voice-rec.ps1) }
+{ Whisper size of a combo box entry (the list comes from tools\voice-rec.ps1; 'base' when it could not be read) }
 function WhisperId(I: Integer): String;
 begin
-  case I of
-    0: Result := 'tiny';
-    1: Result := 'base';
-    2: Result := 'small';
-    3: Result := 'medium';
-  else
-    Result := 'large-v3';
-  end;
-end;
-
-function WhisperText(I: Integer): String;
-begin
-  case I of
-    0: Result := 'tiny   (about 0.08 GB download, fastest, makes many mistakes)';
-    1: Result := 'base   (about 0.15 GB, fine for clear speech on weak PCs)';
-    2: Result := 'small   (about 0.5 GB, good balance)';
-    3: Result := 'medium   (about 1.5 GB, very accurate, about 3.5 GB graphics memory)';
-  else
-    Result := 'large-v3   (about 3.1 GB, most accurate, about 5 GB graphics memory)';
-  end;
+  if (I >= 0) and (I < GetArrayLength(WhisperIds)) then Result := WhisperIds[I] else Result := 'base';
 end;
 
 { ---------- pages ---------- }
 
 procedure InitializeWizard;
-var Y, N: Integer; Saved: String; Ip8: AnsiString;
+var Y: Integer; Saved: String; Ip8: AnsiString;
 begin
   ThemeWizard;
   WizardForm.BorderStyle := bsSizeable;   { make sure the window frame can be dragged and maximized }
@@ -423,9 +406,10 @@ begin
   ModelCombo.Style := csDropDownList;
   ModelCombo.Enabled := False;
   Y := Y + ScaleY(28);
-  RbT1 := AddRadio(ModelPage, Y, T1Text);
-  RbT2 := AddRadio(ModelPage, Y, T2Text);
-  RbT3 := AddRadio(ModelPage, Y, T3Text);
+  { the texts are filled in by DetectModels from the TIER lines of list-llms.ps1 }
+  RbT1 := AddRadio(ModelPage, Y, 'Small language model');
+  RbT2 := AddRadio(ModelPage, Y, 'Medium language model');
+  RbT3 := AddRadio(ModelPage, Y, 'Large language model');
   RbSkip := AddRadio(ModelPage, Y, 'Skip (I will download a model in LM Studio myself)');
   ModelTip := AddText(ModelPage, Y, 'Tip: the next step can search online for the newest models, if you like.', CText, False);
   ModelTip.Font.Style := [fsItalic];
@@ -466,8 +450,6 @@ begin
   WhisperCombo.Parent := VoicePage.Surface;
   WhisperCombo.Left := 0; WhisperCombo.Top := Y; WhisperCombo.Width := VoicePage.SurfaceWidth;
   WhisperCombo.Style := csDropDownList;
-  for N := 0 to 4 do WhisperCombo.Items.Add(WhisperText(N));
-  WhisperCombo.ItemIndex := 1;
   Y := Y + ScaleY(28);
 
   { voice for the answers (Kokoro or Chatterbox) }
@@ -527,12 +509,14 @@ begin
 end;
 
 procedure DetectModels;
-var Lines: TArrayOfString; I, N, Rc, Tier, RecIdx: Integer; L, F, Gpu, Ram, Tmp, Mark, M, RecId: String;
+var Lines: TArrayOfString; I, N, T, Rc, Tier, RecIdx: Integer; L, F, Gpu, Ram, Tmp, Mark, M, RecId: String;
 begin
   ModelsDetected := True;
   RecIdx := -1; RecId := '';
   Tier := 1; Gpu := '0'; Ram := '?';
   Tmp := ExpandConstant('{tmp}\llms.txt');
+  SetArrayLength(TierIds, 4); SetArrayLength(TierKeys, 4); SetArrayLength(TierGbs, 4); SetArrayLength(TierTexts, 4);
+  ExtractTemporaryFile('jarvis-common.ps1');
   ExtractTemporaryFile('list-llms.ps1');
   Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\list-llms.ps1') + '" -Out "' + Tmp + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
   if LoadStringsFromFile(Tmp, Lines) then
@@ -543,12 +527,25 @@ begin
       begin
         Delete(L, 1, 4);
         Tier := StrToIntDef(NextField(L), 1);
-        if Tier = 3 then RecId := 'google/gemma-4-26b-a4b-qat' else if Tier = 2 then RecId := 'google/gemma-4-12b-qat' else RecId := 'qwen3.5-2b';
         Gpu := NextField(L);
         Ram := NextField(L);
       end
-      else if L <> '' then
+      else if Pos('TIER|', L) = 1 then
       begin
+        Delete(L, 1, 5);
+        T := StrToIntDef(NextField(L), 0);
+        if (T >= 1) and (T <= 3) then
+        begin
+          TierIds[T] := NextField(L);
+          TierKeys[T] := NextField(L);
+          TierGbs[T] := NextField(L);
+          TierTexts[T] := 'About ' + TierGbs[T] + ' GB   ' + TierIds[T] + '   (' + L + ')';
+        end;
+      end
+      else if Pos('MODEL|', L) = 1 then
+      begin
+        Delete(L, 1, 6);
+        if (RecId = '') and (Tier >= 1) and (Tier <= 3) then RecId := TierKeys[Tier];
         F := NextField(L);
         if ValidModelId(F) then
         begin
@@ -566,9 +563,14 @@ begin
   if LmFound then M := 'LM Studio: found on this PC.' else M := 'LM Studio: not found. The setup installs it for you (winget).';
   ModelInfo.Caption := M + #13#10 + 'Your PC: GPU memory ' + Gpu + ' GB, RAM ' + Ram + ' GB. The recommended size is marked.';
   Mark := '   <-- recommended';
-  if Tier = 1 then SetRadioText(RbT1, T1Text + Mark);
-  if Tier = 2 then SetRadioText(RbT2, T2Text + Mark);
-  if Tier = 3 then SetRadioText(RbT3, T3Text + Mark);
+  for T := 1 to 3 do
+    if TierTexts[T] <> '' then
+    begin
+      M := TierTexts[T];
+      if T = Tier then M := M + Mark;
+      if T = 1 then SetRadioText(RbT1, M) else if T = 2 then SetRadioText(RbT2, M) else SetRadioText(RbT3, M);
+    end;
+  if LmFound then M := 'LM Studio: found on this PC.' else M := 'LM Studio: not found. The setup installs it for you (winget).';
   RbT1.Checked := Tier = 1; RbT2.Checked := Tier = 2; RbT3.Checked := Tier = 3;
   if ModelCombo.Items.Count > 0 then
   begin
@@ -591,6 +593,7 @@ begin
   OnlineRepo := ''; OnlineGB := '';
   Tmp := ExpandConstant('{tmp}\models-online.txt');
   DeleteFile(Tmp);
+  ExtractTemporaryFile('jarvis-common.ps1');
   ExtractTemporaryFile('model-search.ps1');
   Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\model-search.ps1') + '" -Out "' + Tmp + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
   if LoadStringsFromFile(Tmp, Lines) then
@@ -624,20 +627,22 @@ end;
 
 { looks at the PC (tools\voice-rec.ps1, read-only) and marks the best Whisper size and voice; runs again only when the language model choice changed }
 procedure DetectVoice;
-var Lines: TArrayOfString; I, Rc: Integer; L, Tmp, Gb, Vram, Ram, Nv, FreeGb, Mark: String;
+var Lines: TArrayOfString; I, N, Rc: Integer; L, Tmp, Gb, Vram, Ram, Nv, FreeGb, Mark, Dl, Gm: String;
 begin
   Gb := '-1';
   if RbOnYes.Checked and (OnlineGB <> '') then Gb := OnlineGB
   else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Gb := ModelGBs[ModelCombo.ItemIndex]
-  else if RbT1.Checked then Gb := '1.5'
-  else if RbT2.Checked then Gb := '6.7'
-  else if RbT3.Checked then Gb := '14.6';
+  else if RbT1.Checked and (TierGbs[1] <> '') then Gb := TierGbs[1]
+  else if RbT2.Checked and (TierGbs[2] <> '') then Gb := TierGbs[2]
+  else if RbT3.Checked and (TierGbs[3] <> '') then Gb := TierGbs[3];
   if Gb = VoiceRecKey then Exit;
   VoiceRecKey := Gb;
   Tmp := ExpandConstant('{tmp}\voicerec.txt');
   DeleteFile(Tmp);
+  ExtractTemporaryFile('jarvis-common.ps1');
   ExtractTemporaryFile('voice-rec.ps1');
-  Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\voice-rec.ps1') + '" -RecOut "' + Tmp + '" -RecLlmGB ' + Gb, '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  Exec(PsExe, '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{tmp}\voice-rec.ps1') + '" -Out "' + Tmp + '" -LlmGB ' + Gb, '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  SetArrayLength(WhisperIds, 0); SetArrayLength(WhisperTexts, 0);
   RecWhisper := 'base'; RecTts := 'kokoro'; HasNvidia := False;
   Vram := '0'; Ram := '?'; Nv := '0'; FreeGb := '0';
   if LoadStringsFromFile(Tmp, Lines) then
@@ -645,9 +650,18 @@ begin
     begin
       L := Trim(Lines[I]);
       if Pos('HW|', L) = 1 then begin Delete(L, 1, 3); Vram := NextField(L); Ram := NextField(L); Nv := NextField(L); end
-      else if Pos('WREC|', L) = 1 then RecWhisper := Copy(L, 6, 20)
-      else if Pos('TREC|', L) = 1 then RecTts := Copy(L, 6, 20)
-      else if Pos('FREE|', L) = 1 then FreeGb := Copy(L, 6, 20);
+      else if Pos('WHISPER|', L) = 1 then RecWhisper := Copy(L, 9, 20)
+      else if Pos('VOICE|', L) = 1 then RecTts := Copy(L, 7, 20)
+      else if Pos('FREE|', L) = 1 then FreeGb := Copy(L, 6, 20)
+      else if Pos('WOPT|', L) = 1 then
+      begin
+        Delete(L, 1, 5);
+        N := GetArrayLength(WhisperIds);
+        SetArrayLength(WhisperIds, N + 1); SetArrayLength(WhisperTexts, N + 1);
+        WhisperIds[N] := NextField(L);
+        Dl := NextField(L); Gm := NextField(L);
+        WhisperTexts[N] := WhisperIds[N] + '   (about ' + Dl + ' GB download, about ' + Gm + ' GB graphics memory, ' + L + ')';
+      end;
     end;
   HasNvidia := Nv = '1';
   if HasNvidia then
@@ -656,12 +670,19 @@ begin
     VoiceInfo.Caption := 'Your PC: no NVIDIA graphics card found, RAM ' + Ram + ' GB. Speech recognition runs on the processor, so the smaller sizes are the sensible ones.';
   Mark := '   <-- recommended';
   WhisperCombo.Items.Clear;
-  for I := 0 to 4 do
+  if GetArrayLength(WhisperIds) = 0 then
   begin
-    if WhisperId(I) = RecWhisper then WhisperCombo.Items.Add(WhisperText(I) + Mark)
-    else WhisperCombo.Items.Add(WhisperText(I));
-    if WhisperId(I) = RecWhisper then WhisperCombo.ItemIndex := I;
+    { voice-rec.ps1 gave no list: offer the safe default only }
+    SetArrayLength(WhisperIds, 1); SetArrayLength(WhisperTexts, 1);
+    WhisperIds[0] := 'base'; WhisperTexts[0] := 'base   (the PC check did not answer; you can change the size later with tools\voice-setup.ps1 -Ask)';
   end;
+  for I := 0 to GetArrayLength(WhisperIds) - 1 do
+  begin
+    if WhisperIds[I] = RecWhisper then WhisperCombo.Items.Add(WhisperTexts[I] + Mark)
+    else WhisperCombo.Items.Add(WhisperTexts[I]);
+    if WhisperIds[I] = RecWhisper then WhisperCombo.ItemIndex := I;
+  end;
+  if WhisperCombo.ItemIndex < 0 then WhisperCombo.ItemIndex := 0;
   SetRadioText(VoiceRbKokoro, K1Text);
   SetRadioText(VoiceRbChatterbox, K2Text);
   if RecTts = 'chatterbox' then SetRadioText(VoiceRbChatterbox, K2Text + Mark) else SetRadioText(VoiceRbKokoro, K1Text + Mark);
@@ -699,9 +720,9 @@ begin
   if WakeCheck.Checked then S := S + Space + 'Wake word "Hey Jarvis"' + NewLine;
   if RbOnYes.Checked and (OnlineRepo <> '') then M := 'newest found online' + NewLine + Space + Space + OnlineRepo + ' (about ' + OnlineGB + ' GB)' + NewLine + Space + Space + '(tested after the download)'
   else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
-  else if RbT1.Checked then M := 'download about 1.5 GB'
-  else if RbT2.Checked then M := 'download about 6.7 GB'
-  else if RbT3.Checked then M := 'download about 14.6 GB'
+  else if RbT1.Checked then M := 'download about ' + TierGbs[1] + ' GB (' + TierIds[1] + ')'
+  else if RbT2.Checked then M := 'download about ' + TierGbs[2] + ' GB (' + TierIds[2] + ')'
+  else if RbT3.Checked then M := 'download about ' + TierGbs[3] + ' GB (' + TierIds[3] + ')'
   else M := 'none (later in LM Studio)';
   S := S + Space + 'Language model: ' + M + NewLine;
   S := S + Space + 'Speech recognition: Whisper ' + WhisperId(WhisperCombo.ItemIndex) + NewLine;
@@ -896,16 +917,19 @@ begin
     Desk := ExpandConstant('{userdesktop}');
     DeleteFile(Desk + '\Jarvis.lnk');
     DeleteFile(Desk + '\Stop Jarvis.lnk');
-    { 3b. the fan monitor, only if our installer put it there (marker file); Windows asks for administrator permission }
-    if FileExists(ExpandConstant('{pf}\LibreHardwareMonitor\installed-by-ironman-jarvis.txt')) and FileExists(ExpandConstant('{app}\tools\remove-fan-monitor.ps1')) then
-      if SuppressibleMsgBox('Also remove the fan monitor (LibreHardwareMonitor) that this setup installed?' + #13#10 + 'Windows will ask for administrator permission.', mbConfirmation, MB_YESNO, IDYES) = IDYES then
-        ShellExec('runas', 'powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\remove-fan-monitor.ps1') + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+    { 3b. what the optional parts added to Windows: the fan monitor (its folder only if our setup put it there, marker file)
+          and the firewall rule of the LAN gateway; Windows asks for administrator permission }
+    if (FileExists(ExpandConstant('{pf}\LibreHardwareMonitor\installed-by-ironman-jarvis.txt')) or DirExists(ExpandConstant('{%USERPROFILE}\.openjarvis\gateway')))
+       and FileExists(ExpandConstant('{app}\tools\remove-windows-parts.ps1')) then
+      if SuppressibleMsgBox('Also remove the fan monitor (LibreHardwareMonitor, if this setup installed it) and the firewall rules for the HUD (ports 8085 and 8443)?' + #13#10 + 'Windows will ask for administrator permission.', mbConfirmation, MB_YESNO, IDYES) = IDYES then
+        ShellExec('runas', 'powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\remove-windows-parts.ps1') + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc);
     { 4. settings, keys and logs: ask (they hold the Hue key, the Tado login and your saved chat/memory data) }
     if DirExists(ExpandConstant('{%USERPROFILE}\.openjarvis')) then
       if SuppressibleMsgBox('Also delete your Jarvis settings, keys and logs?' + #13#10 + ExpandConstant('{%USERPROFILE}\.openjarvis') + #13#10#13#10 + 'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then
       begin
         DelTree(ExpandConstant('{%USERPROFILE}\.openjarvis'), True, True, True);
-        { the user settings made by the setup script (Hue address, web search key) go together with the settings folder; kept otherwise, so a reinstall finds them }
+        { the user settings made by the setup script (Hue address, web search key) go together with the settings folder; kept otherwise, so a reinstall finds them.
+          Same names as $JarvisUserEnvVars in tools\jarvis-common.ps1 (tests\powershell\wizard-contract.Tests.ps1 checks that they match) }
         SetArrayLength(Names, 5);
         Names[0] := 'HUE_BRIDGE_IP'; Names[1] := 'FIRECRAWL_API_KEY'; Names[2] := 'OPENJARVIS_WEB_SEARCH_ENGINE';
         Names[3] := 'JARVIS_DOC_ROOT'; Names[4] := 'SERPLY_API_KEY';

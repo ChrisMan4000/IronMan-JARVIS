@@ -4,9 +4,11 @@
 # It: installs mkcert, makes a certificate for this PC, asks for a password, opens port 8443 for the home network only
 # (one UAC prompt) and copies the public certificate (jarvis-ca.crt) to your Desktop for the iPhone.
 # Run it again any time; finished parts are skipped. Never share key.pem, auth.json or mkcert's rootCA-key.pem.
+# Exit code 0 when everything is set up, 1 when a step failed (the message says which).
 $ErrorActionPreference = 'Continue'
+. (Join-Path $PSScriptRoot 'jarvis-common.ps1')
 $Repo = Split-Path -Parent $PSScriptRoot
-$G = Join-Path $env:USERPROFILE '.openjarvis\gateway'
+$G = Join-Path $JarvisConfigDir 'gateway'
 New-Item -ItemType Directory -Force $G | Out-Null
 
 # 1. this PC's home-network address
@@ -26,6 +28,7 @@ if (-not $mk) { Write-Host "mkcert was not found. Close this window, open a NEW 
 
 # 3. certificate
 & $mk -install
+if ($LASTEXITCODE -ne 0) { Write-Host "mkcert could not install its certificate authority (code $LASTEXITCODE)." -ForegroundColor Red; exit 1 }
 if (-not (Test-Path "$G\cert.pem")) {
   & $mk -cert-file "$G\cert.pem" -key-file "$G\key.pem" $ip localhost 127.0.0.1
   if ($LASTEXITCODE -ne 0) { Write-Host "Certificate could not be created." -ForegroundColor Red; exit 1 }
@@ -35,12 +38,17 @@ if (-not (Test-Path "$G\cert.pem")) {
 if (-not (Test-Path "$G\auth.json")) {
   Set-Location $Repo
   uv run --no-sync python tools\gateway.py --set-password
+  if ($LASTEXITCODE -ne 0) { Write-Host "The password was not set. Run this script again." -ForegroundColor Red; exit 1 }
 } else { Write-Host "Password already set. To change it: uv run --no-sync python tools\gateway.py --set-password" }
 
 # 5. firewall: this port, home network only (needs administrator once)
-$rule = netsh advfirewall firewall show rule name="Jarvis Gateway 8443 LAN" 2>$null | Out-String
-if ($rule -notmatch 'Jarvis Gateway') {
-  Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command','netsh advfirewall firewall add rule name="Jarvis Gateway 8443 LAN" dir=in action=allow protocol=TCP localport=8443 remoteip=localsubnet profile=private'
+function Test-GatewayRule { netsh advfirewall firewall show rule name="$JarvisGatewayFirewallRule" 2>&1 | Out-Null; return ($LASTEXITCODE -eq 0) }
+if (-not (Test-GatewayRule)) {
+  $add = "netsh advfirewall firewall add rule name='$JarvisGatewayFirewallRule' dir=in action=allow protocol=TCP localport=8443 remoteip=localsubnet profile=private"
+  try { Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile', '-Command', $add }
+  catch { Write-Host "Administrator permission was not given, so port 8443 stays closed. Run this script again to retry." -ForegroundColor Yellow; exit 1 }
+  if (-not (Test-GatewayRule)) { Write-Host "The firewall rule '$JarvisGatewayFirewallRule' was not added. Run this script again, or add it in an administrator PowerShell: $add" -ForegroundColor Yellow; exit 1 }
+  Write-Host "Opened port 8443 for the home network (firewall rule '$JarvisGatewayFirewallRule')."
 }
 
 # 6. public certificate for the iPhone (the key file is NOT copied)
@@ -52,3 +60,4 @@ Write-Host "DONE. Start Jarvis as usual (the gateway starts with it), then open:
 Write-Host "iPhone: send jarvis-ca.crt to it (AirDrop/mail), install the profile, then Settings > General > About > Certificate Trust Settings > switch it on."
 Write-Host "iOS Firefox also needs Settings > Firefox > Local Network. Your Wi-Fi network must be set to 'Private' in Windows."
 Write-Host "Fullscreen on the iPhone: open the address above, tap the green + button at the top right (or Share > Add to Home Screen) and start Jarvis from the new JARVIS icon."
+exit 0
