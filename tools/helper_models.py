@@ -201,9 +201,8 @@ def serve_model_api(h: Handler) -> None:
                 res = start_load(mid)
         else:
             res = {"error": "unknown"}
-    except (
-        Exception
-    ) as e:  # LM Studio down or a bad number: the HUD shows the short text
+    except Exception as e:
+        # LM Studio down or a bad number: the HUD shows the short text.
         res = {"error": str(e)[:200]}
     send(h, 200, res)
 

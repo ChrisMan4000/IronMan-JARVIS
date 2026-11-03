@@ -127,11 +127,8 @@ def read_gpu() -> dict[str, Any] | None:
             timeout=5,
         )
         return parse_gpu(out.strip())
-    except (
-        OSError,
-        subprocess.SubprocessError,
-        ValueError,
-    ):  # no NVIDIA GPU or driver busy
+    except (OSError, subprocess.SubprocessError, ValueError):
+        # No NVIDIA GPU, or the driver is busy.
         return None
 
 

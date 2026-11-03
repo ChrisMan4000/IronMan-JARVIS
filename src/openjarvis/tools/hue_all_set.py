@@ -110,9 +110,8 @@ class HueAllSetTool(BaseTool):
                 try:
                     hue_bridge.set_room_power(gid, want_on)
                     sent[gid] = True
-                except (
-                    Exception
-                ):  # one refused room is reported as FAILED, the others still switch
+                except Exception:
+                    # A refused room is reported as FAILED; the others still switch.
                     sent[gid] = False
             time.sleep(hue_bridge.READ_BACK_DELAY)
             lights = hue_bridge.request("/lights")

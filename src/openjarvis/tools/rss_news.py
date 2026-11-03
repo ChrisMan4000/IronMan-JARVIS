@@ -149,9 +149,8 @@ def _link(el: ET.Element) -> str:
 
 def headlines(data: bytes, limit: int) -> list[str]:
     """Numbered headline lines (title, date, link) from RSS or Atom XML."""
-    if (
-        b"<!ENTITY" in data
-    ):  # no entity expansion tricks (billion laughs, external files)
+    # No entity expansion tricks (billion laughs, external files).
+    if b"<!ENTITY" in data:
         raise FeedError("Feed refused (entity declaration).")
     try:
         root = ET.fromstring(data)  # nosec B314 - entity declarations refused above

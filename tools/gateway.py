@@ -10,14 +10,16 @@ The gateway is the trust boundary: it sets the Host / Origin headers the helper
 expects. Set the password with:  python tools\\gateway.py --set-password
 Files (never share them): %USERPROFILE%\\.openjarvis\\gateway\\{cert,key}.pem, auth.json
 """
+
 import argparse
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sys
 import time
-import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -25,72 +27,147 @@ import httpx
 import uvicorn
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
-from starlette.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from starlette.responses import (
+    HTMLResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from starlette.routing import Route
 
-GDIR = Path(os.environ.get("JARVIS_GATEWAY_DIR") or (Path.home() / ".openjarvis" / "gateway"))
-AUTH = GDIR / "auth.json"
+GATEWAY_DIR = Path(
+    os.environ.get("JARVIS_GATEWAY_DIR") or (Path.home() / ".openjarvis" / "gateway")
+)
+AUTH_FILE = GATEWAY_DIR / "auth.json"
 COOKIE = "jarvis_gw"
 SESSION_SECONDS = 30 * 24 * 3600
-ITER = 200000
-HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te",
-       "trailers", "transfer-encoding", "upgrade", "host"}
-FAILS = {}  # ip -> [count, locked_until]
-CLIENT = None
+PBKDF2_ITERATIONS = 200000
+MIN_PASSWORD = 4
+MAX_TRIES = 5  # wrong passwords in a row before a lockout
+LOCKOUT_SECONDS = 300
+# Headers that belong to one connection and must not be passed on by a proxy.
+HOP_BY_HOP_HEADERS = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+    "host",
+}
+# Home Screen icons and the web app manifest: the iPhone fetches them without a login.
+PUBLIC_PATHS = {
+    "/jarvis-icon-180.png",
+    "/jarvis-icon-192.png",
+    "/jarvis-icon-512.png",
+    "/hud.webmanifest",
+    "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png",
+    "/favicon.ico",
+}
+
+_failed_logins: dict[str, list[float]] = {}  # ip -> [wrong tries, locked until]
+_client: httpx.AsyncClient | None = None
 
 
-def load_auth():
+# ------------------------------------------------------------------------- password
+def load_auth() -> dict | None:
     try:
-        return json.loads(AUTH.read_text(encoding="utf-8"))
-    except Exception:
+        return json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # no password set yet, or a damaged file
         return None
 
 
-def hash_pw(pw, salt):
-    return hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, ITER)
+def hash_password(pw: str, salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, PBKDF2_ITERATIONS)
 
 
-def set_password():
+def password_matches(auth: dict | None, pw: str) -> bool:
+    if not auth:
+        return False
+    return hmac.compare_digest(
+        hash_password(pw, bytes.fromhex(auth["salt"])).hex(), auth["hash"]
+    )
+
+
+def new_auth(pw: str) -> dict:
+    """Salt, password hash and a fresh cookie secret (so old logins stop working)."""
+    salt = os.urandom(16)
+    return {
+        "salt": salt.hex(),
+        "hash": hash_password(pw, salt).hex(),
+        "secret": secrets.token_hex(32),
+    }
+
+
+def set_password() -> int:
     import getpass
-    p1 = getpass.getpass("New gateway password (at least 4 characters): ")
+
+    p1 = getpass.getpass(
+        "New gateway password (at least %d characters): " % MIN_PASSWORD
+    )
     p2 = getpass.getpass("Repeat it: ")
     if p1 != p2:
         print("The two entries differ. Nothing saved.")
         return 1
-    if len(p1) < 4:
-        print("Too short (minimum 4). Nothing saved.")
+    if len(p1) < MIN_PASSWORD:
+        print("Too short (minimum %d). Nothing saved." % MIN_PASSWORD)
         return 1
-    GDIR.mkdir(parents=True, exist_ok=True)
-    salt = os.urandom(16)
-    data = {"salt": salt.hex(), "hash": hash_pw(p1, salt).hex(), "secret": secrets.token_hex(32)}
-    AUTH.write_text(json.dumps(data), encoding="utf-8")
+    GATEWAY_DIR.mkdir(parents=True, exist_ok=True)
+    AUTH_FILE.write_text(json.dumps(new_auth(p1)), encoding="utf-8")
     print("Password saved. All old logins are now invalid.")
     return 0
 
 
-def sign(secret, exp):
-    return hmac.new(bytes.fromhex(secret), str(exp).encode(), hashlib.sha256).hexdigest()
+# ------------------------------------------------------------------- session cookie
+def sign(secret: str, expires: object) -> str:
+    return hmac.new(
+        bytes.fromhex(secret), str(expires).encode(), hashlib.sha256
+    ).hexdigest()
 
 
-def make_cookie(auth):
-    exp = int(time.time()) + SESSION_SECONDS
-    return f"{exp}.{sign(auth['secret'], exp)}"
+def make_cookie(auth: dict) -> str:
+    """Cookie "<expiry>.<signature>": only valid until expiry, with this secret."""
+    expires = int(time.time()) + SESSION_SECONDS
+    return f"{expires}.{sign(auth['secret'], expires)}"
 
 
-def authed(request):
-    auth = load_auth()
-    c = request.cookies.get(COOKIE, "")
-    if not auth or "." not in c:
+def cookie_valid(auth: dict | None, cookie: str) -> bool:
+    if not auth or "." not in cookie:
         return False
-    exp, sig = c.split(".", 1)
+    expires, signature = cookie.split(".", 1)
     try:
-        if int(exp) < time.time():
+        if int(expires) < time.time():
             return False
     except ValueError:
         return False
-    return hmac.compare_digest(sig, sign(auth["secret"], exp))
+    return hmac.compare_digest(signature, sign(auth["secret"], expires))
 
 
+def authed(request) -> bool:
+    return cookie_valid(load_auth(), request.cookies.get(COOKIE, ""))
+
+
+# -------------------------------------------------------------------------- lockout
+def locked_out(ip: str) -> bool:
+    return _failed_logins.get(ip, [0, 0])[1] > time.time()
+
+
+def record_failure(ip: str) -> None:
+    """Count a wrong password; the MAX_TRIES-th one locks the address for a while."""
+    tries = _failed_logins.get(ip, [0, 0])[0] + 1
+    _failed_logins[ip] = (
+        [0, time.time() + LOCKOUT_SECONDS] if tries >= MAX_TRIES else [tries, 0]
+    )
+
+
+def record_success(ip: str) -> None:
+    _failed_logins.pop(ip, None)
+
+
+# ---------------------------------------------------------------------------- pages
 PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>J.A.R.V.I.S.</title><style>
@@ -109,29 +186,35 @@ p{color:#ff9a3d;font-size:13px;text-align:center;margin:0 0 12px}
 <button type="submit">ENTER</button></form></body></html>"""
 
 
+def login_page(message: str = "", status: int = 200) -> HTMLResponse:
+    return HTMLResponse(
+        PAGE.replace("%MSG%", "<p>%s</p>" % message if message else ""),
+        status_code=status,
+    )
+
+
 async def login(request):
     ip = request.client.host if request.client else "?"
     if request.method == "GET":
-        return HTMLResponse(PAGE.replace("%MSG%", ""))
-    rec = FAILS.get(ip, [0, 0])
-    if rec[1] > time.time():
-        return HTMLResponse(PAGE.replace("%MSG%", "<p>Too many tries. Wait 5 minutes.</p>"), status_code=429)
+        return login_page()
+    if locked_out(ip):
+        return login_page("Too many tries. Wait 5 minutes.", 429)
     form = parse_qs((await request.body()).decode("utf-8", "ignore"))
-    pw = (form.get("pw") or [""])[0]
     auth = load_auth()
-    ok = False
-    if auth:
-        ok = hmac.compare_digest(hash_pw(pw, bytes.fromhex(auth["salt"])).hex(), auth["hash"])
-    if not ok:
-        rec[0] += 1
-        if rec[0] >= 5:
-            rec = [0, time.time() + 300]
-        FAILS[ip] = rec
-        return HTMLResponse(PAGE.replace("%MSG%", "<p>Wrong password.</p>"), status_code=401)
-    FAILS.pop(ip, None)
+    if not password_matches(auth, (form.get("pw") or [""])[0]):
+        record_failure(ip)
+        return login_page("Wrong password.", 401)
+    record_success(ip)
     resp = RedirectResponse("/hud.html", status_code=303)
-    resp.set_cookie(COOKIE, make_cookie(auth), max_age=SESSION_SECONDS, httponly=True,
-                    secure=True, samesite="lax", path="/")
+    resp.set_cookie(
+        COOKIE,
+        make_cookie(auth),
+        max_age=SESSION_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
     return resp
 
 
@@ -141,77 +224,120 @@ async def logout(request):
     return resp
 
 
-def pick(path):
-    """Returns (base url, new path, forced headers)."""
+# ----------------------------------------------------------------------- forwarding
+def backend_for(path: str) -> tuple[str, str, dict[str, str]]:
+    """(backend base url, path at the backend, headers the backend must see)."""
     if path == "/helper" or path.startswith("/helper/"):
-        return ("http://127.0.0.1:8765", path[len("/helper"):] or "/",
-                {"host": "127.0.0.1:8765", "origin": "http://localhost:5173"})
+        return (
+            "http://127.0.0.1:8765",
+            path[len("/helper") :] or "/",
+            {"host": "127.0.0.1:8765", "origin": "http://localhost:5173"},
+        )
     if path == "/wake" or path.startswith("/wake/"):
-        return "http://127.0.0.1:8766", path[len("/wake"):] or "/", {"host": "127.0.0.1:8766"}
+        return (
+            "http://127.0.0.1:8766",
+            path[len("/wake") :] or "/",
+            {"host": "127.0.0.1:8766"},
+        )
     if path.startswith("/v1") or path == "/health" or path.startswith("/api/"):
         return "http://127.0.0.1:8000", path, {"host": "localhost:8000"}
     return "http://localhost:5173", path, {"host": "localhost:5173"}
 
 
-# Home Screen icons and the web app manifest: the iPhone fetches them without the login cookie.
-PUBLIC = {"/jarvis-icon-180.png", "/jarvis-icon-192.png", "/jarvis-icon-512.png", "/hud.webmanifest",
-          "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/favicon.ico"}
+def forwarded_headers(
+    incoming: dict[str, str], forced: dict[str, str]
+) -> dict[str, str]:
+    """Backend headers: no hop-by-hop headers, login cookie or browser origin."""
+    hdrs = {
+        k: v
+        for k, v in incoming.items()
+        if k not in HOP_BY_HOP_HEADERS and k not in ("cookie", "origin", "referer")
+    }
+    hdrs.update(forced)
+    return hdrs
 
 
 async def proxy(request):
-    pub = request.method in ("GET", "HEAD") and request.url.path in PUBLIC
-    rp = "/jarvis-icon-180.png" if request.url.path.startswith("/apple-touch-icon") else request.url.path
-    if not pub and not authed(request):
+    public = request.method in ("GET", "HEAD") and request.url.path in PUBLIC_PATHS
+    path = (
+        "/jarvis-icon-180.png"
+        if request.url.path.startswith("/apple-touch-icon")
+        else request.url.path
+    )
+    if not public and not authed(request):
         if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
             return RedirectResponse("/login", status_code=303)
         return Response("login required", status_code=401)
-    base, path, forced = pick(rp)
-    url = base + path + (("?" + request.url.query) if request.url.query else "")
-    hdrs = {k: v for k, v in request.headers.items()
-            if k not in HOP and k not in ("cookie", "origin", "referer")}
-    hdrs.update(forced)
+    base, backend_path, forced = backend_for(path)
+    url = base + backend_path + (("?" + request.url.query) if request.url.query else "")
     body = None if request.method in ("GET", "HEAD") else request.stream()
     try:
-        req = CLIENT.build_request(request.method, url, headers=hdrs, content=body)
-        r = await CLIENT.send(req, stream=True)
+        req = _client.build_request(
+            request.method,
+            url,
+            headers=forwarded_headers(dict(request.headers), forced),
+            content=body,
+        )
+        r = await _client.send(req, stream=True)
     except httpx.HTTPError as e:
         return Response("backend not reachable: " + type(e).__name__, status_code=502)
-    out = {k: v for k, v in r.headers.items() if k.lower() not in HOP}
+    out = {k: v for k, v in r.headers.items() if k.lower() not in HOP_BY_HOP_HEADERS}
     out["x-content-type-options"] = "nosniff"
     out["referrer-policy"] = "no-referrer"
-    return StreamingResponse(r.aiter_raw(), status_code=r.status_code, headers=out,
-                             background=BackgroundTask(r.aclose))
-
-
-from contextlib import asynccontextmanager
+    return StreamingResponse(
+        r.aiter_raw(),
+        status_code=r.status_code,
+        headers=out,
+        background=BackgroundTask(r.aclose),
+    )
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global CLIENT
-    CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(900.0, connect=5.0),
-                               limits=httpx.Limits(max_connections=100))
+    global _client
+    _client = httpx.AsyncClient(
+        timeout=httpx.Timeout(900.0, connect=5.0),
+        limits=httpx.Limits(max_connections=100),
+    )
     yield
-    await CLIENT.aclose()
+    await _client.aclose()
 
 
 app = Starlette(
-    routes=[Route("/login", login, methods=["GET", "POST"]),
-            Route("/logout", logout, methods=["GET"]),
-            Route("/{path:path}", proxy, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])],
+    routes=[
+        Route("/login", login, methods=["GET", "POST"]),
+        Route("/logout", logout, methods=["GET"]),
+        Route(
+            "/{path:path}",
+            proxy,
+            methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+        ),
+    ],
     lifespan=lifespan,
 )
 
-if __name__ == "__main__":
+
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set-password", action="store_true")
     ap.add_argument("--port", type=int, default=8443)
     ap.add_argument("--no-tls", action="store_true", help="test only")
-    a = ap.parse_args()
-    if a.set_password:
+    args = ap.parse_args()
+    if args.set_password:
         sys.exit(set_password())
     if not load_auth():
         print("No password set. Run:  python tools\\gateway.py --set-password")
         sys.exit(1)
-    kw = {} if a.no_tls else {"ssl_certfile": str(GDIR / "cert.pem"), "ssl_keyfile": str(GDIR / "key.pem")}
-    uvicorn.run(app, host="0.0.0.0", port=a.port, log_level="warning", **kw)
+    tls = (
+        {}
+        if args.no_tls
+        else {
+            "ssl_certfile": str(GATEWAY_DIR / "cert.pem"),
+            "ssl_keyfile": str(GATEWAY_DIR / "key.pem"),
+        }
+    )
+    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning", **tls)  # nosec B104 - LAN access is the point
+
+
+if __name__ == "__main__":
+    main()
