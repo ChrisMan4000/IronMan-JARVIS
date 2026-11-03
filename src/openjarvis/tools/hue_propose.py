@@ -59,16 +59,12 @@ class HueProposeTool(BaseTool):
 
     def execute(self, **params: Any) -> ToolResult:
         room = str(params.get("room", "")).strip()
-        state = str(params.get("state", "")).strip().lower()
-        if state not in ("on", "off"):
+        want_on = hue_bridge.power_state(params.get("state"))
+        if want_on is None:
             return _fail("state must be on or off.")
+        state = "on" if want_on else "off"
         try:
-            groups = hue_bridge.request("/groups")
-            match = hue_bridge.find_room(groups, room)
-            if match is None:
-                names = [name for _gid, name in hue_bridge.rooms(groups)]
-                return _fail("No such room. Rooms: %s" % ", ".join(names))
-            gid, name = match
+            gid, name = hue_bridge.lookup_room(room)
             store = ApprovalStore()
             try:
                 act = store.queue_action(
@@ -90,6 +86,8 @@ class HueProposeTool(BaseTool):
                 ),
                 success=True,
             )
+        except hue_bridge.UnknownRoom as e:
+            return _fail(str(e))
         except Exception as e:
             # A bridge or approvals database problem becomes a short tool reply.
             return _fail("Hue propose error: %s" % hue_bridge.error_text(e))

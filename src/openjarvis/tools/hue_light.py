@@ -37,6 +37,10 @@ COLORS = {
 }
 LAMP_FILLER = ("the", "light", "lights", "lamp", "lamps", "hue", "my", "in", "on", "at")
 READ_BACK_DELAY = 0.6  # seconds before a single lamp reports its new state
+BRI_MAX = 254  # the bridge's brightness scale is 1-254
+PERCENT_TO_BRI = BRI_MAX / 100
+MIRED_PER_KELVIN = 1_000_000  # colour temperature: mired = 1,000,000 / kelvin
+CT_RANGE = (153, 500)  # mired range of Hue white lamps (about 6500 K to 2000 K)
 
 
 class LampCapabilities(TypedDict):
@@ -106,7 +110,7 @@ def _display_hex(state: dict[str, Any], c: LampCapabilities) -> str:
     if c["color"] and state.get("colormode") == "xy":
         return xy_to_hex(state.get("xy", [0.32, 0.33]))
     if c["ct"]:
-        kelvin = 1e6 / max(153, state.get("ct", 366))
+        kelvin = MIRED_PER_KELVIN / max(CT_RANGE[0], state.get("ct", 366))
         return (
             "#ffd6a0" if kelvin < 3200 else ("#fff1dc" if kelvin < 4800 else "#e8f0ff")
         )
@@ -121,7 +125,7 @@ def lamp_info(lid: str, lamp: dict[str, Any]) -> LampInfo:
         "name": lamp.get("name", "?"),
         "on": bool(st.get("on")),
         "reachable": bool(st.get("reachable", True)),
-        "bri": round(st.get("bri", 254) / 2.54) if c["dim"] else None,
+        "bri": round(st.get("bri", BRI_MAX) / PERCENT_TO_BRI) if c["dim"] else None,
         "hex": _display_hex(st, c),
         **c,
     }
@@ -144,7 +148,7 @@ def set_lamp(
     if on is not None:
         body["on"] = bool(on)
     if bri is not None:
-        body["bri"] = max(1, min(254, round(float(bri) * 2.54)))
+        body["bri"] = max(1, min(BRI_MAX, round(float(bri) * PERCENT_TO_BRI)))
         body.setdefault("on", True)
     if color:
         hx = COLORS.get(color.lower().strip(), color.strip())
@@ -153,7 +157,9 @@ def set_lamp(
         body["xy"] = hex_to_xy(hx)
         body.setdefault("on", True)
     if kelvin:
-        body["ct"] = max(153, min(500, round(1e6 / float(kelvin))))
+        body["ct"] = max(
+            CT_RANGE[0], min(CT_RANGE[1], round(MIRED_PER_KELVIN / float(kelvin)))
+        )
         body.setdefault("on", True)
     return hue_bridge.request("/lights/%s/state" % lid, body)
 
@@ -204,6 +210,22 @@ def _unsupported(lamp: dict[str, Any], color: str, kelvin: Any, bri: Any) -> str
     return ""
 
 
+def _read_back_report(lid: str, reply: Any, want_on: bool | None) -> tuple[str, bool]:
+    """Wait, read the lamp back, describe it; ok = reachable and on/off as asked."""
+    time.sleep(READ_BACK_DELAY)
+    now = lamp_info(lid, hue_bridge.request("/lights/%s" % lid))
+    ok = (want_on is None or now["on"] == want_on) and now["reachable"]
+    text = "Sent to lamp %s. Bridge reply: %s. Now: %s%s%s. Verified: %s." % (
+        now["name"],
+        json.dumps(reply)[:200],
+        "ON" if now["on"] else "OFF",
+        "" if now["bri"] is None else ", %d%%" % now["bri"],
+        "" if not now["color"] else ", colour " + now["hex"],
+        "YES" if ok else "NO (lamp unreachable?)",
+    )
+    return text, ok
+
+
 @ToolRegistry.register(TOOL_NAME)
 class HueLightTool(BaseTool):
     tool_id = TOOL_NAME
@@ -252,19 +274,16 @@ class HueLightTool(BaseTool):
 
     def execute(self, **params: Any) -> ToolResult:
         hue_bridge.log_call(TOOL_NAME, params)
-        name = str(params.get("light", "")).strip()
-        state = str(params.get("state", "") or "").strip().lower()
-        if state and state not in ("on", "off"):
+        want_on = hue_bridge.power_state(params.get("state"))
+        if params.get("state") and want_on is None:
             return _fail("state must be on or off.")
-        color, kelvin, bri = (
-            params.get("color") or "",
-            params.get("kelvin"),
-            params.get("brightness"),
-        )
+        color = params.get("color") or ""
+        kelvin, bri = params.get("kelvin"), params.get("brightness")
         try:
             lights = hue_bridge.request("/lights")
+            room = str(params.get("room", "") or "").strip()
             lid = find_lamp(
-                lights, name, _room_lamp_ids(str(params.get("room", "") or "").strip())
+                lights, str(params.get("light", "")).strip(), _room_lamp_ids(room)
             )
             if lid is None:
                 names = sorted(lamp.get("name", "?") for lamp in lights.values())
@@ -274,20 +293,8 @@ class HueLightTool(BaseTool):
             problem = _unsupported(lights[lid], color, kelvin, bri)
             if problem:
                 return _fail(problem)
-            reply = set_lamp(
-                lid, None if not state else state == "on", bri, color, kelvin
-            )
-            time.sleep(READ_BACK_DELAY)
-            now = lamp_info(lid, hue_bridge.request("/lights/%s" % lid))
-            ok = (not state or now["on"] == (state == "on")) and now["reachable"]
-            text = "Sent to lamp %s. Bridge reply: %s. Now: %s%s%s. Verified: %s." % (
-                now["name"],
-                json.dumps(reply)[:200],
-                "ON" if now["on"] else "OFF",
-                "" if now["bri"] is None else ", %d%%" % now["bri"],
-                "" if not now["color"] else ", colour " + now["hex"],
-                "YES" if ok else "NO (lamp unreachable?)",
-            )
+            reply = set_lamp(lid, want_on, bri, color, kelvin)
+            text, ok = _read_back_report(lid, reply, want_on)
             return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
         except Exception as e:  # any bridge/network problem becomes a short tool reply
             return _fail("Hue error: %s" % hue_bridge.error_text(e))

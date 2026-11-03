@@ -116,7 +116,11 @@ def set_password() -> int:
         print("Too short (minimum %d). Nothing saved." % MIN_PASSWORD)
         return 1
     GATEWAY_DIR.mkdir(parents=True, exist_ok=True)
-    AUTH_FILE.write_text(json.dumps(new_auth(p1)), encoding="utf-8")
+    tmp = AUTH_FILE.with_suffix(
+        ".tmp"
+    )  # write fully, then swap: never a half-written file
+    tmp.write_text(json.dumps(new_auth(p1)), encoding="utf-8")
+    tmp.replace(AUTH_FILE)
     print("Password saved. All old logins are now invalid.")
     return 0
 

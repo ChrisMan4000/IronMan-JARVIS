@@ -31,6 +31,10 @@ class HueBridgeError(RuntimeError):
     """The bridge is not configured or answered with an error entry."""
 
 
+class UnknownRoom(HueBridgeError):
+    """No room (or more than one) matches; the message lists the rooms."""
+
+
 def bridge_address() -> str:
     """Bridge IP from HUE_BRIDGE_IP (read on each call), else the Windows settings.
 
@@ -135,6 +139,23 @@ def find_room(groups: dict[str, dict[str, Any]], text: str) -> tuple[str, str] |
         if cleaned and name.lower() in (cleaned, cleaned[:-1])
     ]
     return loose[0] if len(loose) == 1 else None
+
+
+def lookup_room(text: str) -> tuple[str, str]:
+    """(group id, room name) for a spoken room; UnknownRoom lists rooms if none fits."""
+    groups = request("/groups")
+    match = find_room(groups, text)
+    if match is None:
+        raise UnknownRoom(
+            "No such room. Rooms: %s" % ", ".join(n for _g, n in rooms(groups))
+        )
+    return match
+
+
+def power_state(text: object) -> bool | None:
+    """True for "on", False for "off", None for anything else."""
+    state = str(text or "").strip().lower()
+    return {"on": True, "off": False}.get(state)
 
 
 def set_room_power(group_id: str, on: bool) -> Any:

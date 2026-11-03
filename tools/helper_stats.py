@@ -8,11 +8,13 @@ hits an error keeps running and reports "no value" (None) until the source answe
 from __future__ import annotations
 
 import ctypes
+import functools
 import ipaddress
 import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -25,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 LINK_MBPS = 250  # your DSL line speed (250 Mbps)
 JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
+BITS_PER_MEGABIT = 1e6
+BYTES_PER_GB = 1e9
+CO2_REFRESH, CO2_RETRY = 6 * 3600, 600  # seconds
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW: no console flashes when calling lms
 LMSTUDIO_MODELS_URL = "http://localhost:1234/api/v0/models"
 FANS_URL = (
@@ -38,6 +43,16 @@ GPU_QUERY = (
     "name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed"
 )
 GEO_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dbip.mmdb")
+
+
+@functools.lru_cache(maxsize=None)
+def program(name: str) -> str:
+    """Full path of a command-line program (found once on PATH), else its plain name.
+
+    A full path means a file of the same name in the current folder is never started.
+    """
+    return shutil.which(name) or name
+
 
 # Shared data returned by GET /
 stats: dict[str, Any] = {
@@ -79,7 +94,7 @@ def cpu_times() -> tuple[int, int]:
 
 def net_bytes() -> tuple[int, int] | None:
     """(received, sent) bytes since boot, read from 'netstat -e'."""
-    out = subprocess.check_output(["netstat", "-e"], text=True, timeout=5)
+    out = subprocess.check_output([program("netstat"), "-e"], text=True, timeout=5)
     for line in out.splitlines():
         m = re.match(r"^\s*\S+\s+(\d+)\s+(\d+)\s*$", line)
         if m:
@@ -92,8 +107,8 @@ def net_speed(
 ) -> dict[str, float]:
     """Download/upload in Mbit/s and as a share of the line speed."""
     dt = max(0.1, seconds)
-    down = max(0, after[0] - before[0]) * 8 / dt / 1e6
-    up = max(0, after[1] - before[1]) * 8 / dt / 1e6
+    down = max(0, after[0] - before[0]) * 8 / dt / BITS_PER_MEGABIT
+    up = max(0, after[1] - before[1]) * 8 / dt / BITS_PER_MEGABIT
     return {
         "down_pct": round(min(100, 100 * down / LINK_MBPS), 2),
         "up_pct": round(min(100, 100 * up / LINK_MBPS), 2),
@@ -122,7 +137,11 @@ def parse_gpu(line: str) -> dict[str, Any]:
 def read_gpu() -> dict[str, Any] | None:
     try:
         out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=" + GPU_QUERY, "--format=csv,noheader,nounits"],
+            [
+                program("nvidia-smi"),
+                "--query-gpu=" + GPU_QUERY,
+                "--format=csv,noheader,nounits",
+            ],
             text=True,
             timeout=5,
         )
@@ -234,7 +253,9 @@ def connections_snapshot(ips: dict[str, int]) -> list[dict[str, Any]]:
 def conn_step() -> None:
     """Refresh the connection list for the map."""
     ips = public_ips(
-        subprocess.check_output(["netstat", "-n", "-p", "tcp"], text=True, timeout=8)
+        subprocess.check_output(
+            [program("netstat"), "-n", "-p", "tcp"], text=True, timeout=8
+        )
     )
     new = [i for i in ips if i not in geo]
     if new:
@@ -257,7 +278,7 @@ def model_size_gb(mid: str | None) -> float | None:
     _size_cache.update(id=mid, t=time.time(), gb=None)
     try:
         out = subprocess.run(
-            ["lms", "ps", "--json"],
+            [program("lms"), "ps", "--json"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -265,7 +286,7 @@ def model_size_gb(mid: str | None) -> float | None:
         ).stdout
         for m in json.loads(out):
             if m.get("identifier") == mid or m.get("modelKey") == mid:
-                _size_cache["gb"] = round(m["sizeBytes"] / 1e9, 1)
+                _size_cache["gb"] = round(m["sizeBytes"] / BYTES_PER_GB, 1)
     except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
         logger.debug("lms ps failed: %s", exc)
     return _size_cache["gb"]
@@ -322,7 +343,7 @@ def co2_loop() -> None:
             if value:
                 stats["co2"] = value
                 break
-        time.sleep(6 * 3600 if value else 600)
+        time.sleep(CO2_REFRESH if value else CO2_RETRY)
 
 
 # --------------------------------------------------------------- small file readers

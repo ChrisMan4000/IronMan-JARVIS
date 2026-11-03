@@ -53,19 +53,15 @@ class HueSetTool(BaseTool):
     def execute(self, **params: Any) -> ToolResult:
         hue_bridge.log_call(TOOL_NAME, params)
         room = str(params.get("room", "")).strip()
-        state = str(params.get("state", "")).strip().lower()
-        if state not in ("on", "off"):
+        want_on = hue_bridge.power_state(params.get("state"))
+        if want_on is None:
             return _fail("state must be on or off.")
-        want_on = state == "on"
         try:
-            groups = hue_bridge.request("/groups")
-            match = hue_bridge.find_room(groups, room)
-            if match is None:
-                names = [name for _gid, name in hue_bridge.rooms(groups)]
-                return _fail("No such room. Rooms: %s" % ", ".join(names))
-            gid, name = match
+            gid, name = hue_bridge.lookup_room(room)
             reply = hue_bridge.set_room_power(gid, want_on)
             text, ok = hue_bridge.read_back_report(gid, name, want_on, reply)
             return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
+        except hue_bridge.UnknownRoom as e:
+            return _fail(str(e))
         except Exception as e:  # any bridge/network problem becomes a short tool reply
             return _fail("Hue set error: %s" % hue_bridge.error_text(e))

@@ -92,10 +92,10 @@ class HueAllSetTool(BaseTool):
 
     def execute(self, **params: Any) -> ToolResult:
         hue_bridge.log_call(TOOL_NAME, params)
-        state = str(params.get("state", "")).strip().lower()
-        if state not in ("on", "off"):
+        want_on = hue_bridge.power_state(params.get("state"))
+        if want_on is None:
             return _fail("state must be on or off.")
-        want_on = state == "on"
+        state = "on" if want_on else "off"
         try:
             groups = hue_bridge.request("/groups")
             rooms = [

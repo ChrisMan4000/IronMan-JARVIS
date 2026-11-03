@@ -396,3 +396,17 @@ def test_execute_reports_failed_read_back(bridge, approvals, monkeypatch):
         not r.success
         and r.content == "Sent: Office off. Could not read back (OSError)."
     )
+
+
+def test_power_state_and_lookup_room(bridge):
+    assert [hue_bridge.power_state(v) for v in ("on", " OFF ", "dim", None)] == [
+        True,
+        False,
+        None,
+        None,
+    ]
+    assert hue_bridge.lookup_room("office lights") == ("4", "Office")
+    with pytest.raises(
+        hue_bridge.UnknownRoom, match="Rooms: Sleep, Office, Hallway, Kitchen"
+    ):
+        hue_bridge.lookup_room("garage")

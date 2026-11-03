@@ -330,38 +330,58 @@ def mode_from_words(value: str) -> int | None:
     return None
 
 
+TIMER_ACTIONS = {"night": 1, "party": 2, "timer_off": 0}
+HUMIDITY_RANGE = (40, 80)  # percent; the unit offers steps of 10
+
+
+def _plan_speed(value: str) -> Plan | str:
+    n = _digits(value)
+    if n not in (1, 2, 3):
+        return "Speed must be 1, 2 or 3."
+    return {P_POWER: 1, P_SPEED: n}, lambda s: s["power"] and s["speed"] == n
+
+
+def _plan_mode(value: str) -> Plan | str:
+    m = mode_from_words(value)
+    if m is None:
+        return "Mode must be ventilation, heat recovery or supply air."
+    return {P_POWER: 1, P_MODE: m}, lambda s: s["mode"] == MODES[m]
+
+
+def _plan_humidity(value: str) -> Plan | str:
+    h = _digits(value) or 0
+    if not HUMIDITY_RANGE[0] <= h <= HUMIDITY_RANGE[1]:
+        return "Humidity target must be between 40 and 80 percent."
+    h = int(round(h / 10.0) * 10)
+    return {P_HUM_ON: 1, P_HUM_SET: h}, (
+        lambda s: s["humidity_sensor_on"] and s["humidity_target"] == h
+    )
+
+
+def _plan_timer(timer: int) -> Plan:
+    writes = {P_TIMER: timer} if timer == 0 else {P_POWER: 1, P_TIMER: timer}
+    return writes, lambda s: s["timer"] == TIMERS[timer]
+
+
+PLANNERS: dict[str, Callable[[str], Plan | str]] = {
+    "on": lambda _v: ({P_POWER: 1}, lambda s: s["power"]),
+    "off": lambda _v: ({P_POWER: 0}, lambda s: not s["power"]),
+    "speed": _plan_speed,
+    "mode": _plan_mode,
+    "humidity": _plan_humidity,
+    **{name: (lambda _v, t=t: _plan_timer(t)) for name, t in TIMER_ACTIONS.items()},
+}
+
+
 def plan_change(action: str, value: str) -> Plan | str:
     """What to write for an action and how to check it afterwards, or an error text."""
-    if action == "on":
-        return {P_POWER: 1}, lambda s: s["power"]
-    if action == "off":
-        return {P_POWER: 0}, lambda s: not s["power"]
-    if action == "speed":
-        n = _digits(value)
-        if n not in (1, 2, 3):
-            return "Speed must be 1, 2 or 3."
-        return {P_POWER: 1, P_SPEED: n}, lambda s: s["power"] and s["speed"] == n
-    if action == "mode":
-        m = mode_from_words(value)
-        if m is None:
-            return "Mode must be ventilation, heat recovery or supply air."
-        return {P_POWER: 1, P_MODE: m}, lambda s: s["mode"] == MODES[m]
-    if action in ("night", "party", "timer_off"):
-        t = {"night": 1, "party": 2, "timer_off": 0}[action]
-        writes = {P_TIMER: t} if t == 0 else {P_POWER: 1, P_TIMER: t}
-        return writes, lambda s: s["timer"] == TIMERS[t]
-    if action == "humidity":
-        h = _digits(value) or 0
-        if not 40 <= h <= 80:
-            return "Humidity target must be between 40 and 80 percent."
-        h = int(round(h / 10.0) * 10)  # the unit offers 40, 50, 60, 70, 80
-        return {P_HUM_ON: 1, P_HUM_SET: h}, (
-            lambda s: s["humidity_sensor_on"] and s["humidity_target"] == h
+    planner = PLANNERS.get(action)
+    if planner is None:
+        return (
+            "Unknown action. Use status, on, off, speed, mode, night, party, timer_off"
+            " or humidity."
         )
-    return (
-        "Unknown action. Use status, on, off, speed, mode, night, party, timer_off"
-        " or humidity."
-    )
+    return planner(value)
 
 
 def _log_change(text: str) -> None:

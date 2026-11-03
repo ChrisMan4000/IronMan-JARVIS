@@ -18,7 +18,14 @@ import urllib.request
 from typing import Any
 
 from helper_http import Handler, need_trusted, query, send
-from helper_stats import JARVIS_DIR, LMSTUDIO_MODELS_URL, NO_WINDOW, stats
+from helper_stats import (
+    BYTES_PER_GB,
+    JARVIS_DIR,
+    LMSTUDIO_MODELS_URL,
+    NO_WINDOW,
+    program,
+    stats,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +102,7 @@ def settings_from_query(q: dict[str, str]) -> dict[str, Any]:
 # ------------------------------------------------------------------------ LM Studio
 def _lms(*args: str, timeout: float) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["lms", *args],
+        [program("lms"), *args],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -110,7 +117,7 @@ def model_sizes() -> dict[str, float]:
         try:
             listed = json.loads(_lms("ls", "--json", timeout=15).stdout)
             _sizes["m"] = {
-                m["modelKey"]: round(m["sizeBytes"] / 1e9, 1)
+                m["modelKey"]: round(m["sizeBytes"] / BYTES_PER_GB, 1)
                 for m in listed
                 if m.get("modelKey") and m.get("sizeBytes")
             }
@@ -148,9 +155,11 @@ def list_models() -> list[dict[str, Any]]:
 def _do_load(mid: str, ctx: int) -> None:
     """Unload everything, then load one model with its saved context (in a thread)."""
     try:
-        subprocess.run(["lms", "unload", "--all"], timeout=60, capture_output=True)
+        subprocess.run(
+            [program("lms"), "unload", "--all"], timeout=60, capture_output=True
+        )
         r = subprocess.run(
-            ["lms", "load", mid, "-c", str(ctx), "-y"],
+            [program("lms"), "load", mid, "-c", str(ctx), "-y"],
             timeout=300,
             capture_output=True,
             text=True,
