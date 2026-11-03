@@ -11,7 +11,7 @@ Security rules (added 2026-10-14):
 - Other websites cannot READ the answers: the CORS header is only sent to the HUD.
 - Model ids are checked against LM Studio's own list before any command is run.
 """
-import ctypes, glob, ipaddress, json, mimetypes, os, re, subprocess, threading, time
+import ctypes, ipaddress, json, mimetypes, os, re, subprocess, threading, time
 import urllib.parse, urllib.request
 from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -363,43 +363,16 @@ def serve_doc(h):
 
 
 # ---------------------------------------------------------------- word counts: /count
-_cnt = {"sig": None, "rows": [], "checked": 0.0}
-
-
-def _load_texts():
-    """All document passages from the Big-RAG cache (rebuilt at most every 10 minutes)."""
-    if time.time() - _cnt["checked"] > 600:
-        try:
-            import ragcache
-            ragcache.refresh(verbose=False)
-        except Exception:
-            pass
-        _cnt["checked"] = time.time()
-    files = sorted(glob.glob(os.path.join(r"C:\AI\Big-RAG-cache", "shard_*.jsonl")))
-    sig = tuple((f, os.stat(f).st_mtime) for f in files)
-    if sig != _cnt["sig"]:
-        rows = []
-        for f in files:
-            with open(f, encoding="utf-8") as fh:
-                for line in fh:
-                    m = json.loads(line)
-                    rows.append((m["f"], m["t"].lower()))
-        _cnt.update(sig=sig, rows=rows)
-    return _cnt["rows"]
+COUNT_REFRESH = 600  # seconds between checks for a changed document index
 
 
 def count_word(word):
     """How many documents / passages contain the word, plus the top 15 documents."""
-    w = word.lower()
-    files = {}
-    n = 0
-    for f, t in _load_texts():
-        if w in t:
-            n += 1
-            files[f] = files.get(f, 0) + 1
-    top = sorted(files.items(), key=lambda kv: -kv[1])[:15]
-    return {"word": word, "documents": len(files), "passages": n,
-            "top": [{"f": f, "n": c} for f, c in top]}
+    from openjarvis.tools import rag_cache
+
+    passages, files = rag_cache.count_documents([word], rag_cache.load_passages(COUNT_REFRESH))
+    return {"word": word, "documents": len(files), "passages": passages,
+            "top": [{"f": f, "n": c} for f, c in rag_cache.top_documents(files)]}
 
 
 def serve_count(h):
