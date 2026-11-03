@@ -196,7 +196,7 @@ def load_passages(refresh_every: float = REFRESH_EVERY) -> list[Passage]:
 def embed_batch(texts: list[str], timeout: float = 60.0) -> list[list[float]]:
     """Raw vectors for several texts from the LM Studio embedding model, in order.
 
-    The one LM Studio embedding client: embed() below and the memory store's
+    The one LM Studio embedding client: embed_query() below and the memory store's
     LMStudioEmbedder (tools/storage/sqlite_dense.py) both use it.
     """
     body = json.dumps({"model": EMBED_MODEL, "input": texts}).encode()
@@ -209,7 +209,7 @@ def embed_batch(texts: list[str], timeout: float = 60.0) -> list[list[float]]:
     return [row["embedding"] for row in sorted(data, key=lambda d: d.get("index", 0))]
 
 
-def embed(text: str, timeout: float = 60.0) -> np.ndarray:
+def embed_query(text: str, timeout: float = 60.0) -> np.ndarray:
     """The question as a normalized vector from the LM Studio embedding model."""
     import numpy as np
 
@@ -226,7 +226,7 @@ def search(
     vectors, passages = load_index()
     if not passages:
         return []
-    scores = vectors @ embed(query, timeout)
+    scores = vectors @ embed_query(query, timeout)
     k = min(k, len(scores))
     best = np.argpartition(-scores, k - 1)[:k]
     best = best[np.argsort(-scores[best])]

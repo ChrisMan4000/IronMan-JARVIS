@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from openjarvis.core.registry import MemoryRegistry
+from openjarvis.tools import rag_cache
 from openjarvis.tools.storage._stubs import RetrievalResult
 from openjarvis.tools.storage.dense import DenseMemory
 from openjarvis.tools.storage.embeddings import Embedder
@@ -38,9 +39,7 @@ class LMStudioEmbedder(Embedder):
 
     def embed(self, texts: list[str]) -> Any:
         """Rows of L2-normalized float32 vectors, one per text (shape (n, dim))."""
-        import numpy as np
-
-        from openjarvis.tools import rag_cache
+        import numpy as np  # optional dependency, only needed once embeddings are used
 
         if not texts:
             return np.zeros((0, self.dim()), dtype=np.float32)
@@ -57,8 +56,6 @@ class LMStudioEmbedder(Embedder):
     def dim(self) -> int:
         """Vector size (asks LM Studio once with a short probe text)."""
         if self._dim is None:
-            from openjarvis.tools import rag_cache
-
             self._dim = len(rag_cache.embed_batch(["probe"], self._timeout)[0])
         return self._dim
 

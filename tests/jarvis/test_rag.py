@@ -45,7 +45,7 @@ def library(tmp_path, monkeypatch):
     monkeypatch.setitem(rag_cache._last_refresh, "at", 0.0)
     monkeypatch.setattr(
         rag_cache,
-        "embed",
+        "embed_query",
         lambda text, timeout=60.0: np.array([1.0, 0.0, 0.0], dtype=np.float32),
     )
     return shard
@@ -130,7 +130,7 @@ def test_tool_explains_missing_embedding_model(library, monkeypatch):
     def offline(text, timeout=60.0):
         raise urllib.error.URLError("connection refused")
 
-    monkeypatch.setattr(rag_cache, "embed", offline)
+    monkeypatch.setattr(rag_cache, "embed_query", offline)
     r = oracle_search.OracleSearchTool().execute(query="sea level")
     assert not r.success and "Is LM Studio running" in r.content
 
