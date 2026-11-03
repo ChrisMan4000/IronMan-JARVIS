@@ -163,34 +163,76 @@ def set_room_power(group_id: str, on: bool) -> Any:
     return request("/groups/%s/action" % group_id, {"on": on})
 
 
-def room_any_on(group_id: str) -> bool:
-    """Read a room back: True when at least one of its lights reports on."""
-    return bool(request("/groups/%s" % group_id).get("state", {}).get("any_on"))
+# Read-back verdicts for one room, from the most to the least certain.
+VERIFIED, PARTLY, UNCONFIRMABLE, FAILED = (
+    "verified",
+    "partly",
+    "unconfirmable",
+    "failed",
+)
 
 
-READ_BACK_DELAY = 1.0  # seconds the bridge needs before a room reads back its new state
+def room_verdict(
+    name: str,
+    light_ids: list[str],
+    lights: dict[str, dict[str, Any]],
+    sent: bool,
+    want_on: bool,
+) -> tuple[str, str]:
+    """(verdict, report line) for one room after the switch command."""
+    state = "on" if want_on else "off"
+    if not sent:
+        return FAILED, "%s: FAILED, the bridge did not accept the command" % name
+    reachable, unreachable = [], []
+    for lid in light_ids:
+        light = lights.get(lid)
+        if light is not None and light.get("state", {}).get("reachable", True):
+            reachable.append(light)
+        else:  # unreachable, or missing from the bridge's light list
+            unreachable.append(light.get("name", lid) if light else lid)
+    if not reachable:
+        return UNCONFIRMABLE, "%s: NOT CONFIRMABLE, all lights unreachable (%s)" % (
+            name,
+            ", ".join(unreachable),
+        )
+    if not all(
+        bool(light.get("state", {}).get("on")) == want_on for light in reachable
+    ):
+        return FAILED, "%s: MISMATCH, a reachable light is not %s" % (name, state)
+    if unreachable:
+        return PARTLY, "%s: confirmed %s for the reachable lights; unreachable: %s" % (
+            name,
+            state,
+            ", ".join(unreachable),
+        )
+    return VERIFIED, "%s: verified %s" % (name, state)
+
+
+def room_lights(group_id: str) -> tuple[list[str], dict[str, dict[str, Any]]]:
+    """A room's light ids and the bridge's current record of every light."""
+    ids = [str(x) for x in request("/groups/%s" % group_id).get("lights", [])]
+    return ids, request("/lights")
+
+
+READ_BACK_DELAY = 1.0  # seconds before the lights report their new state
 
 
 def read_back_report(
     group_id: str, room: str, want_on: bool, reply: Any
 ) -> tuple[str, bool]:
-    """Wait, read the room back and describe it; ok is True only when it matches.
+    """Wait, read the room's lights back one by one and describe them.
 
-    A room whose lights are all unreachable can still read back as matching, because the
-    bridge echoes the request; hue_all_set checks every light for that case.
+    ok is True when every reachable light matches (room_verdict VERIFIED or PARTLY).
+    The room's own any_on is not used: the bridge echoes the request there even when
+    all its lights are unreachable.
     """
     time.sleep(READ_BACK_DELAY)
-    any_on = room_any_on(group_id)
-    ok = any_on == want_on
-    text = (
-        "Sent: %s %s. Bridge reply: %s. Verified by reading back: %s"
-        " (any light on now: %s)."
-        % (
-            room,
-            "on" if want_on else "off",
-            json.dumps(reply),
-            "YES" if ok else "NO (some lights in this room may be unreachable)",
-            any_on,
-        )
+    ids, lights = room_lights(group_id)
+    verdict, line = room_verdict(room, ids, lights, True, want_on)
+    text = "Sent: %s %s. Bridge reply: %s. Read back light by light: %s." % (
+        room,
+        "on" if want_on else "off",
+        json.dumps(reply),
+        line,
     )
-    return text, ok
+    return text, verdict in (VERIFIED, PARTLY)

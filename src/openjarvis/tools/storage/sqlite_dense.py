@@ -18,34 +18,49 @@ from typing import Any
 from openjarvis.core.registry import MemoryRegistry
 from openjarvis.tools.storage._stubs import RetrievalResult
 from openjarvis.tools.storage.dense import DenseMemory
-from openjarvis.tools.storage.embeddings import Embedder, OllamaEmbedder
+from openjarvis.tools.storage.embeddings import Embedder
 from openjarvis.tools.storage.sqlite import SQLiteMemory
 
 logger = logging.getLogger(__name__)
 
-LMSTUDIO_URL = "http://localhost:1234"
-LMSTUDIO_EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5"
 
+class LMStudioEmbedder(Embedder):
+    """Embeddings from LM Studio's embedding model, through rag_cache.embed_batch.
 
-class LMStudioEmbedder(OllamaEmbedder):
-    """Embeddings from LM Studio (/v1/embeddings) instead of Ollama."""
+    The endpoint and the model name live only in openjarvis.tools.rag_cache.
+    """
 
-    def __init__(self) -> None:
-        super().__init__(
-            model=LMSTUDIO_EMBED_MODEL,
-            base_url=LMSTUDIO_URL,
-            batch_size=16,
-            max_parallel=2,
-        )
+    BATCH_SIZE = 16  # texts per request
 
-    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
-        r = self._httpx.post(
-            self._base_url + "/v1/embeddings",
-            json={"model": self._model, "input": texts},
-            timeout=self._timeout_s,
-        )
-        r.raise_for_status()
-        return [d["embedding"] for d in r.json()["data"]]
+    def __init__(self, timeout: float = 60.0) -> None:
+        self._timeout = timeout
+        self._dim: int | None = None
+
+    def embed(self, texts: list[str]) -> Any:
+        """Rows of L2-normalized float32 vectors, one per text (shape (n, dim))."""
+        import numpy as np
+
+        from openjarvis.tools import rag_cache
+
+        if not texts:
+            return np.zeros((0, self.dim()), dtype=np.float32)
+        rows: list[list[float]] = []
+        for i in range(0, len(texts), self.BATCH_SIZE):
+            batch = texts[i : i + self.BATCH_SIZE]
+            rows.extend(rag_cache.embed_batch(batch, self._timeout))
+        arr = np.asarray(rows, dtype=np.float32)
+        norms = np.linalg.norm(arr, axis=1, keepdims=True)
+        arr = arr / np.where(norms == 0, 1.0, norms)
+        self._dim = int(arr.shape[1])
+        return arr
+
+    def dim(self) -> int:
+        """Vector size (asks LM Studio once with a short probe text)."""
+        if self._dim is None:
+            from openjarvis.tools import rag_cache
+
+            self._dim = len(rag_cache.embed_batch(["probe"], self._timeout)[0])
+        return self._dim
 
 
 def _metadata(raw: str | None) -> dict[str, Any] | None:

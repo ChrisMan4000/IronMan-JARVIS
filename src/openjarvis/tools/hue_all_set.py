@@ -1,7 +1,7 @@
 """Hue tool: switch ALL Philips Hue rooms on or off and report per room.
 
-Each room is switched, then every light is checked on its own (on/off and reachable),
-because a room's any_on read-back can look right while all its lights are unreachable.
+Each room is switched, then every light is checked on its own (on/off and
+reachable) with hue_bridge.room_verdict, the check hue_set and hue_execute use too.
 """
 
 from __future__ import annotations
@@ -16,53 +16,18 @@ from openjarvis.tools._stubs import BaseTool, ToolSpec
 
 TOOL_NAME = "hue_all_set"
 
-# Per-room verdicts, in the order the summary line counts them.
+# Per-room verdicts, in the order the summary line counts them (defined in hue_bridge).
 VERIFIED, PARTLY, UNCONFIRMABLE, FAILED = (
-    "verified",
-    "partly",
-    "unconfirmable",
-    "failed",
+    hue_bridge.VERIFIED,
+    hue_bridge.PARTLY,
+    hue_bridge.UNCONFIRMABLE,
+    hue_bridge.FAILED,
 )
+room_verdict = hue_bridge.room_verdict
 
 
 def _fail(msg: str) -> ToolResult:
     return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
-
-
-def room_verdict(
-    name: str,
-    light_ids: list[str],
-    lights: dict[str, dict[str, Any]],
-    sent: bool,
-    want_on: bool,
-) -> tuple[str, str]:
-    """(verdict, report line) for one room after the switch command."""
-    state = "on" if want_on else "off"
-    if not sent:
-        return FAILED, "%s: FAILED, the bridge did not accept the command" % name
-    reachable, unreachable = [], []
-    for lid in light_ids:
-        light = lights.get(lid)
-        if light is not None and light.get("state", {}).get("reachable", True):
-            reachable.append(light)
-        else:  # unreachable, or missing from the bridge's light list
-            unreachable.append(light.get("name", lid) if light else lid)
-    if not reachable:
-        return UNCONFIRMABLE, "%s: NOT CONFIRMABLE, all lights unreachable (%s)" % (
-            name,
-            ", ".join(unreachable),
-        )
-    if not all(
-        bool(light.get("state", {}).get("on")) == want_on for light in reachable
-    ):
-        return FAILED, "%s: MISMATCH, a reachable light is not %s" % (name, state)
-    if unreachable:
-        return PARTLY, "%s: confirmed %s for the reachable lights; unreachable: %s" % (
-            name,
-            state,
-            ", ".join(unreachable),
-        )
-    return VERIFIED, "%s: verified %s" % (name, state)
 
 
 @ToolRegistry.register(TOOL_NAME)

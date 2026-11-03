@@ -154,7 +154,7 @@ def test_hue_set_switches_and_verifies(bridge):
     assert bridge.puts == [("/groups/10/action", {"on": True})]
     assert (
         "Sent: Kitchen on." in r.content
-        and "Verified by reading back: YES" in r.content
+        and "Read back light by light: Kitchen: verified on" in r.content
     )
 
 
@@ -390,7 +390,7 @@ def test_execute_reports_failed_read_back(bridge, approvals, monkeypatch):
     def no_read_back(group_id):
         raise OSError("timed out")
 
-    monkeypatch.setattr(hue_bridge, "room_any_on", no_read_back)
+    monkeypatch.setattr(hue_bridge, "room_lights", no_read_back)
     r = HueExecuteTool().execute(request_id=rid)
     assert (
         not r.success

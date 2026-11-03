@@ -36,8 +36,9 @@ class ChatterboxTTSBackend(TTSBackend):
     def __init__(
         self, *, model_path: str = "", device: str = "auto", language_id: str = "en"
     ) -> None:
-        # model_path is kept for config compatibility; weights come from Hugging Face.
-        self._model_path = model_path
+        # model_path is accepted so existing configs still work;
+        # the weights always come from Hugging Face.
+        del model_path
         self._device = device
         self._language_id = language_id
         self._model: Any | None = None

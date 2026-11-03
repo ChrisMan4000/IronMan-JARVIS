@@ -193,17 +193,27 @@ def load_passages(refresh_every: float = REFRESH_EVERY) -> list[Passage]:
         return _texts["passages"]
 
 
-def embed(text: str, timeout: float = 60.0) -> np.ndarray:
-    """The question as a normalized vector from the LM Studio embedding model."""
-    import numpy as np
+def embed_batch(texts: list[str], timeout: float = 60.0) -> list[list[float]]:
+    """Raw vectors for several texts from the LM Studio embedding model, in order.
 
-    body = json.dumps({"model": EMBED_MODEL, "input": text}).encode()
+    The one LM Studio embedding client: embed() below and the memory store's
+    LMStudioEmbedder (tools/storage/sqlite_dense.py) both use it.
+    """
+    body = json.dumps({"model": EMBED_MODEL, "input": texts}).encode()
     req = urllib.request.Request(
         EMBED_URL, data=body, headers={"Content-Type": "application/json"}
     )
     # Fixed http://localhost URL: no user-controlled scheme reaches urlopen.
     with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310
-        vector = np.array(json.load(r)["data"][0]["embedding"], dtype=np.float32)
+        data = json.load(r)["data"]
+    return [row["embedding"] for row in sorted(data, key=lambda d: d.get("index", 0))]
+
+
+def embed(text: str, timeout: float = 60.0) -> np.ndarray:
+    """The question as a normalized vector from the LM Studio embedding model."""
+    import numpy as np
+
+    vector = np.array(embed_batch([text], timeout)[0], dtype=np.float32)
     return vector / np.linalg.norm(vector)
 
 
