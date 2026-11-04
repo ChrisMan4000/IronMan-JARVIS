@@ -24,7 +24,7 @@
 - It took **72 hours**, built entirely in the **free Claude web chat** (very small steps, one at a time).
 - In other words: I **vibecoded** this whole project with the free version of Claude. No paid plan, no coding background.
 - Then I let Claude clean up the vibecoded code with [desloppify](https://github.com/peteromallet/desloppify), a code-quality scanner for AI-written code (November 2026): shared helpers instead of copies, clearer names and file splits, safer scripts, and about 260 automatic tests. Its strict scores went from 13 to 70 (Python), 23 to 80 (PowerShell) and 24 to 76 (HUD JavaScript) out of 100.
-- It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). On yours? I am as curious as you are.
+- It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). But it adapts the models to your specific hardware, so a decent laptop should run it as well with a lighter model.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
 ## ✨ What you get
