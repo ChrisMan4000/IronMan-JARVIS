@@ -16,6 +16,7 @@ param(
   [string]$WhisperModel = '',   # speech recognition size: tiny|base|small|medium|large-v3 (empty = recommended for this PC, see tools\voice-setup.ps1)
   [string]$TtsChoice = '',      # voice: kokoro|chatterbox (empty = kokoro; plain PowerShell use asks)
   [string]$VoiceClip = '',      # optional clip of your OWN voice for Chatterbox
+  [string]$City = '',           # home city for the HUD weather (tools\set-home-city.ps1); empty = keep / ask in plain PowerShell
   [string]$StatusFile = ''      # the wizard reads progress lines from this file
 )
 $ErrorActionPreference = 'Continue'
@@ -229,6 +230,7 @@ if (-not $useHue)  { $unused += 'hue_lights', 'hue_set', 'hue_light_list', 'hue_
 if (-not $useTado) { $unused += 'tado_heating' }
 [System.IO.File]::WriteAllText($cfgFile, (Get-TomlWithoutListItem $c $unused), $Utf8)
 Write-Host "Settings file: $cfgFile (analytics are OFF in it)" -ForegroundColor Green
+& (Join-Path $Repo 'tools\set-home-city.ps1') -City $City -NoAsk:$FromWizard   # ATMOSPHERICS weather; a city that is not found never stops the install
 
 # ---------- 3. Python and web packages ----------
 Write-InstallStep 3 "Installing Python and web packages (a few minutes)"

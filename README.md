@@ -50,7 +50,7 @@ On top of [OpenJarvis's own features](https://openjarvis.stanford.edu/#features)
 
 ## 🚀 Install
 
-**Recommended:** download [IronMan-JARVIS-Installer.exe](https://github.com/ChrisMan4000/IronMan-JARVIS/releases/latest/download/IronMan-JARVIS-Installer.exe) and double-click it as a normal user (not as administrator). It asks the optional questions in its own window (Hue, Tado, wake word, model, voice, document search, Firecrawl key), downloads what is missing (Git, uv, Node.js, Rust, LM Studio, the models) and shows the progress. For Tado your browser opens once: **sign in to your Tado account first**, then approve. The installer is not code-signed: Windows SmartScreen warns, click "More info" > "Run anyway". Log: `%USERPROFILE%\.openjarvis\install-log.txt`.
+**Recommended:** download [IronMan-JARVIS-Installer.exe](https://github.com/ChrisMan4000/IronMan-JARVIS/releases/latest/download/IronMan-JARVIS-Installer.exe) and double-click it as a normal user (not as administrator). It asks the optional questions in its own window (Hue, Tado, wake word, model, voice, document search, Firecrawl key, your city), downloads what is missing (Git, uv, Node.js, Rust, LM Studio, the models) and shows the progress. For Tado your browser opens once: **sign in to your Tado account first**, then approve. The installer is not code-signed: Windows SmartScreen warns, click "More info" > "Run anyway". Log: `%USERPROFILE%\.openjarvis\install-log.txt`.
 
 **Advanced, with Git** (normal PowerShell, not administrator):
 
@@ -61,7 +61,7 @@ cd IronMan-JARVIS
 powershell -ExecutionPolicy Bypass -File .\install-jarvis.ps1
 ```
 
-It asks the same questions in the console; run it again to change a choice. Then double-click the **Jarvis** icon. Set your city in `frontend/public/hud.html` (`HOME_CFG`, default London).
+It asks the same questions in the console; run it again to change a choice. Then double-click the **Jarvis** icon. It asks for your city for the HUD weather; change it later with `powershell -ExecutionPolicy Bypass -File tools\set-home-city.ps1`.
 
 ## ⚙️ Optional parts
 

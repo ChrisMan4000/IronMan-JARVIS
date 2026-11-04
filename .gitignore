@@ -143,3 +143,6 @@ tools/npu/models/
 
 # desloppify scan state
 .desloppify/
+
+# HUD home city of this PC (written by tools/set-home-city.ps1)
+frontend/public/hud-home.js

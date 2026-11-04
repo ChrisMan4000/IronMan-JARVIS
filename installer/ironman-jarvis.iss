@@ -77,9 +77,9 @@ begin
 end;
 
 var
-  HuePage, TadoPage, WakePage, ModelPage, VoicePage, TtsPage, RagPage, KeyPage: TWizardPage;
+  HuePage, TadoPage, WakePage, ModelPage, VoicePage, TtsPage, RagPage, KeyPage, CityPage: TWizardPage;
   HueCheck, TadoCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
-  HueIpEdit, KeyEdit: TNewEdit;
+  HueIpEdit, KeyEdit, CityEdit: TNewEdit;
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
   ModelCombo, WhisperCombo: TNewComboBox;
   ClipEdit: TNewEdit;
@@ -496,6 +496,18 @@ begin
   if RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'FIRECRAWL_API_KEY', Saved) and (Saved <> '') then
     AddText(KeyPage, Y, 'A key is already saved on this PC. Leave the box empty to keep it.', COrange, False);
 
+  { home city: ATMOSPHERICS weather and the world-map home point (tools\set-home-city.ps1 writes frontend\public\hud-home.js) }
+  CityPage := NewPage(KeyPage.ID, 'Your city', 'For the weather and the home point on the world map in the HUD.');
+  Y := 0;
+  AddText(CityPage, Y, 'Type the city you live in. The setup looks it up with the free Open-Meteo service (only the city name is sent). Leave the box empty to skip: the HUD then shows London, or keeps the city of an earlier install.', CText, False);
+  AddLink(CityPage, Y, 'Open-Meteo geocoding', 'https://open-meteo.com/en/docs/geocoding-api');
+  AddText(CityPage, Y, 'Your city:', CText, False);
+  CityEdit := TNewEdit.Create(CityPage);
+  CityEdit.Parent := CityPage.Surface;
+  CityEdit.Left := 0; CityEdit.Top := Y; CityEdit.Width := CityPage.SurfaceWidth;
+  Y := Y + ScaleY(30);
+  AddText(CityPage, Y, 'Change it later with tools\set-home-city.ps1 in the install folder.', CText, False);
+
   { an earlier install left its settings (kept at uninstall): pre-fill the answers }
   if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'HUE_BRIDGE_IP', Saved) then Saved := '';
   if (Saved = '') and LoadStringFromFile(ExpandConstant('{%USERPROFILE}\.openjarvis\hue-ip.txt'), Ip8) then Saved := Trim(String(Ip8));
@@ -735,6 +747,7 @@ begin
   else S := S + Space + 'Voice: Kokoro' + NewLine;
   if RagCheck.Checked then S := S + Space + 'Document search (Big RAG)' + NewLine;
   if Trim(KeyEdit.Text) <> '' then S := S + Space + 'Web search key (Firecrawl): entered' + NewLine;
+  if Trim(CityEdit.Text) <> '' then S := S + Space + 'City (weather): ' + Trim(CityEdit.Text) + NewLine;
   if LmStudioInstalled then
     S := S + Space + 'LM Studio: already installed' + NewLine
   else
@@ -774,7 +787,7 @@ begin
 end;
 
 procedure RunSetup;
-var Opts, Params, Clip: String; Run, Code, Rc, Ticks: Integer; Lines: TArrayOfString;
+var Opts, Params, Clip, CityArg: String; Run, Code, Rc, Ticks: Integer; Lines: TArrayOfString;
 begin
   Opts := '';
   if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp ''' + Trim(HueIpEdit.Text) + '''';
@@ -798,6 +811,13 @@ begin
     end;
   end
   else Opts := Opts + ' -TtsChoice ''kokoro''';
+  CityArg := Trim(CityEdit.Text);
+  if CityArg <> '' then
+  begin
+    StringChangeEx(CityArg, '"', '', True);
+    StringChangeEx(CityArg, '''', '''''', True);
+    Opts := Opts + ' -City ''' + CityArg + '''';
+  end;
   { the key goes through this process's environment, never through a command line }
   if Trim(KeyEdit.Text) <> '' then SetEnvironmentVariableW('JARVIS_FIRECRAWL_KEY', Trim(KeyEdit.Text));
   if HueCheck.Checked then
