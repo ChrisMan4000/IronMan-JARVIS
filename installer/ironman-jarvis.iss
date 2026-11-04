@@ -382,7 +382,7 @@ begin
   { Tado }
   TadoPage := NewPage(HuePage.ID, 'Tado Smart Heating (optional)', 'Control your Tado radiator valves.');
   Y := 0;
-  AddText(TadoPage, Y, 'Lets Jarvis set or switch off your Tado heating ("heating off in the living room"). Needs a Tado account. Your browser opens once later, so you can approve the login.', CText, False);
+  AddText(TadoPage, Y, 'Lets Jarvis set or switch off your Tado heating ("heating off in the living room"). Needs a Tado account. Your browser opens once later: sign in to your Tado account there first (the confirm button does nothing before that), then approve the login within 5 minutes.', CText, False);
   AddLink(TadoPage, Y, 'Tado Smart Heating', 'https://www.tado.com/en');
   TadoCheck := AddCheck(TadoPage, Y, 'Use Tado Smart Heating');
 

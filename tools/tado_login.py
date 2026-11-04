@@ -18,7 +18,12 @@ def main() -> None:
     tado = Tado(token_file_path=TOKEN_FILE)
     print("Status:", tado.device_activation_status(), flush=True)
     url = tado.device_verification_url()
-    print("Open this link in your browser and approve:", url, flush=True)
+    print(
+        "Open this link, sign in to your Tado account first (the confirm button does",
+        "nothing before that), then approve within 5 minutes:",
+        url,
+        flush=True,
+    )
     # Opens the default browser (Firefox, Edge, Chrome ...).
     if not webbrowser.open(url):
         print("(Could not open a browser by itself: copy the link above.)", flush=True)

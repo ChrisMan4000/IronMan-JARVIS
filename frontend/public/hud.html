@@ -162,7 +162,7 @@ async function ask(text){
   if(hq){
     add('user',text);hist.push({role:'user',content:text});
     let msg,say;
-    try{const out=[];let ok=true;for(const rm of hq.rooms){const r=await fetch('http://127.0.0.1:8765/hue?room='+encodeURIComponent(rm)+'&state='+hq.state);const j=await r.json();out.push(j.ok&&/Verified by reading back: YES/.test(j.text)?(rm.charAt(0).toUpperCase()+rm.slice(1)+' lights '+hq.state+' (confirmed by the bridge).'):j.text);if(!j.ok)ok=false}msg=out.join(' ');say=ok?(hq.rooms.join(', ')+' '+hq.state+'.'):'Some of that did not work.'}
+    try{const out=[];let ok=true;for(const rm of hq.rooms){const r=await fetch('http://127.0.0.1:8765/hue?room='+encodeURIComponent(rm)+'&state='+hq.state);const j=await r.json();out.push(j.ok&&/\bverified\b/i.test(j.text)&&!/\bpartly\b/i.test(j.text)?(rm.charAt(0).toUpperCase()+rm.slice(1)+' lights '+hq.state+' (confirmed by the bridge).'):j.text);if(!j.ok)ok=false}msg=out.join(' ');say=ok?(hq.rooms.join(', ')+' '+hq.state+'.'):'Some of that did not work.'}
     catch(e){msg='Hue request failed: '+e.message;say='That did not work.'}
     hist.push({role:'assistant',content:msg});add('jarvis',msg);if(on)await speak(say);return}
   const tq=!att?tadoQ(text):null;
@@ -301,7 +301,7 @@ async function speak(t){
     const lim=NOG?30:45,c0=chunks[0];
     if(c0.length>lim+10){let k=-1;const m=c0.slice(10,lim+20).search(/[,;:]/);if(m>=0)k=11+m;else{const sp=c0.lastIndexOf(' ',lim);if(sp>=10)k=sp}
       if(k>0){const a=c0.slice(0,k).trim(),b=c0.slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}}
-  const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(90000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
+  const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(45000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
     if(!r.ok)throw new Error('Speech failed: '+r.status);return ctx.decodeAudioData(await r.arrayBuffer())};
   window.MICMX=0;window.MICPK=0;interrupted=false;const stopB=await bargeStart();
   try{
@@ -317,7 +317,7 @@ async function speak(t){
       playing=null;
       if(interrupted)break;
     }
-  }finally{if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
+  }catch(e){if(e&&(e.name==='TimeoutError'||e.name==='AbortError')){add('sys','(voice did not answer in time, listening again)');return}throw e}finally{if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
   if(interrupted)add('sys','(interrupted)');else await new Promise(r=>setTimeout(r,100));
 }
 cv.style.cursor='default';cv.onmousemove=ev=>{const rg=window.RING;cv.style.cursor=(rg&&Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)<=rg.r)?'pointer':'default'};

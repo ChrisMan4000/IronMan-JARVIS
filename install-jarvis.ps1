@@ -410,16 +410,16 @@ if ($useHue -and -not $FromWizard) {
   Connect-HueBridge (Read-Host "IP address of your Hue bridge (Hue app > Settings > Bridge)").Trim()
 }
 if ($useTado) {
-  Write-Host "Tado login (https://www.tado.com/en): a link appears. Open it in your browser and approve the login."
+  Write-Host "Tado login (https://www.tado.com/en): a link appears. Open it in your browser, SIGN IN to your Tado account first (the confirm button does nothing before that), then approve the login (within 5 minutes)."
   if (-not $FromWizard) { uv run --no-sync python tools\tado_login.py }
   elseif (Test-Path "$Cfg\tado-token.json") { Write-Host "Tado login already saved." }
   else {
-    Write-WizardLine $StatusFile "STEP 9|Tado: approve the login in your browser (it opens by itself, waiting up to 2 minutes)"
+    Write-WizardLine $StatusFile "STEP 9|Tado: on the page that opens, sign in to your Tado account first, then approve (waiting up to 5 minutes)"
     $tOut = Join-Path $env:TEMP 'tado-login-out.txt'; Remove-Item $tOut -ErrorAction SilentlyContinue
     $tErr = Join-Path $env:TEMP 'tado-login-err.txt'; Remove-Item $tErr -ErrorAction SilentlyContinue
     $tp = Start-Process -FilePath uv -ArgumentList 'run','--no-sync','python','-u','tools\tado_login.py' -WorkingDirectory $Repo -RedirectStandardOutput $tOut -RedirectStandardError $tErr -NoNewWindow -PassThru
     $opened = $false
-    for ($w = 0; $w -lt 60 -and -not $tp.HasExited; $w++) {
+    for ($w = 0; $w -lt 150 -and -not $tp.HasExited; $w++) {   # 5 minutes: as long as the Tado login code is valid
       Start-Sleep -Seconds 2
       if ($opened) { continue }
       $all = ''; foreach ($f in $tOut, $tErr) { if (Test-Path $f) { $all += (Get-Content $f -Raw -ErrorAction SilentlyContinue) + "`n" } }
