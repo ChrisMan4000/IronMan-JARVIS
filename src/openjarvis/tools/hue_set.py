@@ -1,7 +1,6 @@
 """Hue tool: switch ONE Philips Hue room on or off right away, then read the state back.
 
-This is the direct path the model and the HUD /hue route use. hue_propose and
-hue_execute are the approval-gated alternative, kept for later and not enabled.
+This is the direct path the model and the HUD /hue route use.
 Room matching rules live in hue_bridge.find_room.
 """
 

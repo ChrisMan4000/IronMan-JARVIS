@@ -1,20 +1,13 @@
-"""Hue tools: matching, bridge client errors, read-back verdicts, approval gate."""
+"""Hue tools: matching, bridge client errors, read-back verdicts."""
 
 from __future__ import annotations
 
 import io
 import json
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from openjarvis.tools import hue_bridge
-from openjarvis.tools.approval_store import (
-    STATUS_APPROVED,
-    STATUS_EXECUTED,
-    TIER_HIGH,
-    ApprovalStore,
-)
 from openjarvis.tools.hue_all_set import (
     FAILED,
     PARTLY,
@@ -24,7 +17,6 @@ from openjarvis.tools.hue_all_set import (
     room_verdict,
 )
 from openjarvis.tools.hue_colors import hex_to_xy, xy_to_hex
-from openjarvis.tools.hue_execute import HueExecuteTool
 from openjarvis.tools.hue_light import (
     HueLightTool,
     LampChange,
@@ -35,7 +27,6 @@ from openjarvis.tools.hue_light import (
 )
 from openjarvis.tools.hue_light_list import lamp_report
 from openjarvis.tools.hue_lights import room_report
-from openjarvis.tools.hue_propose import HUE_ROOM_POWER, HueProposeTool
 from openjarvis.tools.hue_set import HueSetTool
 
 from .conftest import GROUPS, LIGHTS
@@ -299,103 +290,6 @@ def test_hue_light_room_narrows_ambiguous_name(bridge):
     assert bridge.puts == []
     r = HueLightTool().execute(light="strip", room="kitchen", state="on")
     assert r.success and bridge.puts == [("/lights/17/state", {"on": True})]
-
-
-# ---------------------------------------------------------------------- approval gate
-@pytest.fixture
-def approvals(tmp_path, monkeypatch):
-    db = str(tmp_path / "approvals.db")
-    monkeypatch.setattr(
-        "openjarvis.tools.hue_propose.ApprovalStore", lambda: ApprovalStore(db)
-    )
-    monkeypatch.setattr(
-        "openjarvis.tools.hue_execute.ApprovalStore", lambda: ApprovalStore(db)
-    )
-    return db
-
-
-def _request_id(text):
-    return text.split()[1]
-
-
-def test_propose_never_switches(bridge, approvals):
-    r = HueProposeTool().execute(room="office lights", state="on")
-    assert r.success and "Waiting for the user to approve" in r.content
-    assert bridge.puts == []
-    store = ApprovalStore(approvals)
-    act = store.get_action(_request_id(r.content))
-    store.close()
-    assert act.action_type == HUE_ROOM_POWER and act.payload == {
-        "group_id": "4",
-        "room": "Office",
-        "state": "on",
-    }
-
-
-def test_execute_refuses_unless_approved(bridge, approvals):
-    rid = _request_id(HueProposeTool().execute(room="Office", state="on").content)
-    assert (
-        "not approved by the user" in HueExecuteTool().execute(request_id=rid).content
-    )
-    assert "not found" in HueExecuteTool().execute(request_id="nope").content
-    assert HueExecuteTool().execute(request_id="").content == "No request id given."
-    assert bridge.puts == []
-
-
-def test_execute_runs_once_after_approval(bridge, approvals):
-    rid = _request_id(HueProposeTool().execute(room="Office", state="on").content)
-    store = ApprovalStore(approvals)
-    store.update_status(rid, STATUS_APPROVED)
-    store.close()
-    r = HueExecuteTool().execute(request_id=rid)
-    assert r.success and bridge.puts == [("/groups/4/action", {"on": True})]
-    again = HueExecuteTool().execute(request_id=rid)
-    assert (
-        "is %s" % STATUS_EXECUTED in again.content and len(bridge.puts) == 1
-    )  # no replay
-
-
-def test_execute_refuses_expired_and_foreign_requests(bridge, approvals):
-    store = ApprovalStore(approvals)
-    old = store.queue_action(
-        HUE_ROOM_POWER,
-        "x",
-        {"group_id": "4", "room": "Office", "state": "on"},
-        HUE_ROOM_POWER,
-        TIER_HIGH,
-        ttl_hours=1,
-    )
-    other = store.queue_action("tado_set", "x", {}, "tado_set", TIER_HIGH)
-    for rid in (old.id, other.id):
-        store.update_status(rid, STATUS_APPROVED)
-    store._conn.execute(  # move the expiry into the past
-        "UPDATE pending_actions SET expires_at = ? WHERE id = ?",
-        ((datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(), old.id),
-    )
-    store._conn.commit()
-    store.close()
-    assert "has expired" in HueExecuteTool().execute(request_id=old.id).content
-    assert (
-        "is not a Hue request" in HueExecuteTool().execute(request_id=other.id).content
-    )
-    assert bridge.puts == []
-
-
-def test_execute_reports_failed_read_back(bridge, approvals, monkeypatch):
-    rid = _request_id(HueProposeTool().execute(room="Office", state="off").content)
-    store = ApprovalStore(approvals)
-    store.update_status(rid, STATUS_APPROVED)
-    store.close()
-
-    def no_read_back(group_id):
-        raise OSError("timed out")
-
-    monkeypatch.setattr(hue_bridge, "room_lights", no_read_back)
-    r = HueExecuteTool().execute(request_id=rid)
-    assert (
-        not r.success
-        and r.content == "Sent: Office off. Could not read back (OSError)."
-    )
 
 
 def test_power_state_and_lookup_room(bridge):

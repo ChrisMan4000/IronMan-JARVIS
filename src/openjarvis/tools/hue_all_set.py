@@ -1,7 +1,7 @@
 """Hue tool: switch ALL Philips Hue rooms on or off and report per room.
 
 Each room is switched, then every light is checked on its own (on/off and
-reachable) with hue_bridge.room_verdict, the check hue_set and hue_execute use too.
+reachable) with hue_bridge.room_verdict, the check hue_set uses too.
 """
 
 from __future__ import annotations

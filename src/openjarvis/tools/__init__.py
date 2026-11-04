@@ -49,16 +49,6 @@ except ImportError:
     pass
 
 try:
-    import openjarvis.tools.hue_propose  # noqa: F401
-except ImportError:
-    pass
-
-try:
-    import openjarvis.tools.hue_execute  # noqa: F401
-except ImportError:
-    pass
-
-try:
     import openjarvis.tools.hue_set  # noqa: F401
 except ImportError:
     pass
