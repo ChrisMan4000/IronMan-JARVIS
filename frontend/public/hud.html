@@ -45,7 +45,7 @@ let hist=[{role:'system',content:'You are Jarvis, a concise voice assistant. Ans
 const LABEL={idle:'STANDBY',listening:'LISTENING',thinking:'PROCESSING',speaking:'SPEAKING'};
 // Add one line to the log. The text is inserted as plain text (never as HTML), so text from the web,
 // documents or the model cannot inject code; only real http(s) addresses become clickable links.
-function putBold(d,t){t=String(t);let p=0;t.replace(/\*\*([^*\n]+?)\*\*/g,(m,x,i)=>{putPlain(d,t.slice(p,i));const b=document.createElement("b");putPlain(b,x);d.appendChild(b);p=i+m.length;return m});putPlain(d,t.slice(p))}
+function putBold(d,t){t=String(t).replace(/^([ \t]*)\*[ \t]+/gm,"$1\u2022 ");let p=0;t.replace(/\*\*([^*\n]+?)\*\*|\*(?=\S)([^*\n]*?\S)\*/g,(m,x,y,i)=>{putPlain(d,t.slice(p,i));const b=document.createElement("b");putPlain(b,x||y);d.appendChild(b);p=i+m.length;return m});putPlain(d,t.slice(p))}   // **bold** and *bold* (italic is kept for predictions); "* " at a line start is a bullet
 function putText(d,t){t=String(t);let p=0;t.replace(/~~([^~\n]+?)~~/g,(m,x,i)=>{putBold(d,t.slice(p,i));const e=document.createElement("i");putBold(e,x);d.appendChild(e);p=i+m.length;return m});putBold(d,t.slice(p))}
 function putPlain(d,t){t=String(t);let p=0;
   t.replace(/https?:\/\/[^\s<>"'\])]+/g,(u,i)=>{d.appendChild(document.createTextNode(t.slice(p,i)));
@@ -89,6 +89,9 @@ function setFile(f){
 (function(){const f=window.fetch.bind(window);window.fetch=function(u,o){try{if(location.port==='8443'&&typeof u==='string'){if(u.indexOf('http://127.0.0.1:8765')===0)u='/helper'+u.slice(21);else if(u.indexOf('http://127.0.0.1:8766')===0)u='/wake'+u.slice(21);}}catch{/* not a helper URL: leave it unchanged */}return f(u,o)}})();
 const DOCBASE=(location.port==='8443'?'/helper':'http://127.0.0.1:8765')+'/doc?f=';
 (()=>{const s=document.createElement('style');s.textContent='#log .src,#log .lnk{font-size:0.7vh;padding-left:1.6em}.src:before{content:"SOURCES > ";opacity:.6}.src a{color:#ff9a3d;margin-right:.8em;text-decoration:underline;word-break:break-all}';document.head.appendChild(s)})();
+function linkFromSearch(u,ok){   // true when a web search really returned this address (or a longer one under it)
+  const k=s=>{try{const p=new URL(s);return(p.hostname.replace(/^www\./,'')+p.pathname.replace(/\/+$/,'')).toLowerCase()}catch{return''}};
+  const a=k(u);return !!a&&ok.some(x=>{const b=k(x);return b===a||b.startsWith(a+'/')})}
 function splitReply(r){
   const files=[],urls=[],keep=[],UR=/https?:\/\/[^\s;,)\]>"']+/g;
   r=r.replace(/([^\n])[ \t]+((?:sources?|links?)[ \t]*:[ \t]*(?:https?:|[^\s;]+\.[A-Za-z0-9]{2,5}))/gi,'$1\n$2');r.split('\n').forEach(line=>{
@@ -98,7 +101,7 @@ function splitReply(r){
     (body.match(UR)||[]).forEach(u=>urls.push(u.replace(/[.]+$/,'')));
     body.replace(UR,' ').split(/;|\n/).map(s=>s.replace(/^\s*(?:[-\u2022*]|\[\d+\]|\d+[.)])\s*/,'').replace(/\s*\(chunk[^)]*\)\s*$/i,'').replace(/[*`[\]]/g,'').trim()).filter(s=>/\.[A-Za-z0-9]{2,5}$/.test(s)).forEach(f=>files.push(f));
   });
-  const shown=keep.join('\n').trim();
+  const shown=keep.join('\n').replace(/\[([^\]]*)\]\(\s*(https?:\/\/[^)\s]+)\s*\)/g,(m,t,u)=>{urls.push(u);return t}).replace(UR,u=>{urls.push(u.replace(/[.]+$/,''));return ''}).replace(/[ \t]+([.,;:!?])/g,'$1').replace(/[ \t]+\n/g,'\n').replace(/[ \t]{2,}/g,' ').trim();   // links written inside the text are shown in the LINKS line instead
   const spoken=shown.replace(new RegExp('(?:'+CONFRE.source+')[.,:;]?','gi'),'').replace(/\[\d+(?:\s*,\s*\d+)*\]/g,'').replace(/\s+/g,' ').trim();
   return {shown:shown,files:[...new Set(files)],urls:[...new Set(urls)],spoken:spoken||shown};
 }
@@ -210,17 +213,17 @@ async function ask(text){
     else{text=text||'Please summarize this file.';shown=text+'  [file: '+a.name+']';content=text+'\n\n--- '+a.name+' ---\n'+a.data}}
   add('user',shown);window.lampSent=Date.now()/1000;const um={role:'user',content:content};hist.push(um);
   if(hist.length>41)hist.splice(1,hist.length-41);
-  let reply;
+  let reply,okUrls=[];   // okUrls: addresses a real web search returned in this turn (null: cannot be checked)
   try{
     const c=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:(/\b(lights?|lamps?|hue)\b/i.test(text)?[hist[0],um]:hist).map((m,i)=>i===0&&m.role==='system'?{role:'system',content:m.content+' Current date: '+new Date().toDateString()+'. For news, weather and other current facts, call web_search and summarize the returned results, then end with a Links: line of the result URLs.'}:m)})});
     if(!c.ok)throw new Error('Chat failed: '+c.status);
     reply=((await c.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
   }catch(e){const i=hist.indexOf(um);if(i>=0)hist.splice(i,1);throw e}
-  if(!img&&/\b(weather|forecast|temperature|news|headlines?|today|tonight|tomorrow|latest|right now|price of|stock|score|who won|exchange rate|wetter|nachrichten|aktuell|heute|morgen|kurs)\b/i.test(text)){try{await new Promise(r=>setTimeout(r,1300));const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.web)||0)>(window.lampSent||0))){const sr=await(await fetch("http://127.0.0.1:8765/search?q="+encodeURIComponent(text))).json();if(sr.ok&&sr.text){const c2=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:[{role:'system',content:'You are J.A.R.V.I.S. Current date: '+new Date().toDateString()+'. Answer the question briefly using ONLY the web results given. End with a Links: line of the result URLs.'},{role:'user',content:text+'\n\nWeb results:\n'+sr.text.slice(0,4000)}]})});if(c2.ok){const r2=((await c2.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(r2)reply=r2}}}}catch{/* follow-up request failed: keep the first reply */}}
+  if(!img&&/\b(weather|forecast|temperature|news|headlines?|today|tonight|tomorrow|latest|right now|price of|stock|score|who won|exchange rate|wetter|nachrichten|aktuell|heute|morgen|kurs)\b/i.test(text)){try{await new Promise(r=>setTimeout(r,1300));const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.web)||0)>(window.lampSent||0))){const sr=await(await fetch("http://127.0.0.1:8765/search?q="+encodeURIComponent(text))).json();if(sr.ok&&sr.text){okUrls=okUrls.concat(sr.text.match(/https?:\/\/[^\s;,)\]>"']+/g)||[]);const c2=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:[{role:'system',content:'You are J.A.R.V.I.S. Current date: '+new Date().toDateString()+'. Answer the question briefly using ONLY the web results given. End with a Links: line of the result URLs.'},{role:'user',content:text+'\n\nWeb results:\n'+sr.text.slice(0,4000)}]})});if(c2.ok){const r2=((await c2.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(r2)reply=r2}}}}catch{/* follow-up request failed: keep the first reply */}}
   // web_search ran but the model left out the Links line (small models often do): add the addresses the search returned
-  if(!img&&!/\bLinks:/i.test(reply)){try{const t=((await(await fetch(JarvisHud.helperUrl('/'))).json()).tools)||{};const wl=t.web_links;if((t.web||0)>(window.lampSent||0)&&wl&&wl.at>=(window.lampSent||0)&&wl.urls.length)reply+='\nLinks: '+wl.urls.join('; ')}catch{/* helper not reachable: the reply stays without links */}}
+  try{const t=((await(await fetch(JarvisHud.helperUrl('/'))).json()).tools)||{};const wl=t.web_links;if((t.web||0)>(window.lampSent||0)&&wl&&wl.at>=(window.lampSent||0)&&wl.urls.length){okUrls=okUrls.concat(wl.urls);if(!img&&!/\bLinks:/i.test(reply))reply+='\nLinks: '+wl.urls.slice(0,3).join('; ')}}catch{okUrls=null/* helper not reachable: links cannot be checked, they stay */}
   if(img)um.content=text+' [image "'+img+'" was attached here]';
-  hist.push({role:'assistant',content:reply});const pr=splitReply(reply);addJ(pr.shown);let pf=pr.files;if(pf.length){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const nw=document.createElement("div");nw.className="src";nw.style.color="#ff9a3d";nw.style.fontWeight="bold";nw.textContent="NOTE: document search did not run, sources hidden: "+pf.join("; ");log.appendChild(nw);pf=[]}}catch{/* keep the reply without the search note */}}addSources(pf,pr.urls);if(pf.length||pr.urls.length)lastSrc={files:pf,urls:pr.urls};
+  hist.push({role:'assistant',content:reply});const pr=splitReply(reply);let hid=0;if(okUrls){const n=pr.urls.length;pr.urls=pr.urls.filter(u=>linkFromSearch(u,okUrls));hid=n-pr.urls.length}addJ(pr.shown);let pf=pr.files;if(pf.length){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const nw=document.createElement("div");nw.className="src";nw.style.color="#ff9a3d";nw.style.fontWeight="bold";nw.textContent="NOTE: document search did not run, sources hidden: "+pf.join("; ");log.appendChild(nw);pf=[]}}catch{/* keep the reply without the search note */}}addSources(pf,pr.urls);if(hid){const nh=document.createElement('div');nh.className='lnk';nh.style.opacity='.6';nh.textContent='('+hid+(hid>1?' links':' link')+' hidden: not from a web search)';log.appendChild(nh)}if(pf.length||pr.urls.length)lastSrc={files:pf,urls:pr.urls};
   if(on)await speak(pr.spoken);
 }
 async function runText(text){state='thinking';try{await ask(text)}catch(e){add('sys',e.message)}}
@@ -289,7 +292,7 @@ async function bargeStart(){
   return ()=>{closed=true;clearInterval(timer);try{sp.disconnect()}catch{/* already disconnected */}try{src.disconnect()}catch{/* already disconnected */}st.getTracks().forEach(x=>x.stop())};
 }
 async function speak(t){
-  const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>]/g,'').replace(/\s+/g,' ').trim();   // links are not read aloud (markdown links keep their text)
+  const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>~]/g,'').replace(/\s+/g,' ').trim();   // links and the ~~ / ** marks are not read aloud (markdown links keep their text)
   if(!clean||!on)return;
   // the source list is never read aloud; the rest of the answer is read in full, sentence by sentence (the next piece is prepared while one plays)
   let spoken=clean.replace(/\s*\bSources?:.*$/i,'').trim();
@@ -299,7 +302,7 @@ async function speak(t){
   for(const p of parts){cur+=(cur?' ':'')+p;if(cur.length>=40){chunks.push(cur);cur=''}}
   if(cur)chunks.push(cur);{ // the first piece is kept short so the voice starts sooner (shorter still on a PC without a GPU); the rest follows while it plays
     const lim=NOG?30:45,c0=chunks[0];
-    if(c0.length>lim+10){let k=-1;const m=c0.slice(10,lim+20).search(/[,;:]/);if(m>=0)k=11+m;else{const sp=c0.lastIndexOf(' ',lim);if(sp>=10)k=sp}
+    if(c0.length>lim+10){let k=-1;const m=c0.slice(10,lim+20).search(/[,;:]/);if(m>=0)k=11+m;   // only at a comma, never in the middle of a phrase (that sounded cut off)
       if(k>0){const a=c0.slice(0,k).trim(),b=c0.slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}}
   const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(45000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
     if(!r.ok)throw new Error('Speech failed: '+r.status);return ctx.decodeAudioData(await r.arrayBuffer())};

@@ -34,7 +34,7 @@ def test_links_file_round_trip(tmp_path, monkeypatch):
     assert helper_stats.read_web_links() is None  # no search yet
     assert tool_marks.save_web_links(RESULT)
     got = helper_stats.read_web_links()
-    assert got["at"] > 0 and len(got["urls"]) == 3
+    assert got["at"] > 0 and len(got["urls"]) == 4  # all different addresses are kept (up to 20)
     links.write_text("not-a-time\n", encoding="utf-8")
     assert helper_stats.read_web_links() is None
 

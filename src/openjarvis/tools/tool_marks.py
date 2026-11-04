@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
 WEB_LINKS_FILE = os.path.join(JARVIS_DIR, "tool-web_search-links.txt")
-MAX_LINKS = 3
+MAX_LINKS = 3  # links the HUD adds when the model wrote none
+SAVED_LINKS = 20  # links kept, so the HUD can check the model's links against the search
 _URL = re.compile(r"https?://[^\s\"'<>()\[\]{}|\\^`]+")
 # pictures, styles, scripts and redirect helpers in page text are no use as links
 _NOT_A_PAGE = re.compile(
@@ -42,7 +43,7 @@ def result_links(text: str, limit: int = MAX_LINKS) -> list[str]:
 def save_web_links(text: str) -> bool:
     """Write "<time>" and the result's links (one per line) for the helper; False if
     the file could not be written (the answer itself is not affected)."""
-    lines = [str(time.time()), *result_links(text)]
+    lines = [str(time.time()), *result_links(text, SAVED_LINKS)]
     try:
         with open(WEB_LINKS_FILE + ".tmp", "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
