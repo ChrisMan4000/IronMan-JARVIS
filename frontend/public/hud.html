@@ -278,14 +278,14 @@ async function bargeStart(){
       if(r.ok){const tx=((await r.json()).text||'').trim();
         window.LASTH=(tx||'(empty)')+' #'+(window.NC=(window.NC||0)+1)+' '+(Date.now()-T0)+'ms';
         (window.HH=window.HH||[]).push(tx||'(empty)');if(window.HH.length>4)window.HH.shift();
-        if(!closed&&(W1(tx)||tx.split(/\s+/).length<=3&&/\b(stop|stopp|nope|top|stock|shop|step|stuff)\b/i.test(tx))){interrupted=true;if(playing)try{playing.stop()}catch{/* already stopped */}}}
+        if(!closed&&(W1(tx)||tx.split(/\s+/).length<=3&&/\b(stop|stopp|halt|quiet|enough|cancel|silence|nope|top|stock|shop|step|stuff|stuck|stub)\b/i.test(tx))){interrupted=true;if(playing)try{playing.stop()}catch{/* already stopped */}}}
     }catch{/* transcription failed: keep speaking */}
     window.TQ--;chk=false};
   const sp=ctx.createScriptProcessor(4096,1,1),ring=[];let cap=null;
   sp.onaudioprocess=e=>{const x=new Float32Array(e.inputBuffer.getChannelData(0));ring.push(x);if(ring.length>6)ring.shift();
-    if(cap){cap.push(x);if(cap.length>=14){const c=cap;cap=null;chk=false;sendClip(c)}}};
+    if(cap){cap.push(x);if(cap.length>=9){const c=cap;cap=null;chk=false;sendClip(c)}}};
   src.connect(sp);sp.connect(ctx.destination);
-  const checkWord=()=>{if(cap||chk||(window.TQ||0)>=2)return;chk=true;window.CK=(window.CK||0)+1;cap=ring.slice()};
+  const checkWord=()=>{if(cap||chk||(window.TQ||0)>=3)return;chk=true;window.CK=(window.CK||0)+1;cap=ring.slice()};
   const timer=setInterval(()=>{an.getFloatTimeDomainData(d);let s=0;for(const v of d)s+=v*v;const r=Math.sqrt(s/d.length);
     window.BL=r;window.MICPK=Math.max((window.MICPK||0)*0.97,r);window.MICMX=Math.max(window.MICMX||0,r);loud=r>BARGE?loud+1:0;
     window.MICLD=loud;if(loud>=1&&!chk&&!closed)checkWord();},50);
@@ -305,7 +305,7 @@ async function speak(t){
   for(const p of parts){cur+=(cur?' ':'')+p;if(cur.length>=40){chunks.push(cur);cur=''}}
   if(cur)chunks.push(cur);{ // the first piece is kept short so the voice starts sooner (shorter still on a PC without a GPU); the rest follows while it plays
     const lim=NOG?30:45,c0=chunks[0];
-    if(c0.length>lim+10){let k=-1;const m=c0.slice(10,lim+20).search(/[,;:]/);if(m>=0)k=11+m;   // only at a comma, never in the middle of a phrase (that sounded cut off)
+    if(c0.length>lim+10){let k=-1;const se=c0.search(/[.!?]["')\]]*\s/);if(se>=11&&se<=lim+20)k=se+1;else{const m=c0.slice(lim-5,lim+30).search(/[,;:]\s/);if(m>=0&&c0.length-(lim-5+m)>25)k=lim-4+m}   // only at a comma, never in the middle of a phrase (that sounded cut off)
       if(k>0){const a=c0.slice(0,k).trim(),b=c0.slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}}
   const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(45000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
     if(!r.ok)throw new Error('Speech failed: '+r.status);return ctx.decodeAudioData(await r.arrayBuffer())};
@@ -655,10 +655,10 @@ const hist=(x,y,w,h,fn,col)=>{const n=Math.floor(w/(5*u));g.fillStyle=col;for(le
 
 
 /* neural brain (hud-brain.js) replaces the whole ring; without WebGL the old ring below is drawn */
-if(window.JarvisBrain&&JarvisHud.neural===undefined){const bc=document.createElement('canvas');bc.id='brainCv';bc.style.cssText='position:fixed;left:0;top:0;pointer-events:none;mix-blend-mode:screen;z-index:1';document.body.appendChild(bc);
+if(window.JarvisBrain&&!/[?&]nobrain/.test(location.search)&&JarvisHud.neural===undefined){const bc=document.createElement('canvas');bc.id='brainCv';bc.style.cssText='position:fixed;left:0;top:0;pointer-events:none;mix-blend-mode:screen;z-index:1';document.body.appendChild(bc);
   JarvisHud.neural=JarvisBrain(bc,{detail:document.documentElement.classList.contains('phn')?0.5:1,fps:MAX_FPS});if(!JarvisHud.neural){bc.remove();JarvisHud.neural=null}}
 const NB=JarvisHud.neural;
-if(NB){const bs=Math.round(Rc*2.6),k=(cx-bs/2|0)+','+(cy-bs/2|0)+','+bs;if(NB.pk!==k){NB.pk=k;Object.assign(NB.canvas.style,{left:(cx-bs/2|0)+'px',top:(cy-bs/2|0)+'px',width:bs+'px',height:bs+'px'})}
+if(NB){const bs=Math.round(R*2.1*1.03*2.6),k=(cx-bs/2|0)+','+(cy-bs/2|0)+','+bs;if(NB.pk!==k){NB.pk=k;Object.assign(NB.canvas.style,{left:(cx-bs/2|0)+'px',top:(cy-bs/2|0)+'px',width:bs+'px',height:bs+'px'})}
   NB.setState(state);NB.setLevel(Math.min(1,level*1.6));NB.setFps(MAX_FPS)}
 /* dark disc + polar grid */
 if(!NB){g.fillStyle='rgba(0,8,14,0.55)';g.beginPath();g.arc(cx,cy,Rc+20*u,0,PI*2);g.fill();
