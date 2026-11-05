@@ -32,7 +32,7 @@ html.phn #mlist{position:fixed !important;left:50% !important;top:118px !importa
 html.phn #log,html.phn #bar{animation:phnIn 1s ease 2s both}
 html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + var(--log-h) - 32px) !important;animation:phnIn 1s ease 2s both}
 @keyframes phnIn{from{opacity:0}}
-</style><script src="hud-shared.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
+</style><script src="hud-shared.js"></script><script src="hud-brain.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
 <canvas id="cv"></canvas><canvas id="pcv"></canvas><div id="log"></div>
 <div id="bar"><button id="tClip" title="Attach image or file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.3-8.3"/></svg></button><span id="tChip"></span><input type="text" id="tIn" placeholder="Type a message..." autocomplete="off"><button id="tSend" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button><button id="tMic" title="Two-way voice (F6). The wake word works too" aria-label="Voice"><svg viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="6" y="1" width="4" height="8"/><rect x="5" y="2" width="1" height="6"/><rect x="10" y="2" width="1" height="6"/><rect x="7" y="3" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="7" y="5" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="3" y="6" width="1" height="3"/><rect x="12" y="6" width="1" height="3"/><rect x="4" y="9" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/><rect x="5" y="10" width="6" height="1"/><rect x="7" y="11" width="2" height="2"/><rect x="5" y="13" width="6" height="1"/></svg></button><input type="file" id="tFile" hidden accept="image/*,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.log,.yaml,.yml,.toml,.xml,.ps1,.sh"></div>
 <script src="hud-home.js" onerror="this.remove()"></script><script>
@@ -291,8 +291,11 @@ async function bargeStart(){
     window.MICLD=loud;if(loud>=1&&!chk&&!closed)checkWord();},50);
   return ()=>{closed=true;clearInterval(timer);try{sp.disconnect()}catch{/* already disconnected */}try{src.disconnect()}catch{/* already disconnected */}st.getTracks().forEach(x=>x.stop())};
 }
+/* temperatures are read aloud in words: 12°C -> 'twelve degrees centigrade', -3 °F -> 'minus three degrees Fahrenheit' */
+function spokenTemp(t){return t.replace(/(?:(?<![\w.])(-|\u2212)\s?)?(\d+(?:[.,]\d+)?)\s*(?:°\s*([CF])\b|\u2103|\u2109|°)/gi,(m,sg,n,u)=>{const f=m.indexOf('\u2109')>=0?'F':m.indexOf('\u2103')>=0?'C':(u||'').toUpperCase();
+  return (sg?'minus ':'')+n+(n==='1'?' degree':' degrees')+(f==='C'?' centigrade':f==='F'?' Fahrenheit':'')})}
 async function speak(t){
-  const clean=t.replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>~]/g,'').replace(/\s+/g,' ').trim();   // links and the ~~ / ** marks are not read aloud (markdown links keep their text)
+  const clean=spokenTemp(t).replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>~]/g,'').replace(/\s+/g,' ').trim();   // links and the ~~ / ** marks are not read aloud (markdown links keep their text)
   if(!clean||!on)return;
   // the source list is never read aloud; the rest of the answer is read in full, sentence by sentence (the next piece is prepared while one plays)
   let spoken=clean.replace(/\s*\bSources?:.*$/i,'').trim();
@@ -651,10 +654,16 @@ const ser=(a,mv)=>(i,n)=>{const j=a.length-n+i;return j>=0?a[j]/mv:0};
 const hist=(x,y,w,h,fn,col)=>{const n=Math.floor(w/(5*u));g.fillStyle=col;for(let i=0;i<n;i++){const v=cl(fn(i,n));g.globalAlpha=0.3+0.65*v;g.fillRect(x+i*5*u,y+h-v*h,3.5*u,Math.max(1,v*h))}g.globalAlpha=1};
 
 
+/* neural brain (hud-brain.js) replaces the whole ring; without WebGL the old ring below is drawn */
+if(window.JarvisBrain&&JarvisHud.neural===undefined){const bc=document.createElement('canvas');bc.id='brainCv';bc.style.cssText='position:fixed;left:0;top:0;pointer-events:none;mix-blend-mode:screen;z-index:1';document.body.appendChild(bc);
+  JarvisHud.neural=JarvisBrain(bc,{detail:document.documentElement.classList.contains('phn')?0.5:1,fps:MAX_FPS});if(!JarvisHud.neural){bc.remove();JarvisHud.neural=null}}
+const NB=JarvisHud.neural;
+if(NB){const bs=Math.round(Rc*2.6),k=(cx-bs/2|0)+','+(cy-bs/2|0)+','+bs;if(NB.pk!==k){NB.pk=k;Object.assign(NB.canvas.style,{left:(cx-bs/2|0)+'px',top:(cy-bs/2|0)+'px',width:bs+'px',height:bs+'px'})}
+  NB.setState(state);NB.setLevel(Math.min(1,level*1.6));NB.setFps(MAX_FPS)}
 /* dark disc + polar grid */
-g.fillStyle='rgba(0,8,14,0.55)';g.beginPath();g.arc(cx,cy,Rc+20*u,0,PI*2);g.fill();
+if(!NB){g.fillStyle='rgba(0,8,14,0.55)';g.beginPath();g.arc(cx,cy,Rc+20*u,0,PI*2);g.fill();
 for(let i=1;i<=10;i++)A(RS*i*0.22,0,PI*2,1,C,0.1);
-for(let i=0;i<24;i++){const p=P(RS*0.2,i*PI/12),q=P(Rc,i*PI/12);g.globalAlpha=0.07;g.strokeStyle=C;g.lineWidth=u;ln(p[0],p[1],q[0],q[1])}
+for(let i=0;i<24;i++){const p=P(RS*0.2,i*PI/12),q=P(Rc,i*PI/12);g.globalAlpha=0.07;g.strokeStyle=C;g.lineWidth=u;ln(p[0],p[1],q[0],q[1])}}
 
 /* baseline with traveling pulses */
 const WG=JarvisHud.wings(LY,Rc),{xl,xr,gl,gr2}=WG;
@@ -685,6 +694,7 @@ if(!cmp&&wr>200*u){
     const fr=FNR[k];if(!fr)continue;tx(fr.n,x1,y+12*u,11*u,dim);tx(Math.round(fr.v)+fr.s,x1+wr,y+12*u,12*u,col,'right');
     g.fillStyle=col;g.globalAlpha=0.1;g.fillRect(x1,y+20*u,wr,10*u);g.globalAlpha=0.55;g.fillRect(x1,y+20*u,wr*Math.min(1,fr.v/fr.m),10*u);g.globalAlpha=1}}
 
+if(!NB){   /* old ring (only without WebGL) */
 /* compass */
 g.shadowColor=C;g.shadowBlur=8*u;
 A(Rc,0,PI*2,1.5,C,1);A(Rc+22*u,0,PI*2,1.5,C,1);
@@ -787,6 +797,7 @@ ln(cx-RS*0.8,cy,cx-RS*0.3,cy);ln(cx+RS*0.3,cy,cx+RS*0.8,cy);ln(cx,cy-RS*0.8,cx,c
 const core=g.createRadialGradient(cx,cy,0,cx,cy,RS*0.4);
 core.addColorStop(0,'rgba(255,255,255,'+(0.6+level+0.2*br)+')');core.addColorStop(0.4,'rgba('+c+','+(0.4+level)+')');core.addColorStop(1,'rgba('+c+',0)');
 g.fillStyle=core;g.beginPath();g.arc(cx,cy,RS*(0.4+level*0.2+0.06*br),0,PI*2);g.fill();
+}   /* end old ring */
 g.shadowBlur=0;g.globalAlpha=1;g.setLineDash([]);
 }
 
@@ -1044,4 +1055,4 @@ function done(){try{localStorage.setItem(K,'1')}catch{/* storage blocked (privat
 b.onclick=function(){if(dp){dp.prompt();dp.userChoice.then(done,done);return}pn.style.display=pn.style.display==='block'?'none':'block'};
 pn.querySelector('button').onclick=done;
 document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script>if(!document.documentElement.classList.contains('phn')){document.write('<script src="hud-boot-scene.js"></'+'script><script src="hud-boot.js"></'+'script>')}   /* parser-blocking on purpose: the boot overlay must cover the HUD before its first paint; phone layout (class set in <head>) has no boot animation */</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
-</body></html>
+</body></html>

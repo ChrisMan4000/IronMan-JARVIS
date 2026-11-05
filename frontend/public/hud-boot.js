@@ -147,7 +147,7 @@
   /* ---------- hand-over to the real HUD ---------- */
   const capture = JarvisHud.capture;
   let captureState = CAPTURE.COLLECTING, freezeCount = 0, snapshot = null, collected = [], textReveal = [];
-  let mapDelays = null, brainSeeds = null, domTexts = null, done = false;
+  let mapDelays = null, brainSeeds = null, domTexts = null, done = false, brainIntro = false;
   const log = document.getElementById('log'), bar = document.getElementById('bar');
   capture.texts = new Map();
   [log, bar].forEach((el) => { if (el) { el.style.zIndex = '101'; el.style.clipPath = 'inset(100% 0 0 0)'; } });
@@ -342,6 +342,8 @@
 
   function drawFrame(t) {
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.clearRect(0, 0, W, H);
+    const NB = JarvisHud.neural;   // the neural brain (hud-brain.js) assembles above this overlay instead of the old ring pieces
+    if (NB && !brainIntro) { brainIntro = true; NB.canvas.style.zIndex = 101; NB.intro(Math.max(1.5, TIME.burst - t)); }
     drawGrid(t);
     const starFade = 1 - clamp01((t - TIME.starsFade) / 0.6);
     if (starFade > 0) {   // star tunnel
@@ -355,18 +357,18 @@
     const zoom = 1.08 - 0.08 * easeOut(clamp01((t - TIME.starsFade) / 0.8));
     ctx.translate(CX, CY); ctx.scale(zoom, zoom); ctx.translate(-CX, -CY);
     pieces.forEach((p) => {
-      if (p.wing) return;   // the wings come from the HUD snapshot
+      if (p.wing || NB) return;   // the wings come from the HUD snapshot; the ring pieces only without the brain
       if (p.update) p.update();
       if (t < p.startAt + p.flyTime) { drawPiece(p, t - 0.1, true); drawPiece(p, t - 0.05, true); }
       drawPiece(p, t, false);
     });
     ctx.restore(); ctx.shadowBlur = 0; ctx.setLineDash([]);
-    if (t > TIME.flash) {   // the core lights up and pulses
+    if (!NB && t > TIME.flash) {   // the core lights up and pulses
       const ca2 = clamp01((t - TIME.flash) / 0.4), pulse = 0.5 + 0.5 * Math.sin((t - TIME.burst) * 7), gr = ctx.createRadialGradient(CX, CY, 0, CX, CY, coreR * 0.46);
       gr.addColorStop(0, 'rgba(255,255,255,' + (0.6 + 0.2 * pulse) * ca2 + ')'); gr.addColorStop(0.4, 'rgba(25,211,255,' + 0.4 * ca2 + ')'); gr.addColorStop(1, 'rgba(25,211,255,0)');
       ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(CX, CY, coreR * 0.46, 0, TAU); ctx.fill();
     }
-    if (t > TIME.burst) {   // white flash and an orange shock ring
+    if (!NB && t > TIME.burst) {   // white flash and an orange shock ring
       const b = clamp01((t - TIME.burst) / 0.7);
       ctx.globalAlpha = (1 - b) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(CX, CY, coreR * 0.35 * (1 + b * 2), 0, TAU); ctx.fill();
       ctx.globalAlpha = 1 - b; ctx.strokeStyle = COLOR.orange; ctx.lineWidth = 3 * u; ctx.beginPath(); ctx.arc(CX, CY, coreR * (0.4 + b * 5), 0, TAU); ctx.stroke();
@@ -388,7 +390,7 @@
     if (done) return;
     done = true; restoreHud();
     overlay.style.transition = 'opacity .4s'; overlay.style.pointerEvents = 'none'; overlay.style.opacity = '0';
-    setTimeout(() => overlay.remove(), 500);
+    setTimeout(() => { overlay.remove(); if (JarvisHud.neural) JarvisHud.neural.canvas.style.zIndex = 1; }, 500);
   }
   function tick(now) {
     if (!overlay.isConnected) return;

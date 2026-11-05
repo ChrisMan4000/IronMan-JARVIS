@@ -1,6 +1,6 @@
 # IronMan J.A.R.V.I.S. – An IronMan-Style Web-Interface with all the Bells & Whistles
 
-*Tony Stark had a billion dollars and a genius brain. I had a free Claude web chat and 72 hours.*
+*Tony Stark had a billion dollars and a genius brain. I had a Claude chat and about 120 hours.*
 
 ![The IronMan J.A.R.V.I.S. HUD](docs/images/hud-screenshot.png)
 <sub>The HUD at 5120x1440. Click the image to see it full size.</sub>
@@ -18,7 +18,7 @@
 
 > <i>🏹 Local AI is a [countervailing technology](https://www.lesswrong.com/posts/TuBYwefHQLDXttwdP/countervailing-technologies) (Samuele Marro): it moves power back towards the little guy. Nobody can switch it off, charge for it or read along. Jarvis is my little crossbow.</i>
 
-- I am **not a developer**. This is my **first GitHub project**, **vibecoded** in **72 hours** with the free Claude web chat.
+- I am **not a developer**. This is my **first GitHub project**, **vibecoded** in about **120 hours** (24 days, Oct 12 to Nov 5, 2026) in the Claude chat, first the free web version, later a paid plan.
 - Then Claude cleaned up the code with [desloppify](https://github.com/peteromallet/desloppify), a code-quality scanner for AI-written code: shared helpers instead of copies, clearer names, safer scripts and about 260 automatic tests (strict scores from 13-24 to 70-80 out of 100).
 - It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). But it adapts the models to your specific hardware, so a decent laptop should run it as well with a lighter model.
 - Be nice. Open an issue if something breaks and tell me what you saw.
