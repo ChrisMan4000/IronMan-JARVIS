@@ -9,6 +9,7 @@
 param(
   [switch]$FromWizard,
   [switch]$WantHue, [string]$HueIp = '',
+  [switch]$WantSonos, [string]$SonosIp = '',
   [switch]$WantTado, [switch]$WantWake, [switch]$WantRag,
   [int]$ModelTier = 0,          # 1-3 = download that size ($JarvisModelTiers in tools\jarvis-common.ps1), 0 = none
   [string]$ModelId = '',        # an LM Studio model that is already installed
@@ -48,6 +49,14 @@ function Write-CheckResult([string]$Name, [bool]$Ok, [string]$Hint) {
   if ($Ok) { Write-Host "  OK       $Name" -ForegroundColor Green }
   else     { Write-Host "  MISSING  $Name   ($Hint)" -ForegroundColor Yellow }
 }
+function Save-SonosIp([string]$Ip) {
+# remembers the Sonos speaker address (user variable SONOS_IP); the speaker is controlled directly in the home network, no login needed
+if ($Ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { Write-Host "That does not look like an IP address. Skipped Sonos; run this script again." -ForegroundColor Yellow; return }
+[Environment]::SetEnvironmentVariable('SONOS_IP', $Ip, 'User')
+$env:SONOS_IP = $Ip
+Write-Host "Sonos address saved." -ForegroundColor Green
+}
+
 function Connect-HueBridge([string]$Ip) {
   # asks the Hue bridge for an app key (the round button on the bridge must have been pressed in the last 30 seconds)
   if ($Ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { Write-Host "That does not look like an IP address. Skipped Hue; run this script again." -ForegroundColor Yellow; return }
@@ -216,10 +225,11 @@ Write-Host "All programs found." -ForegroundColor Green
 
 # ---------- 2. options and settings file ----------
 Write-InstallStep 2 "Writing your settings file"
-if ($FromWizard) { $useHue = [bool]$WantHue; $useTado = [bool]$WantTado; $useWake = [bool]$WantWake }
+if ($FromWizard) { $useHue = [bool]$WantHue; $useTado = [bool]$WantTado; $useWake = [bool]$WantWake; $useSonos = [bool]$WantSonos }
 else {
   $useHue  = Get-Consent "Use Philips Hue Smart Lights? (https://www.philips-hue.com/en-us/explore-hue)"
   $useTado = Get-Consent "Use Tado Smart Heating? (https://www.tado.com/en)"
+  $useSonos = Get-Consent "Use a Sonos speaker or soundbar? (https://www.sonos.com)"
   $useWake = Get-Consent "Set up the wake word 'Hey Jarvis' (openWakeWord, https://github.com/dscripka/openWakeWord ; own Python environment, a few minutes)?"
 }
 $cfgFile = "$Cfg\config.toml"
@@ -228,6 +238,7 @@ $c = [System.IO.File]::ReadAllText($cfgFile, [System.Text.Encoding]::UTF8)
 $unused = @()
 if (-not $useHue)  { $unused += 'hue_lights', 'hue_set', 'hue_light_list', 'hue_all_set' }
 if (-not $useTado) { $unused += 'tado_heating' }
+if (-not $useSonos) { $unused += 'sonos_control' }
 [System.IO.File]::WriteAllText($cfgFile, (Get-TomlWithoutListItem $c $unused), $Utf8)
 Write-Host "Settings file: $cfgFile (analytics are OFF in it)" -ForegroundColor Green
 & (Join-Path $Repo 'tools\set-home-city.ps1') -City $City -NoAsk:$FromWizard   # ATMOSPHERICS weather; a city that is not found never stops the install
@@ -410,6 +421,10 @@ Write-InstallStep 9 "Philips Hue and Tado (optional)"
 if ($useHue -and -not $FromWizard) {
   Write-Host "Philips Hue (https://www.philips-hue.com/en-us/explore-hue)"
   Connect-HueBridge (Read-Host "IP address of your Hue bridge (Hue app > Settings > Bridge)").Trim()
+}
+if ($useSonos) {
+  if (-not $FromWizard) { $SonosIp = (Read-Host "IP address of your Sonos speaker (Sonos app > Settings > System > About My System)").Trim() }
+  Save-SonosIp $SonosIp
 }
 if ($useTado) {
   Write-Host "Tado login (https://www.tado.com/en): a link appears. Open it in your browser, SIGN IN to your Tado account first (the confirm button does nothing before that), then approve the login (within 5 minutes)."

@@ -32,7 +32,7 @@ On top of [OpenJarvis's own features](https://openjarvis.stanford.edu/#features)
 - 🖥️ **Full-screen HUD:** live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections, a glowing 3D brain, a cinematic intro. Phone layout included.
 - 🎙️ **Talk to it:** say "Hey Jarvis" or press **F6**; **Esc** stops it. Local speech recognition (faster-whisper) and voice (Kokoro or Chatterbox), chosen for your PC by the installer.
 - 🏠 **Everything local:** the AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account. Switch model, context size and reasoning inside the HUD.
-- 💡 **Smart home (optional):** [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights and [Tado](https://www.tado.com/en) heating. Every change is read back, so Jarvis cannot just claim it worked.
+- 💡 **Smart home (optional):** [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights, [Tado](https://www.tado.com/en) heating and a [Sonos](https://www.sonos.com) speaker or soundbar (play, pause, skip, volume; the volume is capped at 80 %). Every change is read back, so Jarvis cannot just claim it worked.
 - 🔎 **Web search, news and documents (optional):** web search with the [Firecrawl](https://www.firecrawl.dev/) API (your own free key), news headlines, and questions about your own files with the LM Studio plugin [Big RAG](https://lmstudio.ai/mindstudio/big-rag). Sources are always clickable links.
 - 💭 **Memory:** tell it "my car is a blue Beetle" and it still knows in the next chat (stored only on your PC).
 - 📈 **Honest answers:** every answer shows its confidence, predictions are in _italic_, two lights show whether web or document search was used.

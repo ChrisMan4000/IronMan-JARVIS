@@ -26,6 +26,7 @@ enabled = [
   "hue_all_set",
   "tado_heating",
   "oxxify_vent",
+  "sonos_control",
   "hue_light",
 ]
 

@@ -29,7 +29,7 @@ $script:JarvisLmStudioPort = 1234
 $script:JarvisHelperProcessPattern = 'backup-watch\.ps1|hwstats\.py|wake_service\.py|gateway\.py'
 $script:JarvisProcessPattern = 'services\.ps1|jarvis serve|' + $JarvisHelperProcessPattern
 # Windows user variables the installer can set (the uninstallers remove them, start-jarvis.ps1 reads them again).
-$script:JarvisUserEnvVars = 'HUE_BRIDGE_IP', 'FIRECRAWL_API_KEY', 'OPENJARVIS_WEB_SEARCH_ENGINE', 'SERPLY_API_KEY', 'JARVIS_DOC_ROOT'
+$script:JarvisUserEnvVars = 'HUE_BRIDGE_IP', 'SONOS_IP', 'FIRECRAWL_API_KEY', 'OPENJARVIS_WEB_SEARCH_ENGINE', 'SERPLY_API_KEY', 'JARVIS_DOC_ROOT'
 # Names of things made in Windows by the optional parts (fan monitor, LAN gateway).
 $script:JarvisFanTaskName = 'LibreHardwareMonitor Hidden'
 $script:JarvisFanFirewallRule = 'Block LHM 8085 from network'

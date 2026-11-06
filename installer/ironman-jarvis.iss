@@ -77,9 +77,9 @@ begin
 end;
 
 var
-  HuePage, TadoPage, WakePage, ModelPage, VoicePage, TtsPage, RagPage, KeyPage, CityPage: TWizardPage;
-  HueCheck, TadoCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
-  HueIpEdit, KeyEdit, CityEdit: TNewEdit;
+  HuePage, TadoPage, SonosPage, WakePage, ModelPage, VoicePage, TtsPage, RagPage, KeyPage, CityPage: TWizardPage;
+  HueCheck, TadoCheck, SonosCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
+  HueIpEdit, SonosIpEdit, KeyEdit, CityEdit: TNewEdit;
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
   ModelCombo, WhisperCombo: TNewComboBox;
   ClipEdit: TNewEdit;
@@ -317,6 +317,11 @@ begin
   HueIpEdit.Enabled := HueCheck.Checked;
 end;
 
+procedure SonosClick(Sender: TObject);
+begin
+  SonosIpEdit.Enabled := SonosCheck.Checked;
+end;
+
 procedure ModelRadioClick(Sender: TObject);
 begin
   ModelCombo.Enabled := RbExist.Checked and RbExist.Enabled;
@@ -329,6 +334,7 @@ begin
   C := CheckList[TNewStaticText(Sender).Tag];
   C.Checked := not C.Checked;
   HueClick(nil);
+  SonosClick(nil);
 end;
 
 procedure RadioLabelClick(Sender: TObject);
@@ -386,8 +392,23 @@ begin
   AddLink(TadoPage, Y, 'Tado Smart Heating', 'https://www.tado.com/en');
   TadoCheck := AddCheck(TadoPage, Y, 'Use Tado Smart Heating');
 
+  { Sonos }
+  SonosPage := NewPage(TadoPage.ID, 'Sonos speaker or soundbar (optional)', 'Play, pause and change the volume by voice or text.');
+  Y := 0;
+  AddText(SonosPage, Y, 'Lets Jarvis play, pause, skip, mute and set the volume of one Sonos speaker or soundbar ("turn the sound bar down"). It talks to the speaker directly inside your home network: no account, no cloud. Every change is read back, and the volume is capped at 80 percent.', CText, False);
+  AddLink(SonosPage, Y, 'Sonos', 'https://www.sonos.com');
+  SonosCheck := AddCheck(SonosPage, Y, 'Use a Sonos speaker or soundbar');
+  SonosCheck.OnClick := @SonosClick;
+  AddText(SonosPage, Y, 'IP address of the speaker (Sonos app > Settings > System > About My System):', CText, False);
+  SonosIpEdit := TNewEdit.Create(SonosPage);
+  SonosIpEdit.Parent := SonosPage.Surface;
+  SonosIpEdit.Left := 0; SonosIpEdit.Top := Y; SonosIpEdit.Width := ScaleX(160);
+  SonosIpEdit.Enabled := False;
+  Y := Y + ScaleY(30);
+  AddText(SonosPage, Y, 'Tip: give the speaker a fixed address in your router so it does not change.', CText, False);
+
   { wake word }
-  WakePage := NewPage(TadoPage.ID, 'Wake word (optional)', 'Say "Hey Jarvis" to start talking.');
+  WakePage := NewPage(SonosPage.ID, 'Wake word (optional)', 'Say "Hey Jarvis" to start talking.');
   Y := 0;
   AddText(WakePage, Y, 'Listens for "Hey Jarvis" with the open-source openWakeWord. It needs its own Python environment and a few hundred MB, a few minutes of setup. Without it you click the ring or press F6.', CText, False);
   AddLink(WakePage, Y, 'openWakeWord', 'https://github.com/dscripka/openWakeWord');
@@ -518,6 +539,13 @@ begin
     HueIpEdit.Enabled := True;
   end;
   if FileExists(ExpandConstant('{%USERPROFILE}\.openjarvis\tado-token.json')) then TadoCheck.Checked := True;
+  if RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'SONOS_IP', Saved) then
+    if ValidIp(Saved) then
+    begin
+      SonosCheck.Checked := True;
+      SonosIpEdit.Text := Saved;
+      SonosIpEdit.Enabled := True;
+    end;
 end;
 
 procedure DetectModels;
@@ -721,6 +749,12 @@ begin
       MsgBox('Please type the IP address of your Hue bridge, for example 192.168.1.20 (Hue app > Settings > Bridge), or untick Philips Hue.', mbError, MB_OK);
       Result := False;
     end;
+  if CurPageID = SonosPage.ID then
+    if SonosCheck.Checked and (not ValidIp(Trim(SonosIpEdit.Text))) then
+    begin
+      MsgBox('Please type the IP address of your Sonos speaker, for example 192.168.1.30 (Sonos app > Settings > System > About My System), or untick Sonos.', mbError, MB_OK);
+      Result := False;
+    end;
 end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
@@ -729,6 +763,7 @@ begin
   S := MemoDirInfo + NewLine + NewLine + 'Your choices:' + NewLine;
   if HueCheck.Checked then S := S + Space + 'Philips Hue Smart Lights (bridge ' + Trim(HueIpEdit.Text) + ')' + NewLine;
   if TadoCheck.Checked then S := S + Space + 'Tado Smart Heating' + NewLine;
+  if SonosCheck.Checked then S := S + Space + 'Sonos speaker (' + Trim(SonosIpEdit.Text) + ')' + NewLine;
   if WakeCheck.Checked then S := S + Space + 'Wake word "Hey Jarvis"' + NewLine;
   if RbOnYes.Checked and (OnlineRepo <> '') then M := 'newest found online' + NewLine + Space + Space + OnlineRepo + ' (about ' + OnlineGB + ' GB)' + NewLine + Space + Space + '(tested after the download)'
   else if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then M := 'existing model ' + ModelKeys[ModelCombo.ItemIndex]
@@ -792,6 +827,7 @@ begin
   Opts := '';
   if HueCheck.Checked then Opts := Opts + ' -WantHue -HueIp ''' + Trim(HueIpEdit.Text) + '''';
   if TadoCheck.Checked then Opts := Opts + ' -WantTado';
+  if SonosCheck.Checked then Opts := Opts + ' -WantSonos -SonosIp ''' + Trim(SonosIpEdit.Text) + '''';
   if WakeCheck.Checked then Opts := Opts + ' -WantWake';
   if RagCheck.Checked then Opts := Opts + ' -WantRag';
   if RbOnYes.Checked and (OnlineRepo <> '') then Opts := Opts + ' -OnlineModel ''' + OnlineRepo + '''';
@@ -950,10 +986,10 @@ begin
         DelTree(ExpandConstant('{%USERPROFILE}\.openjarvis'), True, True, True);
         { the user settings made by the setup script (Hue address, web search key) go together with the settings folder; kept otherwise, so a reinstall finds them.
           Same names as $JarvisUserEnvVars in tools\jarvis-common.ps1 (tests\powershell\wizard-contract.Tests.ps1 checks that they match) }
-        SetArrayLength(Names, 5);
+        SetArrayLength(Names, 6);
         Names[0] := 'HUE_BRIDGE_IP'; Names[1] := 'FIRECRAWL_API_KEY'; Names[2] := 'OPENJARVIS_WEB_SEARCH_ENGINE';
-        Names[3] := 'JARVIS_DOC_ROOT'; Names[4] := 'SERPLY_API_KEY';
-        for I := 0 to 4 do RegDeleteValue(HKEY_CURRENT_USER, 'Environment', Names[I]);
+        Names[3] := 'JARVIS_DOC_ROOT'; Names[4] := 'SERPLY_API_KEY'; Names[5] := 'SONOS_IP';
+        for I := 0 to 5 do RegDeleteValue(HKEY_CURRENT_USER, 'Environment', Names[I]);
       end;
   end;
 end;

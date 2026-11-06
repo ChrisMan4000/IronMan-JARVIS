@@ -290,7 +290,7 @@
     if (!dots || !dots.length) return;
     if (!mapDelays) { mapDelays = new Float32Array(dots.length); for (let j = 0; j < dots.length; j++) mapDelays[j] = (dots[j][0] + 180) / 360 * 0.9 + random() * 0.4; }
     const p = PANELS[NETWORK], area = JarvisHud.mapArea(p, u), shown = easeOut(clamp01((t - panelStart(NETWORK)) / TIME.panelUnroll));
-    const start = panelStart(NETWORK) + 0.3, size = 1.7 * u, limit = p.y - 6 + (p.h + 12) * shown;
+    const start = panelStart(NETWORK) + 0.3, size = 0.4 * u, limit = p.y - 6 + (p.h + 12) * shown;
     ctx.globalAlpha = 0.38; ctx.fillStyle = COLOR.cyan; ctx.beginPath();
     for (let j = 0; j < dots.length; j++) {
       if (t < start + mapDelays[j]) continue;

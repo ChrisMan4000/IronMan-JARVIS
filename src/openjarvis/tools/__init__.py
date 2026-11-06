@@ -209,6 +209,11 @@ except ImportError:
     pass
 
 try:
+    import openjarvis.tools.sonos_control  # noqa: F401
+except ImportError:
+    pass
+
+try:
     import openjarvis.tools.hue_light  # noqa: F401
 except ImportError:
     pass
