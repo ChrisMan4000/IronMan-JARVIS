@@ -1,6 +1,6 @@
 # J.A.R.V.I.S. HUD (IronMan-JARVIS) – Technical Architecture
 
-**HUD version v1.00 · 2026-11-06** (kept in `frontend/public/hud-version.js`; shown in the browser tab and in the CORE STATUS panel)
+**HUD version:** shown in the browser tab and in the CORE STATUS panel (kept in `frontend/public/hud-version.js`).
 This document describes the HUD and the programs around it. The general OpenJarvis engine is documented upstream in `docs/architecture/` (overview, engine, agents, memory, security, query flow).
 
 ## 1. In three sentences
@@ -52,7 +52,8 @@ Voice (wake word or F6) → faster-whisper → text → HUD → Jarvis server `/
 * Secrets (`hue-key.txt`, `tado-token.json`, Firecrawl key, gateway password) stay on the PC and are never shared.
 
 ## 7. Versioning and history
-`frontend/public/hud-version.js` → `window.HUD_VERSION`. Change it there only.
+`frontend/public/hud-version.js` → `window.HUD_VERSION`. Change it there only. The number after the dot counts the iterations: add 1 with every commit that changes the HUD files (`hud.html`, `hud-*.js`, `hud.webmanifest`).
 | Version | Date | Changes |
 |---|---|---|
 | v1.00 | 2026-11-06 | first numbered release of the HUD: version shown in tab and CORE STATUS; this document |
+| v1.43 | 2026-11-06 | the number after the dot now counts the iterations (git commits that changed the HUD files; 42 before this one); the private home world page has its own number |

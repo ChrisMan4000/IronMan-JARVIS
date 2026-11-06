@@ -1,6 +1,6 @@
 # IronMan J.A.R.V.I.S. – An IronMan-Style Web-Interface with all the Bells & Whistles
 
-**HUD version v1.00** (kept in `frontend/public/hud-version.js`; shown in the browser tab and in the CORE STATUS panel). Technical architecture: [docs/HUD-ARCHITECTURE.md](docs/HUD-ARCHITECTURE.md).
+**HUD version** shown in the browser tab and in the CORE STATUS panel (kept in `frontend/public/hud-version.js`; the number after the dot counts the iterations, one per commit that changes the HUD). Technical architecture: [docs/HUD-ARCHITECTURE.md](docs/HUD-ARCHITECTURE.md).
 
 *Tony Stark had a billion dollars and a genius brain. I had a Claude chat and about 120 hours.*
 
