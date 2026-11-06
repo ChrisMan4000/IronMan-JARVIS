@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>J.A.R.V.I.S. v1.00</title>
+<!doctype html><html><head><meta charset="utf-8"><title>J.A.R.V.I.S.</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="JARVIS"><meta name="theme-color" content="#02060b"><link rel="apple-touch-icon" href="jarvis-icon-180.png"><link rel="icon" type="image/png" sizes="192x192" href="jarvis-icon-192.png"><link rel="manifest" href="hud.webmanifest" crossorigin="use-credentials">
 <style>
@@ -859,7 +859,7 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   box(L1,y2,pw,h2,'CORE STATUS',C);
   g.fillStyle='rgba('+c+',0.18)';g.fillRect(L1+28*u,y2+50*u,pw-56*u,h2*0.36);g.strokeStyle=C;g.strokeRect(L1+28*u,y2+50*u,pw-56*u,h2*0.36);
   tx(online?(on?LABEL[state]:'ONLINE'):'OFFLINE',L1+pw/2,y2+50*u+h2*0.22,Math.min(46*u,pw/9),online?C:'#ff6060','center');
-  tx(online?'SYSTEM ONLINE · '+(window.HUD_VERSION||''):'BACKEND UNREACHABLE',L1+pw/2,y2+50*u+h2*0.31,14*u,dim,'center');
+  tx(online?'SYSTEM ONLINE':'BACKEND UNREACHABLE',L1+pw/2,y2+50*u+h2*0.31,14*u,dim,'center');
   spark(H.lat,L1+28*u,y2+h2*0.5,pw-56*u,h2*0.4,'#8fe6b8',Math.max(50,...H.lat),'LINK LATENCY MS',lat);
   box(L2,y2,pw,h2,'BIOMETRIC // AUDIO',C);
   tx('EKG // MIC INPUT',L2+28*u,y2+62*u,12*u,dim);plot(wave(state==='listening'?micAn:null),L2+28*u,y2+70*u,pw-56*u,h2*0.3,'#8fe6d4',t);

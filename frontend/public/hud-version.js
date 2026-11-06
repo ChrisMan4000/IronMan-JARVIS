@@ -1,2 +1,3 @@
-/* J.A.R.V.I.S. HUD version - the one place to change it (shown in the browser tab and in CORE STATUS). Rule: v1.<n>, n = number of git commits that changed the HUD files (hud.html, hud-*.js, hud.webmanifest); add 1 with every commit that touches them. */
-window.HUD_VERSION='v1.43';window.HUD_DATE='2026-11-06';
+/* J.A.R.V.I.S. HUD version - the one place to change it (shown only in the HUD, bottom right corner). Rule: v1.<n>, n = number of git commits that changed the HUD files (hud.html, hud-*.js, hud.webmanifest); add 1 with every commit that touches them. */
+window.HUD_VERSION='v1.44';window.HUD_DATE='2026-11-06';
+document.addEventListener('DOMContentLoaded',function(){var e=document.createElement('div');e.textContent=window.HUD_VERSION;e.style.cssText='position:fixed;right:10px;bottom:6px;font:11px monospace;letter-spacing:.12em;color:#ff9928;opacity:.55;pointer-events:none;z-index:50';document.body.appendChild(e)});
