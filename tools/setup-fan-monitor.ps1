@@ -5,7 +5,7 @@
 # What it does:
 #  1. Writes a small watcher script next to LibreHardwareMonitor.exe (an admin-only folder, because it runs with admin rights).
 #  2. Creates the scheduled task "LibreHardwareMonitor Hidden" (no logon trigger). start-jarvis.ps1 starts it;
-#     it starts LibreHardwareMonitor hidden and closes it again about 6 seconds after Jarvis has stopped (3 checks, 2 s apart).
+#     it starts LibreHardwareMonitor hidden and keeps it running until you use Stop Jarvis (which drops a flag file the watcher is waiting for).
 #  3. Adds a firewall rule that blocks port 8085 from the network (LibreHardwareMonitor's web server
 #     listens on all interfaces without a password; this PC itself can still read it).
 # Exit code 0 when the task and the firewall rule exist afterwards, 1 otherwise (tools\install-fan-monitor.ps1 checks it).
@@ -23,18 +23,15 @@ if (-not (Test-Path $exe)) {
 # 1. watcher script (runs on its own with administrator rights, so it gets the values written in instead of reading the project files)
 $watch = @'
 $exe = '__EXE__'
+$flag = '__FLAG__'
+Remove-Item $flag -ErrorAction SilentlyContinue
 if (-not (Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue)) { Start-Process $exe -WindowStyle Hidden }
-$seen = $false; $down = 0; $start = Get-Date
-while ($true) {
-  Start-Sleep 2
-  $up = [bool](Get-NetTCPConnection -State Listen -LocalPort __PORTS__ -ErrorAction SilentlyContinue)
-  if ($up) { $seen = $true; $down = 0 } else { $down++ }
-  if ($seen -and $down -ge 3) { break }
-  if (-not $seen -and ((Get-Date) - $start).TotalMinutes -gt 5) { break }
-}
+Start-Sleep 3
+while ((Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue) -and -not (Test-Path $flag)) { Start-Sleep 2 }
 Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item $flag -ErrorAction SilentlyContinue
 '@
-$watch = $watch.Replace('__EXE__', $exe.Replace("'", "''")).Replace('__PORTS__', "$JarvisServerPort,8765")   # Jarvis server and helper: Jarvis counts as running while one of them listens
+$watch = $watch.Replace('__EXE__', $exe.Replace("'", "''")).Replace('__FLAG__', (Join-Path $JarvisConfigDir 'stop-lhm.flag').Replace("'", "''"))   # Stop Jarvis (tools\stop-jarvis.ps1) creates this flag file; the watcher then closes LibreHardwareMonitor
 $wf = Join-Path $Folder 'lhm-watch.ps1'
 Set-Content -Path $wf -Value $watch -Encoding UTF8
 Write-Host "wrote $wf"

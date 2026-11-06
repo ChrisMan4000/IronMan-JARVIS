@@ -1,4 +1,4 @@
-# Stop Jarvis: stops the supervisor, services, server and LM Studio. The browser is left open. The fan monitor (if installed) stops itself about 6 s later.
+# Stop Jarvis: stops the supervisor, services, server and LM Studio. The browser is left open. The fan monitor (if installed) is stopped here too.
 # Exit code 0 when everything stopped, 1 when a Jarvis port is still in use (the window then stays open so the message can be read).
 param([switch]$KeepLmStudio)   # -KeepLmStudio: leave LM Studio and its model alone (used by the uninstallers)
 . (Join-Path $PSScriptRoot 'jarvis-common.ps1')
@@ -12,7 +12,8 @@ $ids += Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match $Ja
 foreach ($i in ($ids | Sort-Object -Unique)) { taskkill /PID $i /T /F 2>&1 | Out-Null }
 # 2a. delete the stale server PID record (a reused PID blocks the next start)
 Remove-Item (Join-Path $JarvisConfigDir 'server.pid'), (Join-Path $JarvisConfigDir 'server.pid.identity.json') -ErrorAction SilentlyContinue
-# 2b. fan monitor: not stopped here on purpose (its own watcher closes LibreHardwareMonitor about 6 s after Jarvis is gone)
+# 2b. fan monitor: LibreHardwareMonitor runs elevated, so it cannot be killed from here. Drop a flag file; its watcher (lhm-watch.ps1) sees it and ends LHM.
+New-Item -ItemType File -Force -Path (Join-Path $JarvisConfigDir 'stop-lhm.flag') -ErrorAction SilentlyContinue | Out-Null
 # 3. LM Studio: unload model, stop server, close app
 $lms = Get-LmsCommand
 if (-not $KeepLmStudio) {

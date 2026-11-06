@@ -119,7 +119,7 @@ Start-Job -ScriptBlock {
 
 # --- Step 3: start the helper programs and the Jarvis server, each in its own terminal tab
 $env:PYTHONWARNINGS = 'ignore'; $env:HF_HUB_VERBOSITY = 'error'   # keeps harmless library warnings out of the terminal windows (inherited by the tabs; no semicolons in the wt command, wt would split it)
-# optional fan monitor: only runs if tools\setup-fan-monitor.ps1 was used (starts LibreHardwareMonitor hidden, closes it again after Jarvis stops)
+# optional fan monitor: only runs if tools\setup-fan-monitor.ps1 was used (starts LibreHardwareMonitor hidden, stays up until Stop Jarvis is used)
 Stop-ScheduledTask -TaskName $JarvisFanTaskName -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Start-ScheduledTask -TaskName $JarvisFanTaskName -ErrorAction SilentlyContinue   # stop first: an old watcher would ignore the start
 # one tab "Jarvis Services" runs the helper (8765), the HUD web server (5173), the wake word (8766, if set up) and the backup watcher (if present); see tools\services.ps1
 Start-Process wt -WindowStyle Minimized -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"Jarvis Services`" --suppressApplicationTitle powershell -NoExit -ExecutionPolicy Bypass -File `"$root\tools\services.ps1`""

@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>J.A.R.V.I.S.</title>
+<!doctype html><html><head><meta charset="utf-8"><title>J.A.R.V.I.S. v1.00</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="JARVIS"><meta name="theme-color" content="#02060b"><link rel="apple-touch-icon" href="jarvis-icon-180.png"><link rel="icon" type="image/png" sizes="192x192" href="jarvis-icon-192.png"><link rel="manifest" href="hud.webmanifest" crossorigin="use-credentials">
 <style>
@@ -32,7 +32,7 @@ html.phn #mlist{position:fixed !important;left:50% !important;top:118px !importa
 html.phn #log,html.phn #bar{animation:phnIn 1s ease 2s both}
 html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + var(--log-h) - 32px) !important;animation:phnIn 1s ease 2s both}
 @keyframes phnIn{from{opacity:0}}
-</style><script src="hud-shared.js"></script><script src="hud-brain.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
+</style><script src="hud-version.js"></script><script src="hud-shared.js"></script><script src="hud-brain.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
 <canvas id="cv"></canvas><canvas id="pcv"></canvas><div id="log"></div>
 <div id="bar"><button id="tClip" title="Attach image or file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.3-8.3"/></svg></button><span id="tChip"></span><input type="text" id="tIn" placeholder="Type a message..." autocomplete="off"><button id="tSend" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button><button id="tMic" title="Two-way voice (F6). The wake word works too" aria-label="Voice"><svg viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="6" y="1" width="4" height="8"/><rect x="5" y="2" width="1" height="6"/><rect x="10" y="2" width="1" height="6"/><rect x="7" y="3" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="7" y="5" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="3" y="6" width="1" height="3"/><rect x="12" y="6" width="1" height="3"/><rect x="4" y="9" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/><rect x="5" y="10" width="6" height="1"/><rect x="7" y="11" width="2" height="2"/><rect x="5" y="13" width="6" height="1"/></svg></button><input type="file" id="tFile" hidden accept="image/*,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.log,.yaml,.yml,.toml,.xml,.ps1,.sh"></div>
 <script src="hud-home.js" onerror="this.remove()"></script><script>
@@ -859,7 +859,7 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   box(L1,y2,pw,h2,'CORE STATUS',C);
   g.fillStyle='rgba('+c+',0.18)';g.fillRect(L1+28*u,y2+50*u,pw-56*u,h2*0.36);g.strokeStyle=C;g.strokeRect(L1+28*u,y2+50*u,pw-56*u,h2*0.36);
   tx(online?(on?LABEL[state]:'ONLINE'):'OFFLINE',L1+pw/2,y2+50*u+h2*0.22,Math.min(46*u,pw/9),online?C:'#ff6060','center');
-  tx(online?'SYSTEM ONLINE':'BACKEND UNREACHABLE',L1+pw/2,y2+50*u+h2*0.31,14*u,dim,'center');
+  tx(online?'SYSTEM ONLINE · '+(window.HUD_VERSION||''):'BACKEND UNREACHABLE',L1+pw/2,y2+50*u+h2*0.31,14*u,dim,'center');
   spark(H.lat,L1+28*u,y2+h2*0.5,pw-56*u,h2*0.4,'#8fe6b8',Math.max(50,...H.lat),'LINK LATENCY MS',lat);
   box(L2,y2,pw,h2,'BIOMETRIC // AUDIO',C);
   tx('EKG // MIC INPUT',L2+28*u,y2+62*u,12*u,dim);plot(wave(state==='listening'?micAn:null),L2+28*u,y2+70*u,pw-56*u,h2*0.3,'#8fe6d4',t);
