@@ -9,6 +9,7 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'services\.
 $ids = @()
 $ids += Get-NetTCPConnection -LocalPort $JarvisServicePorts -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }
 $ids += Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match $JarvisProcessPattern -and $_.ProcessId -ne $PID } | ForEach-Object { $_.ProcessId }
+if ($KeepLmStudio) { $ids += Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'model-download\.ps1' } | ForEach-Object { $_.ProcessId } }   # uninstaller only: Stop Jarvis leaves a running model download alone
 foreach ($i in ($ids | Sort-Object -Unique)) { taskkill /PID $i /T /F 2>&1 | Out-Null }
 # 2a. delete the stale server PID record (a reused PID blocks the next start)
 Remove-Item (Join-Path $JarvisConfigDir 'server.pid'), (Join-Path $JarvisConfigDir 'server.pid.identity.json') -ErrorAction SilentlyContinue

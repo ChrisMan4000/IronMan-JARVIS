@@ -96,23 +96,6 @@ function Enable-ArmLmStudioEngine([string]$Lms) {
     Write-Host "  ARM PC: LM Studio engine set to llama.cpp-win-arm64 $ver (much faster than the emulated x86 engine)." -ForegroundColor Green
   } catch { Write-Host "  Could not select the ARM engine: $($_.Exception.Message). In LM Studio: Runtime > GGUF > CPU llama.cpp (Windows ARM)." -ForegroundColor Yellow }
 }
-function Test-ModelToolCall([string]$Lms, [string]$Key) {
-  # loads the model and asks one question that needs a tool; true when the model answers with the tool call
-  & $Lms server start 2>&1 | Out-Null   # the chat test needs LM Studio's server (port 1234)
-  if ($LASTEXITCODE -ne 0) { Write-JarvisLog "lms server start ended with code $LASTEXITCODE" }
-  Start-Sleep -Seconds 3
-  & $Lms load $Key -c 4096 -y 2>&1 | Out-Null
-  $ok = $false
-  try {
-    $body = @{ model = $Key; temperature = 0; max_tokens = 200; tool_choice = 'auto'
-      messages = @(@{ role = 'user'; content = 'What is the weather in Paris right now? Use the tool.' })
-      tools = @(@{ type = 'function'; function = @{ name = 'get_weather'; description = 'Get the current weather of a city'; parameters = @{ type = 'object'; properties = @{ city = @{ type = 'string' } }; required = @('city') } } }) } | ConvertTo-Json -Depth 8
-    $r = Invoke-RestMethod -Uri "http://127.0.0.1:$JarvisLmStudioPort/v1/chat/completions" -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 240
-    $ok = [bool]($r.choices[0].message.tool_calls -and "$($r.choices[0].message.tool_calls[0].function.name)" -eq 'get_weather')
-  } catch { Write-Host "  Test error: $($_.Exception.Message)" -ForegroundColor Yellow }
-  & $Lms unload --all 2>&1 | Out-Null
-  return $ok
-}
 function Get-OnlineModel([string]$Lms, [string]$RepoId) {
   # downloads a newer model found online (Hugging Face) and tests it for tool calls; returns its LM Studio key, or $null (the normal choice is used then)
   $before = @(Get-LlmModel $Lms | ForEach-Object { $_.modelKey })
@@ -193,6 +176,23 @@ function Save-ModelTier([string]$Lms, [int]$WizardTier) {
   return $null
 }
 
+function New-JarvisShortcuts {
+  # the two desktop icons; made right after the packages are installed so Jarvis can be started while the language model still downloads
+  $ws = New-Object -ComObject WScript.Shell
+  $desk = [Environment]::GetFolderPath('Desktop')
+  foreach ($sc in @(
+      @{ Name = 'Jarvis';      Script = 'start-jarvis.ps1';       Icon = 'assets\jarvis.ico';      Args = '-ExecutionPolicy Bypass -WindowStyle Minimized -File' },
+      @{ Name = 'Stop Jarvis'; Script = 'tools\stop-jarvis.ps1'; Icon = 'assets\jarvis-stop.ico'; Args = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File' })) {
+    $s = $ws.CreateShortcut("$desk\$($sc.Name).lnk")
+    $s.TargetPath = "powershell.exe"
+    $s.Arguments = "$($sc.Args) `"$Repo\$($sc.Script)`""
+    $s.WorkingDirectory = $Repo
+    $ico = Join-Path $Repo $sc.Icon
+    if (Test-Path $ico) { $s.IconLocation = $ico } else { $s.IconLocation = "powershell.exe,0" }   # J.A.R.V.I.S. icons for the desktop shortcuts
+    $s.Save()
+  }
+}
+
 New-Item -ItemType Directory -Force $Cfg | Out-Null
 if ($FromWizard) { try { Start-Transcript -Path (Join-Path $Cfg 'install-log.txt') -Append | Out-Null } catch { Write-JarvisLog "install log not started: $($_.Exception.Message)" } }
 Set-Location $Repo
@@ -251,8 +251,15 @@ $env:SETUPTOOLS_SCM_PRETEND_VERSION = "1.0.0"
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
 if ($LASTEXITCODE -ne 0) { Exit-Install 'uv sync failed: the Python packages could not be installed. See the red text above. Nothing else was set up.' }
 # 'uv sync' removes hand-added packages, so these are added afterwards. Always start things with 'uv run --no-sync'.
-uv pip install maxminddb "python-tado>=1.0,<1.1" maturin pdfplumber psutil huggingface_hub
-if ($LASTEXITCODE -ne 0) { Exit-Install 'uv pip install failed: the helper packages (maxminddb, python-tado, psutil ...) are missing.' }
+uv pip install maxminddb maturin pdfplumber psutil huggingface_hub
+if ($LASTEXITCODE -ne 0) { Exit-Install 'uv pip install failed: the helper packages (maxminddb, psutil ...) are missing.' }
+# Tado support is optional and its package changes often (2026-11-07: 1.0.x disappeared from PyPI and stopped the whole install): never fatal.
+uv pip install "python-tado>=1.0,<1.1"
+if ($LASTEXITCODE -ne 0) { uv pip install "python-tado>=0.18,<1.0" }
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "The Tado package (python-tado) could not be installed. Everything else works; Tado heating stays off until you run this script again." -ForegroundColor Yellow
+  Write-JarvisLog "python-tado could not be installed (uv pip install failed)"
+}
 # optional speed-up module (Rust). Not built on ARM PCs (Windows blocks the build there); Jarvis works the same without it.
 if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional Rust module is skipped." }
 else {
@@ -261,6 +268,7 @@ else {
 }
 Set-Location "$Repo\frontend"; npm install; $npmCode = $LASTEXITCODE; Set-Location $Repo
 if ($npmCode -ne 0) { Exit-Install "npm install failed (code $npmCode): the HUD web packages are missing." }
+New-JarvisShortcuts   # as early as possible: Jarvis can be started now, even while the language model still downloads
 
 # ---------- 4. offline location database for the world map (public download, size-checked) ----------
 Write-InstallStep 4 "Downloading the offline location database"
@@ -338,21 +346,47 @@ if (-not $lmsCmd) {
   Write-Host "  LM Studio command 'lms' not found. Open LM Studio once, run: lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
 } else {
   if ((Get-HardwareInfo).Arm) { Enable-ArmLmStudioEngine $lmsCmd }
-  # 1. a newer model found online (wizard: chosen on its page; console: asked here), tested for tool calls
   $online = ''
   if ($OnlineModel -match '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$') { $online = $OnlineModel }
   elseif (-not $FromWizard) { $online = Find-OnlineModel }
-  if ($online) { $chosen = Get-OnlineModel $lmsCmd $online }
-  # 2. a model that is already in LM Studio
-  if (-not $chosen) {
-    if ($FromWizard) { if (Test-ModelId $ModelId) { $chosen = $ModelId } }
-    else {
+  $bgTier = 0
+  if ($FromWizard) {
+    # Wizard: a model that is already in LM Studio is loaded now. A download (the model found online, or one of the three sizes) runs in the BACKGROUND
+    # (tools\model-download.ps1), so the setup continues, the desktop icons exist and Jarvis can be started while it downloads.
+    if (Test-ModelId $ModelId) { $chosen = $ModelId }
+    if (-not $chosen -and $ModelTier -ge 1) { $bgTier = $ModelTier }
+    if ($online -or $bgTier -ge 1) {
+      $dlArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$Repo\tools\model-download.ps1`"", '-Lms', "`"$lmsCmd`"")
+      if ($online) { $dlArgs += '-OnlineModel'; $dlArgs += $online }
+      if ($bgTier -ge 1) { $dlArgs += '-ModelTier'; $dlArgs += "$bgTier" }
+      if ($chosen) { $dlArgs += '-InterimId'; $dlArgs += $chosen }
+      Remove-Item (Join-Path $Cfg 'model-download.txt') -ErrorAction SilentlyContinue
+      Write-Host "  The language model downloads in the background. You can start Jarvis meanwhile; progress: LM Studio (Downloads) and $Cfg\model-download.txt" -ForegroundColor Cyan
+      Write-WizardLine $StatusFile "STEP 6|Language model: the download continues in the background (watch it in LM Studio)"
+      # started through WMI, so it is NOT a child of this script: the wizard ends this script's process tree when the setup is done
+      $started = $false
+      try {
+        $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ('powershell.exe ' + ($dlArgs -join ' ')) }
+        $started = ($r.ReturnValue -eq 0)
+      } catch { Write-JarvisLog "model download could not be started through WMI: $($_.Exception.Message)" }
+      if (-not $started) { Start-Process powershell.exe -ArgumentList $dlArgs -WindowStyle Hidden }
+      # show the LM Studio window so the person can watch the download (LM Studio is single-instance: a second start only brings its window to the front)
+      $lmsAppShow = Get-LmStudioApp
+      if ($lmsAppShow) {
+        Start-Sleep -Seconds 3
+        Start-Process explorer.exe -ArgumentList ('"{0}"' -f $lmsAppShow); Start-Sleep -Seconds 4
+        if (-not @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count) { Start-Process explorer.exe -ArgumentList ('"{0}"' -f $lmsAppShow) }
+      }
+    }
+  } else {
+    # console: one model after the other, the window shows everything
+    if ($online) { $chosen = Get-OnlineModel $lmsCmd $online }
+    if (-not $chosen) {
       $installedModels = @(Get-LlmModel $lmsCmd)
       if ($installedModels.Count -gt 0) { $chosen = Select-InstalledModel $installedModels }
     }
+    if (-not $chosen) { $chosen = Save-ModelTier $lmsCmd $ModelTier }
   }
-  # 3. download one of the three sizes
-  if (-not $chosen) { $chosen = Save-ModelTier $lmsCmd $ModelTier }
   if ($chosen -and -not (Test-ModelId $chosen)) { Write-Host "  Model name has unexpected characters, not used: $chosen" -ForegroundColor Yellow; $chosen = $null }
   if ($chosen) {
     Write-Host "  Loading $chosen (context 8192)..." -ForegroundColor Cyan
@@ -364,6 +398,7 @@ if (-not $lmsCmd) {
     Write-Host "  Model saved: $chosen" -ForegroundColor Green
   }
 }
+$modelPending = ($FromWizard -and (Test-Path (Join-Path $Cfg 'model-download.txt')))
 
 # ---------- 7. document search: LM Studio plugin Big RAG (optional; https://lmstudio.ai/mindstudio/big-rag) ----------
 Write-InstallStep 7 "Document search (optional)"
@@ -409,6 +444,7 @@ if ($ragAsked -and -not $lmsCmd) {
 Write-InstallStep 8 "Voice models (a few minutes, much longer for the GPU voice)"
 $llmGB = -1   # size of the language model sharing the graphics card: used for the recommendation
 if ($chosen) { foreach ($lm in @(Get-LlmModel $lmsCmd)) { if ($lm.modelKey -eq $chosen) { $llmGB = [math]::Round($lm.sizeBytes / 1GB, 1) } } }
+if ($llmGB -lt 0 -and $modelPending) { $tierGB = ($JarvisModelTiers | Where-Object { $_.Tier -eq $ModelTier } | Select-Object -First 1).Gb; if ($tierGB) { $llmGB = $tierGB } }   # still downloading: the chosen size
 $vs = @{ Repo = $Repo; Whisper = $WhisperModel; Tts = $TtsChoice; VoiceClip = $VoiceClip; LlmGB = $llmGB; StatusFile = $StatusFile; StatusStep = 8 }
 if (-not $FromWizard) { $vs.Ask = $true }
 & "$Repo\tools\voice-setup.ps1" @vs
@@ -477,27 +513,14 @@ else {
   $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
 }
 if ($key) { [Environment]::SetEnvironmentVariable("FIRECRAWL_API_KEY", $key, "User"); [Environment]::SetEnvironmentVariable("OPENJARVIS_WEB_SEARCH_ENGINE", "firecrawl", "User"); Write-Host "key saved as a user environment variable (never in a file)" }
-$ws = New-Object -ComObject WScript.Shell
-$desk = [Environment]::GetFolderPath('Desktop')
-foreach ($sc in @(
-    @{ Name = 'Jarvis';      Script = 'start-jarvis.ps1';       Icon = 'assets\jarvis.ico';      Args = '-ExecutionPolicy Bypass -WindowStyle Minimized -File' },
-    @{ Name = 'Stop Jarvis'; Script = 'tools\stop-jarvis.ps1'; Icon = 'assets\jarvis-stop.ico'; Args = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File' })) {
-  $s = $ws.CreateShortcut("$desk\$($sc.Name).lnk")
-  $s.TargetPath = "powershell.exe"
-  $s.Arguments = "$($sc.Args) `"$Repo\$($sc.Script)`""
-  $s.WorkingDirectory = $Repo
-  $ico = Join-Path $Repo $sc.Icon
-  if (Test-Path $ico) { $s.IconLocation = $ico } else { $s.IconLocation = "powershell.exe,0" }   # J.A.R.V.I.S. icons for the desktop shortcuts
-  $s.Save()
-}
-
 # ---------- final checks ----------
 Write-Host ""; Write-Host "Checks:" -ForegroundColor Cyan
 Write-CheckResult -Name "lms (LM Studio command)" -Ok ([bool](Get-LmsCommand)) -Hint "open LM Studio once, then run: lms bootstrap"
 Write-CheckResult -Name "nvidia-smi" -Ok ([bool](Find-NvidiaSmi)) -Hint "no NVIDIA GPU: the GPU gauges will not work, the rest does"
 Write-CheckResult -Name "settings file" -Ok (Test-Path $cfgFile) -Hint "rerun this script"
 Write-CheckResult -Name "wake word" -Ok (Test-WakeWordReady $NpuDir) -Hint "optional"
-Write-CheckResult -Name "language model" -Ok ([bool]$chosen) -Hint "choose one in step 6 (run this script again) or load one in LM Studio"
+Write-CheckResult -Name "language model" -Ok ([bool]$chosen -or $modelPending) -Hint "choose one in step 6 (run this script again) or load one in LM Studio"
+if ($modelPending -and -not $chosen) { Write-Host "  (the language model is still downloading in the background: see LM Studio)" -ForegroundColor Cyan }
 Write-Host ""
 Write-Host "Still to do by hand:" -ForegroundColor Yellow
 Write-Host " 1. Open LM Studio once, then in PowerShell run: lms bootstrap  (open a NEW PowerShell afterwards)"

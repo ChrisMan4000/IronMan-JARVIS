@@ -211,3 +211,41 @@ function Import-JarvisWindowApi {
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 '@
 }
+function Test-ModelToolCall([string]$Lms, [string]$Key) {
+  # loads the model and asks one question that needs a tool; true when the model answers with the tool call
+  & $Lms server start 2>&1 | Out-Null   # the chat test needs LM Studio's server (port 1234)
+  if ($LASTEXITCODE -ne 0) { Write-JarvisLog "lms server start ended with code $LASTEXITCODE" }
+  Start-Sleep -Seconds 3
+  & $Lms load $Key -c 4096 -y 2>&1 | Out-Null
+  $ok = $false
+  try {
+    $body = @{ model = $Key; temperature = 0; max_tokens = 200; tool_choice = 'auto'
+      messages = @(@{ role = 'user'; content = 'What is the weather in Paris right now? Use the tool.' })
+      tools = @(@{ type = 'function'; function = @{ name = 'get_weather'; description = 'Get the current weather of a city'; parameters = @{ type = 'object'; properties = @{ city = @{ type = 'string' } }; required = @('city') } } }) } | ConvertTo-Json -Depth 8
+    $r = Invoke-RestMethod -Uri "http://127.0.0.1:$JarvisLmStudioPort/v1/chat/completions" -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 240
+    $ok = [bool]($r.choices[0].message.tool_calls -and "$($r.choices[0].message.tool_calls[0].function.name)" -eq 'get_weather')
+  } catch { Write-Host "  Test error: $($_.Exception.Message)" -ForegroundColor Yellow }
+  & $Lms unload $Key 2>&1 | Out-Null   # only the tested model: another model that Jarvis uses stays loaded
+  return $ok
+}
+
+function Get-ModelDownloadState {
+  # The state of the background model download (tools\model-download.ps1 writes %USERPROFILE%\.openjarvis\model-download.txt as
+  # "<state>|<text>|<process id>|<target>"; state = downloading, testing, loading, done or failed). $null when there is no such file.
+  $f = Join-Path $JarvisConfigDir 'model-download.txt'
+  if (-not (Test-Path $f)) { return $null }
+  $raw = Get-Content $f -Raw -ErrorAction SilentlyContinue
+  if (-not $raw) { return $null }
+  $p = ($raw -split "`n")[0].Trim() -split '\|'
+  if ($p.Count -lt 2) { return $null }
+  $alive = $false
+  if ($p.Count -ge 3 -and $p[2] -match '^\d+$') { $alive = [bool](Get-Process -Id ([int]$p[2]) -ErrorAction SilentlyContinue) }
+  $target = ''; if ($p.Count -ge 4) { $target = $p[3] }
+  return [pscustomobject]@{ State = $p[0]; Text = $p[1]; Alive = $alive; Target = $target }
+}
+
+function Test-ModelDownloadActive {
+  # true while the background model download is still running (it needs LM Studio to stay open)
+  $s = Get-ModelDownloadState
+  return [bool]($s -and $s.Alive -and $s.State -in 'downloading', 'testing', 'loading')
+}

@@ -61,7 +61,8 @@ if ($lmsApp) {
   Write-Host "Opening LM Studio: $lmsApp"
   # an LM Studio that was started hidden (tray only) is closed first, otherwise starting it again shows no window
   $withWindow = @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })
-  if (-not $withWindow.Count -and (Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)) { Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 3 }
+  # (not while the installer's model download runs inside it: closing LM Studio would stop that download)
+  if (-not $withWindow.Count -and -not (Test-ModelDownloadActive) -and (Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)) { Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 3 }
   # started through Explorer, so LM Studio (and its helper processes) do not attach to this window:
   # otherwise its log fills this window and keeps it open after Stop Jarvis
   Start-Process explorer.exe -ArgumentList ('"{0}"' -f $lmsApp); Start-Sleep -Seconds 5
@@ -105,6 +106,12 @@ if ($info) {
     $now = Get-LoadedModel
     if ($now -and $now.id -eq $c) { $model = $c; break }
     Write-Host "Could not load $c - trying the next model..." -ForegroundColor Yellow
+  }
+  if (-not $model -and (Test-ModelDownloadActive)) {
+    # the installer is still downloading the model in the background: start everything anyway; the download loads the model when it is done
+    $dl = Get-ModelDownloadState
+    $model = if ($dl.Target -and (Test-ModelId $dl.Target)) { $dl.Target } else { $first }
+    Write-Host "The language model is still downloading ($($dl.Text)). Jarvis starts now; chat answers work as soon as the download has finished (watch it in LM Studio)." -ForegroundColor Yellow
   }
   if (-not $model) { Exit-WithMessage "No language model could be loaded. Open LM Studio, download a model that runs on your PC, then start Jarvis again." }
 }

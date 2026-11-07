@@ -88,7 +88,7 @@ var
   OnlineBtn: TNewButton;
   OnlineInfo: TNewStaticText;
   RbOnYes, RbOnNo: TNewRadioButton;
-  OnlineRepo, OnlineGB: String;
+  OnlineRepo, OnlineGB, OnlineWhy, OnlineDate: String;
   ModelGBs: TArrayOfString;
   VoiceRecKey, RecWhisper, RecTts: String;
   HasNvidia: Boolean;
@@ -273,6 +273,7 @@ end;
 procedure SetRadioLook(R: TNewRadioButton);
 begin
   if R.Enabled then Lbls[R.Tag].Font.Color := CText else Lbls[R.Tag].Font.Color := $707070;
+  if (R = RbSkip) and R.Enabled then Lbls[R.Tag].Font.Color := COrange;
 end;
 
 { Windows 11: title bar and window border in the HUD background color (older Windows keeps its normal frame) }
@@ -431,7 +432,8 @@ begin
   RbT1 := AddRadio(ModelPage, Y, 'Small language model');
   RbT2 := AddRadio(ModelPage, Y, 'Medium language model');
   RbT3 := AddRadio(ModelPage, Y, 'Large language model');
-  RbSkip := AddRadio(ModelPage, Y, 'Skip (I will download a model in LM Studio myself)');
+  RbSkip := AddRadio(ModelPage, Y, 'You can also skip this step (I will download a model in LM Studio myself)');
+  Lbls[RbSkip.Tag].Font.Color := COrange;   { the skip choice stands out in orange }
   ModelTip := AddText(ModelPage, Y, 'Tip: the next step can search online for the newest models, if you like.', CText, False);
   ModelTip.Font.Style := [fsItalic];
   RbExist.Enabled := False;
@@ -444,7 +446,7 @@ begin
   { optional: look online for a newer model that fits the PC }
   OnlinePage := NewPage(ModelPage.ID, 'Newest models (optional)', 'Look online for a newer language model that fits your PC.');
   Y := 0;
-  AddText(OnlinePage, Y, 'The three sizes on the previous page are a fixed list. This optional step asks Hugging Face for the newest chat models of the LM Studio community and suggests the biggest one that fits your PC. After the download the setup tests that the model can call tools (Jarvis needs that). If the test fails, your choice from the previous page is installed instead. You can skip this step.', CText, False);
+  AddText(OnlinePage, Y, 'The three sizes on the previous page are a fixed list. This optional step asks Hugging Face for the newest chat models of the LM Studio community and gives every model that fits your PC points for: how new it is, its size (bigger answers better, but it must fit), how popular it is (downloads and likes) and whether it suits what Jarvis needs (a model family that calls tools, tuned for chat, text only). The best total is suggested. After the download the setup tests that the model can call tools (Jarvis needs that). If the test fails, your choice from the previous page is installed instead. You can skip this step.', CText, False);
   AddLink(OnlinePage, Y, 'Hugging Face: lmstudio-community', 'https://huggingface.co/lmstudio-community');
   OnlineBtn := TNewButton.Create(OnlinePage);
   OnlineBtn.Parent := OnlinePage.Surface;
@@ -520,12 +522,13 @@ begin
   { home city: ATMOSPHERICS weather and the world-map home point (tools\set-home-city.ps1 writes frontend\public\hud-home.js) }
   CityPage := NewPage(KeyPage.ID, 'Your city', 'For the weather and the home point on the world map in the HUD.');
   Y := 0;
-  AddText(CityPage, Y, 'Type the city you live in. The setup looks it up with the free Open-Meteo service (only the city name is sent). Leave the box empty to skip: the HUD then shows London, or keeps the city of an earlier install.', CText, False);
+  AddText(CityPage, Y, 'The box is filled in with Berlin: type your own city instead (or leave Berlin). The setup looks it up with the free Open-Meteo service (only the city name is sent). Leave the box empty to skip: the HUD then shows London, or keeps the city of an earlier install.', CText, False);
   AddLink(CityPage, Y, 'Open-Meteo geocoding', 'https://open-meteo.com/en/docs/geocoding-api');
   AddText(CityPage, Y, 'Your city:', CText, False);
   CityEdit := TNewEdit.Create(CityPage);
   CityEdit.Parent := CityPage.Surface;
   CityEdit.Left := 0; CityEdit.Top := Y; CityEdit.Width := CityPage.SurfaceWidth;
+  CityEdit.Text := 'Berlin';   { suggestion, the user can change or clear it }
   Y := Y + ScaleY(30);
   AddText(CityPage, Y, 'Change it later with tools\set-home-city.ps1 in the install folder.', CText, False);
 
@@ -630,7 +633,7 @@ begin
   OnlineBtn.Enabled := False;
   OnlineInfo.Caption := 'Searching Hugging Face, please wait a few seconds...';
   WizardForm.Update;
-  OnlineRepo := ''; OnlineGB := '';
+  OnlineRepo := ''; OnlineGB := ''; OnlineWhy := ''; OnlineDate := '';
   Tmp := ExpandConstant('{tmp}\models-online.txt');
   DeleteFile(Tmp);
   ExtractTemporaryFile('jarvis-common.ps1');
@@ -645,13 +648,16 @@ begin
         Delete(L, 1, 5);
         OnlineRepo := NextField(L);
         OnlineGB := NextField(L);
+        OnlineDate := NextField(L);
+        OnlineWhy := NextField(L);   { the score, replaced by the reason on the next line }
+        OnlineWhy := L;
         if not ValidModelId(OnlineRepo) then OnlineRepo := '';
       end;
     end;
   if OnlineRepo <> '' then
   begin
-    OnlineInfo.Caption := 'Found: ' + OnlineRepo + ' (about ' + OnlineGB + ' GB, estimated). It fits your PC.';
-    SetRadioText(RbOnYes, 'Use ' + OnlineRepo + '   (about ' + OnlineGB + ' GB, found online)   <-- newest that fits');
+    OnlineInfo.Caption := 'Best match: ' + OnlineRepo + ' (about ' + OnlineGB + ' GB, estimated, added ' + OnlineDate + '). Points: ' + OnlineWhy + '.';
+    SetRadioText(RbOnYes, 'Use ' + OnlineRepo + '   (about ' + OnlineGB + ' GB, found online)   <-- best match for your PC');
     RbOnYes.Enabled := True; SetRadioLook(RbOnYes);
     RbOnYes.Checked := True;
   end
@@ -788,7 +794,7 @@ begin
   else
     S := S + Space + 'LM Studio: will be installed' + NewLine;
   S := S + Space + 'Fan monitor (LibreHardwareMonitor) for the HUD fan panel' + NewLine + Space + Space + '(Windows asks for administrator permission once)' + NewLine;
-  if (not RbSkip.Checked) and (not RbExist.Checked) then S := S + Space + '(a model download of several GB can take a very long' + NewLine + Space + 'time; the setup waits for it)' + NewLine;
+  if (not RbSkip.Checked) and (not RbExist.Checked) then S := S + Space + '(a model download of several GB can take a long time:' + NewLine + Space + 'it runs in the background, you can start Jarvis meanwhile)' + NewLine;
   S := S + NewLine + 'Other missing programs (Git, uv, Node.js, Rust,' + NewLine + 'Windows Terminal) are installed with winget;' + NewLine + 'Windows may ask for permission.';
   Result := S;
 end;
@@ -950,7 +956,8 @@ begin
       S := 'The setup script ended with code ' + IntToStr(SetupCode) + '. Details: ' + ExpandConstant('{%USERPROFILE}\.openjarvis\install-log.txt') + #13#10#13#10;
     S := S + 'Still to do:' + #13#10 +
       '1. Double-click the Jarvis icon on your desktop. Allow the microphone in your browser and remember the decision.' + #13#10 +
-      '2. No language model chosen or the download failed? Open LM Studio, download one, then run this installer again.' + #13#10;
+      '2. The language model may still be downloading in the background (watch it in LM Studio, Downloads). You can start Jarvis now; chatting works once the download is done. File: ' + ExpandConstant('{%USERPROFILE}\.openjarvis\model-download.txt') + #13#10 +
+      '   No language model chosen or the download failed? Open LM Studio, download one, then run this installer again.' + #13#10;
     if RagCheck.Checked then
       S := S + '3. Document search: in LM Studio open a chat, enable the Big RAG plugin and set the documents folder, an index folder and the embedding model (README, Document search).' + #13#10;
     if TadoCheck.Checked then

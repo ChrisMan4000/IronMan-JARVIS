@@ -128,6 +128,15 @@ try {
     if (@('medium', 'large-v3') -contains $Whisper) { $Whisper = 'small'; Write-Host "  Using the smaller size 'small' on the processor." -ForegroundColor Yellow }
     $res = Invoke-ProjectPython $pyWhisper @($Whisper, $device, $compute)
   }
+  if ($res -notmatch 'WHISPER_OK') {
+    # seen on a Snapdragon Surface (2026-11-02/07): "Unable to open file 'model.bin'" = a half-finished download in the Hugging Face cache.
+    # Delete that model's cache folder and download again with the Xet transfer switched off (plain HTTPS), then test once more.
+    Write-Host "  Speech recognition test failed - downloading the model again in the plain way..." -ForegroundColor Yellow
+    Get-ChildItem (Join-Path $env:USERPROFILE '.cache\huggingface\hub') -Directory -Filter "models--Systran--faster-whisper-$Whisper" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    $env:HF_HUB_DISABLE_XET = '1'
+    $res = Invoke-ProjectPython $pyWhisper @($Whisper, $device, $compute)
+    Remove-Item Env:\HF_HUB_DISABLE_XET -ErrorAction SilentlyContinue
+  }
   if ($res -notmatch 'WHISPER_OK') { Write-Host "  The speech recognition test failed (internet?). The setting is saved anyway; Jarvis tries again on first use." -ForegroundColor Yellow }
 
   Write-VoiceStep "Voice: downloading the Kokoro voice (about 0.3 GB)"
