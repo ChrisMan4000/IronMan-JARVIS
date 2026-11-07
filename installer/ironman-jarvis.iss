@@ -955,6 +955,7 @@ begin
       S := S + '3. Document search: in LM Studio open a chat, enable the Big RAG plugin and set the documents folder, an index folder and the embedding model (README, Document search).' + #13#10;
     if TadoCheck.Checked then
       S := S + '4. Tado login did not finish? Run tools\tado_login.py in the Jarvis folder.' + #13#10;
+    S := S + 'Optional: to use the HUD from your phone or another PC in your home network, run tools\setup-remote-access.ps1 in the Jarvis folder (README).' + #13#10;
     WizardForm.FinishedLabel.Caption := S;
   end;
 end;
