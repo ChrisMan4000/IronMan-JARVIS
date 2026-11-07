@@ -905,7 +905,7 @@ g.save();g.beginPath();g.rect(mxm-2*u,mtop-2*u,mwm+4*u,mh+4*u);g.clip();
 g.strokeStyle=C;g.lineWidth=u;g.globalAlpha=0.08;
 for(let lo=-180;lo<=180;lo+=30){const a=pj(lo,LAT0),b=pj(lo,LAT1);ln(a[0],a[1],b[0],b[1])}
 for(let la=-30;la<=60;la+=30){const a=pj(-180,la),b=pj(180,la);ln(a[0],a[1],b[0],b[1])}
-if(JarvisHud.capture.active){JarvisHud.capture.mapDots=MAPD}else if(mapOk&&!JarvisHud.capture.active){const ds=0.4*u,sz=ds*Math.min(MZ.s/mzS0,4);g.fillStyle=C;g.globalAlpha=0.38;MAPD.forEach(d=>{const x=mzCx+(d[0]-MZ.l)*MZ.s,y=mzCy-(d[1]-MZ.a)*MZ.s;if(x>mxm-6&&x<mxm+mwm+6&&y>mtop-6&&y<mtop+mh+6)g.fillRect(x,y,sz,sz)});g.globalAlpha=1}else if(mapOk){const ds=0.4*u,kk=devicePixelRatio||1,cw=Math.ceil((mwm+ds+8)*kk),chh=Math.ceil((mh+ds+8)*kk);
+if(JarvisHud.capture.active){JarvisHud.capture.mapDots=MAPD}else if(mapOk&&!JarvisHud.capture.active){const ds=0.4*u,sz=Math.max(ds,MZ.s*1.5);g.fillStyle=C;g.globalAlpha=0.5;MAPD.forEach(d=>{const x=mzCx+(d[0]-MZ.l)*MZ.s,y=mzCy-(d[1]-MZ.a)*MZ.s;if(x>mxm-6&&x<mxm+mwm+6&&y>mtop-6&&y<mtop+mh+6)g.fillRect(x,y,sz,sz)});g.globalAlpha=1}else if(mapOk){const ds=0.4*u,kk=devicePixelRatio||1,cw=Math.ceil((mwm+ds+8)*kk),chh=Math.ceil((mh+ds+8)*kk);
 if(mwm>1&&mh>1&&cw*chh<3e7){
 const key=C+'|'+kk+'|'+mxm.toFixed(2)+'|'+mtop.toFixed(2)+'|'+mwm.toFixed(2)+'|'+mh.toFixed(2)+'|'+ds.toFixed(3)+'|'+MAPD.length;
 if(MC.key!==key){const ox=(Math.floor(mxm*kk)-2)/kk,oy=(Math.floor(mtop*kk)-2)/kk,cc=MC.cv||(MC.cv=document.createElement('canvas'));
