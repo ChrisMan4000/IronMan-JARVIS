@@ -20,6 +20,10 @@
 
 - I am **not a developer**. This is my **first GitHub project**, **vibe coded** in about **24 days**, first in the free Claude chat, later in a paid plan.
 - Then Claude cleaned up the code with [desloppify](https://github.com/peteromallet/desloppify), a code-quality scanner for AI-written code: shared helpers instead of copies, clearer names, safer scripts and about 260 automatic tests (strict scores from 13-24 to 70-80 out of 100).
+
+  <p align="center">
+    <a href="https://github.com/peteromallet/desloppify"><img src="docs/images/desloppify-scorecard.png" alt="desloppify scorecard for IronMan-JARVIS: score 77.5, strict 70.2" width="600"></a>
+  </p>
 - It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). It adapts the models and tools to your specific hardware, so a decent laptop should run it as well with a lighter model.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
