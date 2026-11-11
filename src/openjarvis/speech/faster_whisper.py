@@ -25,6 +25,36 @@ logger = logging.getLogger(__name__)
 
 
 @SpeechRegistry.register("faster-whisper")
+
+def resolve_model_path(size: str) -> str:
+    """Return a model name/path that CTranslate2 can open.
+
+    On Windows the Hugging Face cache stores files as symlinks, and CTranslate2
+    cannot open ``model.bin`` through them ("Unable to open file 'model.bin'",
+    seen on a Snapdragon Surface). So on Windows the model is copied once into a
+    plain folder under ~/.openjarvis/whisper and that folder is used instead.
+    """
+    import os
+
+    if os.name != "nt" or os.path.isdir(size):
+        return size
+    try:
+        import shutil
+        from pathlib import Path
+
+        from faster_whisper.utils import download_model
+
+        src = Path(download_model(size))
+        dst = Path.home() / ".openjarvis" / "whisper" / size
+        if not (dst / "model.bin").is_file():
+            dst.mkdir(parents=True, exist_ok=True)
+            for f in src.iterdir():
+                shutil.copyfile(f.resolve(), dst / f.name)  # follows the symlink
+        return str(dst)
+    except Exception:
+        logger.warning("Could not make a plain copy of the Whisper model", exc_info=True)
+        return size
+
 class FasterWhisperBackend(SpeechBackend):
     """Local speech-to-text using Faster-Whisper (CTranslate2)."""
 
@@ -89,7 +119,7 @@ class FasterWhisperBackend(SpeechBackend):
                 raise ImportError(self._last_error)
             compute_type = self._resolve_compute_type()
             self._model = WhisperModel(
-                self._model_size,
+                resolve_model_path(self._model_size),
                 device=self._device,
                 compute_type=compute_type,
             )

@@ -42,8 +42,9 @@ $pyWhisper = @'
 import sys
 import numpy as np
 from faster_whisper import WhisperModel
+from openjarvis.speech.faster_whisper import resolve_model_path
 m, d, c = sys.argv[1], sys.argv[2], sys.argv[3]
-w = WhisperModel(m, device=d, compute_type=c)
+w = WhisperModel(resolve_model_path(m), device=d, compute_type=c)
 list(w.transcribe(np.zeros(16000, dtype="float32"), language="en")[0])
 print("WHISPER_OK")
 '@
