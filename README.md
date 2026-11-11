@@ -1,7 +1,5 @@
 # IronMan J.A.R.V.I.S. – An IronMan-Style Web-Interface with all the Bells & Whistles
 
-**HUD version** shown in the browser tab and in the CORE STATUS panel (kept in `frontend/public/hud-version.js`; the number after the dot counts the iterations, one per commit that changes the HUD). Technical architecture: [docs/HUD-ARCHITECTURE.md](docs/HUD-ARCHITECTURE.md).
-
 *Tony Stark had a billion dollars and a genius brain. I had a Claude chat and about 120 hours.*
 
 ![The IronMan J.A.R.V.I.S. HUD](docs/images/hud-screenshot.png)
@@ -20,9 +18,9 @@
 
 > <i>🏹 Local AI is a [countervailing technology](https://www.lesswrong.com/posts/TuBYwefHQLDXttwdP/countervailing-technologies) (Samuele Marro): it moves power back towards the little guy. Nobody can switch it off, charge for it or read along. Jarvis is my little crossbow.</i>
 
-- I am **not a developer**. This is my **first GitHub project**, **vibecoded** in about **120 hours** (24 days, Oct 12 to Nov 5, 2026) in the Claude chat, first the free web version, later a paid plan.
+- I am **not a developer**. This is my **first GitHub project**, **vibe coded** in about **24 days**, first in the free Claude chat, later in a paid plan.
 - Then Claude cleaned up the code with [desloppify](https://github.com/peteromallet/desloppify), a code-quality scanner for AI-written code: shared helpers instead of copies, clearer names, safer scripts and about 260 automatic tests (strict scores from 13-24 to 70-80 out of 100).
-- It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). But it adapts the models to your specific hardware, so a decent laptop should run it as well with a lighter model.
+- It runs great on my PC (Nvidia RTX 5090, Intel Core Ultra 9, 64GB RAM and SSD on Win11). It adapts the models and tools to your specific hardware, so a decent laptop should run it as well with a lighter model.
 - Be nice. Open an issue if something breaks and tell me what you saw.
 
 ## ✨ What you get
@@ -31,11 +29,11 @@ On top of [OpenJarvis's own features](https://openjarvis.stanford.edu/#features)
 
 - 🖥️ **Full-screen HUD:** live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections, a glowing 3D brain, a cinematic intro. Phone layout included.
 - 🎙️ **Talk to it:** say "Hey Jarvis" or press **F6**; **Esc** stops it. Local speech recognition (faster-whisper) and voice (Kokoro or Chatterbox), chosen for your PC by the installer.
-- 🏠 **Everything local:** the AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account. Switch model, context size and reasoning inside the HUD.
-- 💡 **Smart home (optional):** [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) lights, [Tado](https://www.tado.com/en) heating and a [Sonos](https://www.sonos.com) speaker or soundbar (play, pause, skip, volume; the volume is capped at 80 %). Every change is read back, so Jarvis cannot just claim it worked.
+- 🏠 **Everything local:** the AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account. Switch model, context size and reasoning/thinking inside the HUD.
+- 💡 **Smart home (optional):** [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) smart lights, [Tado](https://www.tado.com/en) smart heating and a [Sonos](https://www.sonos.com) speaker or soundbar (play, pause, etc.). Every change is read back, so Jarvis cannot just claim it worked.
 - 🔎 **Web search, news and documents (optional):** web search with the [Firecrawl](https://www.firecrawl.dev/) API (your own free key), news headlines, and questions about your own files with the LM Studio plugin [Big RAG](https://lmstudio.ai/mindstudio/big-rag). Sources are always clickable links.
 - 💭 **Memory:** tell it "my car is a blue Beetle" and it still knows in the next chat (stored only on your PC).
-- 📈 **Honest answers:** every answer shows its confidence, predictions are in _italic_, two lights show whether web or document search was used.
+- 📈 **Honest answers:** every answer shows its confidence %, predictions are in _italic_, two lights show whether web or document search was used.
 - 💶 **Cost comparison:** what the same tokens would have cost on cloud models.
 - 🛡️ **Privacy first:** upstream analytics are switched off, all Jarvis ports listen on `127.0.0.1` only.
 - 🖱️ **Two desktop icons:** **Jarvis** starts everything, **Stop Jarvis** shuts it all down.
@@ -47,7 +45,7 @@ On top of [OpenJarvis's own features](https://openjarvis.stanford.edu/#features)
 | OS | **Windows 11** with Windows PowerShell 5 (the built-in blue one) |
 | GPU | NVIDIA recommended. Without one the HUD still runs (no GPU gauges) with a smaller model. |
 | RAM | 16 GB works with a small model; 64 GB on my PC. |
-| Disk | about **25 GB** free (project ~3 GB, default model ~16 GB; a small model is ~4 GB). The Chatterbox voice needs about 12 GB more. |
+| Disk | about **25 GB** free (project ~3 GB, default model ~16 GB; a small model is ~4 GB). The bigger Chatterbox voice needs about 12 GB more. |
 | Browser | Firefox (what I use). Allow the microphone. |
 
 ## 🚀 Install
