@@ -24,8 +24,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@SpeechRegistry.register("faster-whisper")
-
 def resolve_model_path(size: str) -> str:
     """Return a model name/path that CTranslate2 can open.
 
@@ -55,6 +53,8 @@ def resolve_model_path(size: str) -> str:
         logger.warning("Could not make a plain copy of the Whisper model", exc_info=True)
         return size
 
+
+@SpeechRegistry.register("faster-whisper")
 class FasterWhisperBackend(SpeechBackend):
     """Local speech-to-text using Faster-Whisper (CTranslate2)."""
 
