@@ -1,4 +1,6 @@
-# IronMan J.A.R.V.I.S. – An IronMan-Style Web-Interface with all the Bells & Whistles
+<p align="center">
+  <img src="docs/images/jarvis-header.gif" alt="IronMan J.A.R.V.I.S. – An IronMan-Style Web-Interface with all the Bells &amp; Whistles" width="920">
+</p>
 
 *Tony Stark had a billion dollars and a genius brain. I had a Claude chat and about 120 hours.*
 
