@@ -37,7 +37,7 @@ Start order: LM Studio → model → backup watcher, helper, wake word, server �
 * `hud.html` draws every panel on one canvas each frame (`box()`, `tx()` helpers, one unit `u` scales everything to the screen, 5120×1440 down to phones).
 * `hud-shared.js` – shared layout and hand-over object `window.JarvisHud` (panels, wings, map area, captured texts, brain, hooks `onAsk` / `onLogLine`).
 * `hud-boot-scene.js`, `hud-boot.js` – cinematic intro: pieces fly in, texts of the first frame are captured and replayed, panels unroll, then fade-out (about 6 s, click skips).
-* `hud-brain.js` – the glowing 3D neural-network brain (WebGL point cloud, replaces the centre ring).
+* `hud-brain.js` - the living vortex brain in the centre (WebGL feedback effect in the style of the Geiss music visualiser: a voice wave, a beating two-lobed core and nerve fibres, pulled inward like a tunnel and pushed outward while Jarvis speaks; 120 steps per second; the intro builds it from single pixels sucked in from the whole screen; replaces the centre ring).
 * World map ("NETWORK TRAFFIC // WORLD"): land from `vendor/world-atlas/land-110m.json` sampled into dots; connections come from the helper (`netstat` → public IPs → offline DB-IP database `tools/dbip.mmdb`); home point from `hud-home.js` (`HOME_CFG`, written by `tools/set-home-city.ps1`).
 * `hud-local.js` – private extension hooks of this PC (not part of the public project). `hud-version.js` – version number.
 * Data in: helper `GET http://127.0.0.1:8765/` (every ~0.8 s), server `/v1` (chat, streaming), weather (Open-Meteo), CO2 (NOAA).

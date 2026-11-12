@@ -31,7 +31,7 @@
 
 On top of [OpenJarvis's own features](https://openjarvis.stanford.edu/#features):
 
-- 🖥️ **Full-screen HUD:** live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections, a glowing 3D brain, a cinematic intro. Phone layout included.
+- 🖥️ **Full-screen HUD:** live GPU/CPU gauges, telemetry, weather, CO2, a world map of your network connections, a living, voice-reactive vortex brain, a cinematic intro. Phone layout included.
 - 🎙️ **Talk to it:** say "Hey Jarvis" or press **F6**; **Esc** stops it. Local speech recognition (faster-whisper) and voice (Kokoro or Chatterbox), chosen for your PC by the installer.
 - 🏠 **Everything local:** the AI runs on your PC through [LM Studio](https://lmstudio.ai). No cloud AI, no account. Switch model, context size and reasoning/thinking inside the HUD.
 - 💡 **Smart home (optional):** [Philips Hue](https://www.philips-hue.com/en-us/explore-hue) smart lights, [Tado](https://www.tado.com/en) smart heating and a [Sonos](https://www.sonos.com) speaker or soundbar (play, pause, etc.). Every change is read back, so Jarvis cannot just claim it worked.

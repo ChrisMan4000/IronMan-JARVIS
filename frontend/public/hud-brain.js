@@ -1,252 +1,211 @@
-/* hud-brain.js - Jarvis neural core (plain WebGL, no libraries).
+/* hud-brain.js - Jarvis vortex brain (plain WebGL + one 2D ink canvas, no libraries).
    const b = JarvisBrain(canvas, {detail: 1, fps: 30});
    b.setState('idle'|'listening'|'thinking'|'speaking');  b.setLevel(0..1);  b.intro(seconds);  b.destroy();
-   Canvas is black + opaque: put it over the HUD with CSS mix-blend-mode: screen (black = see-through). */
+   Canvas is black + opaque: put it over the HUD with CSS mix-blend-mode: screen (black = see-through).
+
+   How it works (the way the old Geiss visualiser did it): every step the last picture is warped (spin + pull)
+   and faded, then fresh "ink" is drawn on top: the voice wave, a beating two-lobed core, nerve fibres, dust.
+   The pull goes inward (black-hole tunnel) and turns outward while speaking. The engine runs 120 steps per
+   second whatever the screen rate is. intro() builds the brain out of single pixels sucked in from the window. */
 (function () {
+'use strict';
 const COLS = {idle:[60,190,235], listening:[110,215,190], thinking:[235,160,95], speaking:[110,200,235]};   // HUD FDC palette
-const ACC = [255,154,61];                                                                                   // HUD orange accent
-const SI = {idle:0, listening:1, thinking:2, speaking:3};
-//            rot  wobble line  point mist  glow  pulses
-const CFG = [ [.07,.006, .30, .60, .085, .17, .60],
-              [.12,.010, .33, .66, .090, .21, .75],
-              [.50,.003, .27, .52, .050, .50, 1.0],
-              [.12,.006, .33, .64, .090, .24, .90] ];
+const ACCS = {idle:[235,160,95], listening:[235,160,95], thinking:[60,190,235], speaking:[235,160,95]};     // second ink colour
+const SPD  = {idle:.6, listening:.9, thinking:1.7, speaking:1};                                             // spin speed
+const HZ = 120, TAU = Math.PI*2, WH = [255,255,255];
+const rgba = (c, a) => 'rgba('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+','+a+')';
+const ss = (a, b, x) => { x = Math.max(0, Math.min(1, (x-a)/(b-a))); return x*x*(3-2*x); };
 
-function JarvisBrain(cv, opt) {
+const VS = 'attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}';
+const FB = S => 'precision highp float;varying vec2 v;uniform sampler2D prev,ink;uniform float t,lvl,spd,th,pull,dir;uniform vec3 dec;'+
+ 'mat2 rot(float x){float s=sin(x),k=cos(x);return mat2(k,-s,s,k);}'+
+ 'void main(){vec2 c=v-.5;float r=length(c);'+
+ 'float n1=sin(c.x*7.+t*.5)+sin(c.y*9.-t*.4)+sin((c.x+c.y)*5.+t*.3);'+                 // uneven current instead of clean rings
+ 'float n2=sin(c.x*11.-t*.6)+sin(c.y*6.+t*.35);'+
+ 'float fd=1.-.02*smoothstep(.2,.49,r)-.05*max(dir,0.)*smoothstep(.07,0.,r);'+         // rim fades, core swallows light while pulling in
+ 'c=rot((.015*spd+th*(.012+.012*sin(t*2.6))+.004*spd/(r*6.+.25))*(1.+.3*n1))*c;'+      // spin, faster near the centre, surging while thinking
+ 'c*=1.+dir*(pull*(1.+.25*n2)+.003*lvl)+th*.003*sin(t*3.1+n1);'+                       // dir 1 = pull inward, -1 = push outward (speaking)
+ 'c+=.0014*vec2(sin(c.y*11.+t*.7)+sin(c.y*23.-t),cos(c.x*13.-t*.6)+cos(c.x*19.+t*.8));'+
+ 'vec2 w=c+.5;vec2 e=vec2(1./'+S+'.,0.);'+
+ 'vec3 p=texture2D(prev,w).rgb*.8+(texture2D(prev,w+e.xy).rgb+texture2D(prev,w-e.xy).rgb+texture2D(prev,w+e.yx).rgb+texture2D(prev,w-e.yx).rgb)*.05;'+
+ 'p*=step(0.,w.x)*step(w.x,1.)*step(0.,w.y)*step(w.y,1.);'+
+ 'gl_FragColor=vec4(max(p*dec*fd-.0022,0.)+texture2D(ink,v).rgb,1.);}';
+const SHOW = 'precision highp float;varying vec2 v;uniform sampler2D buf;uniform vec3 col;uniform float lvl,th,ii;'+
+ 'void main(){float r=length(v-.5);vec3 k=pow(texture2D(buf,v).rgb,vec3(.85));'+
+ 'k*=1.+(.4+.6*lvl)*smoothstep(.2,0.,r);'+                                             // hotter centre
+ 'k+=mix(col,vec3(1.),.5)*(.06+.16*lvl+.06*th)*exp(-r*r*900.)*ii;'+
+ 'k*=mix(1.,smoothstep(.5,.2,r),.4)*smoothstep(.5,.44,r);'+                            // soft outer edge, black at the canvas border
+ 'gl_FragColor=vec4(k,1.);}';
+
+window.JarvisBrain = function (cv, opt) {
   opt = opt || {};
-  const D = opt.detail || 1; let FPS = opt.fps || 60;
-  const gl = cv.getContext('webgl', {antialias:true, alpha:false, depth:false, powerPreference:'high-performance'});
+  const detail = opt.detail == null ? 1 : opt.detail, S = detail >= 1 ? 768 : 512, Z = S/768;
+  cv.width = cv.height = S;
+  const gl = cv.getContext('webgl', {alpha:false, antialias:false});
   if (!gl) return null;
-
-  // ---------- helpers ----------
-  const R = Math.random, rnd = (a,b) => a + R()*(b-a), gauss = () => (R()+R()+R()-1.5)*.8;
-  const len = v => Math.hypot(v[0],v[1],v[2]), sub = (a,b) => [a[0]-b[0],a[1]-b[1],a[2]-b[2]];
-  const norm = v => { const l = len(v) || 1; return [v[0]/l,v[1]/l,v[2]/l]; }, dot = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
-  const dir = () => { const z = rnd(-1,1), a = rnd(0,6.2832), s = Math.sqrt(1-z*z); return [s*Math.cos(a), s*Math.sin(a), z]; };
-  const ball = r => { let p; do p = [rnd(-1,1),rnd(-1,1),rnd(-1,1)]; while (len(p) > 1); return p.map(x => x*r); };
-
-  // ---------- cosmic web: particles on the walls and edges of random cells ----------
-  const SEEDS = 46, seeds = Array.from({length:SEEDS}, () => ball(1.2));
-  const near = p => { const o = []; for (let i = 0; i < SEEDS; i++) o.push([len(sub(p,seeds[i])), i]); return o.sort((u,v) => u[0]-v[0]); };
-  const plane = (p,i,j) => { const A = seeds[i], B = seeds[j], n = norm(sub(B,A)), k = dot(sub(p,[(A[0]+B[0])/2,(A[1]+B[1])/2,(A[2]+B[2])/2]), n); return [p[0]-n[0]*k, p[1]-n[1]*k, p[2]-n[2]*k]; };
-  const nodes = [], mk = (b,kind,o) => Object.assign({b, kind, k:R(), sp:rnd(.5,1.6), ph:rnd(0,6.2832)}, o);
-  const WEB = 7000*D | 0, KNOTS = 420*D | 0, DUST = 900*D | 0, HAIRS = 650*D | 0;
-  while (nodes.length < WEB) {
-    let p = ball(1); const o = near(p), [a,b,c] = [o[0][1],o[1][1],o[2][1]], edge = R() < .72;
-    if (edge) for (let i = 0; i < 6; i++) { p = plane(p,a,b); p = plane(p,a,c); } else p = plane(p,a,b);
-    const q = near(p); if (![a,b,c].includes(q[0][1]) || q[1][0]-q[0][0] > .02 || (edge && q[2][0]-q[0][0] > .03)) continue;
-    p = p.map(x => x + gauss()*(edge ? .011 : .02)); if (len(p) > 1) continue;
-    nodes.push(mk(p, 0, {fly:R() < .26}));
-  }
-  // neurons: bright knots where several cells meet
-  const somas = [];
-  for (let tries = 0; somas.length < KNOTS && tries < 30000; tries++) {
-    let p = ball(1); const o = near(p), id = o.slice(0,4).map(x => x[1]);
-    for (let i = 0; i < 12; i++) { p = plane(p,id[0],id[1]); p = plane(p,id[0],id[2]); p = plane(p,id[0],id[3]); }
-    const q = near(p); if (!id.includes(q[0][1]) || q[2][0]-q[0][0] > .03 || len(p) > .97) continue;
-    const fly = R() < .26, acc = somas.length % 6 === 0 ? 1 : 0;
-    somas.push(nodes.length); nodes.push(mk(p, 0, {fly, soma:1, acc}));
-    for (let j = 0, m = 5 + (R()*8|0); j < m; j++) nodes.push(mk(p.map(x => x + gauss()*.016), 0, {fly, star:R() < .3}));
-  }
-  const WEBN = nodes.length;
-  for (let i = 0; i < DUST; i++) nodes.push(mk(dir(), 1, {k:Math.pow(R(),1.6)}));
-  const pairs = [], lmax = [], lmul = [];
-  for (let i = 0; i < HAIRS; i++) {
-    let w; do w = nodes[R()*WEBN|0]; while (len(w.b) < .82);
-    const d = norm(w.b), L = rnd(.03,.15);
-    pairs.push([nodes.length, nodes.length+1]); lmax.push(9); lmul.push(.9, 0);
-    nodes.push(mk(d, 2, {L}), mk(d, 3, {L}));
-  }
-  // links: nearby web particles (grid lookup)
-  const LINK = .075 / Math.cbrt(D), G = new Map(), key = (x,y,z) => (x*73856093) ^ (y*19349663) ^ (z*83492791), cell = p => p.map(v => Math.floor(v/LINK));
-  for (let i = 0; i < WEBN; i++) { const kk = key(...cell(nodes[i].b)); (G.get(kk) || G.set(kk, []).get(kk)).push(i); }
-  for (let i = 0; i < WEBN; i++) {
-    const p = nodes[i].b, c = cell(p), nb = [];
-    for (let x=-1;x<=1;x++) for (let y=-1;y<=1;y++) for (let z=-1;z<=1;z++) for (const j of (G.get(key(c[0]+x,c[1]+y,c[2]+z)) || [])) {
-      if (j <= i) continue; const d = len(sub(p, nodes[j].b)); if (d < LINK) nb.push([d,j]); }
-    nb.sort((u,v) => u[0]-v[0]);
-    for (let m = 0, n = R() < .5 ? 2 : 3; m < Math.min(n, nb.length); m++) { pairs.push([i, nb[m][1]]); lmax.push(LINK*2.2); lmul.push(1,1); }
-  }
-  // axons: each neuron to its 2-3 nearest neurons (the "neural network" lines, carry the signals)
-  const axons = [];
-  somas.forEach(i => {
-    const o = somas.filter(j => j !== i).map(j => [len(sub(nodes[i].b, nodes[j].b)), j]).sort((u,v) => u[0]-v[0]);
-    for (let m = 0, n = 3 + (R() < .5); m < n; m++) if (o[m] && o[m][0] < .6 && (m < 2 || i < o[m][1])) {
-      axons.push(pairs.length); pairs.push([i, o[m][1]]); lmax.push(1.1); lmul.push(1.1,1.1); }
-  });
-  // signals running along the axons
-  const PULSES = Math.min(axons.length*2, 650*D | 0), PB = nodes.length;
-  const pulse = Array.from({length:PULSES}, (_,i) => ({a:axons[R()*axons.length|0], f:R(), v:rnd(.35,.9), acc:i % 5 === 0}));
-  // sparks: tiny fast lights hopping along the web lines (from line to line at the junctions)
-  const adj = Array.from({length:WEBN}, () => []);
-  pairs.forEach(([a,b], i) => { if (a < WEBN && b < WEBN) { adj[a].push(i); adj[b].push(i); } });
-  const webLinks = pairs.map((_,i) => i).filter(i => pairs[i][0] < WEBN && pairs[i][1] < WEBN);
-  const SPARKS = 1100*D | 0, SB = nodes.length + PULSES;
-  const spawn = s => { s.p = webLinks[R()*webLinks.length|0]; s.r = R() < .5; s.f = 0; s.life = 6 + (R()*30|0); return s; };
-  const spark = Array.from({length:SPARKS}, () => spawn({v:rnd(1.4,3.2), f:0}));
-  const M0 = pairs.length, N = nodes.length + PULSES + SPARKS, M = M0 + SPARKS, fire = new Float32Array(N);
-
-  // ---------- shapes for the four states ----------
-  function target(nd, st) {
-    const b = nd.b, r = len(b) || 1e-6, d = [b[0]/r, b[1]/r, b[2]/r]; let Rr;
-    if (nd.kind === 0) { if (st === 2) { if (!nd.fly) return b.map(x => x*.11); Rr = .3 + Math.pow(nd.k,1.5)*2; } else Rr = [.56+.5*r, .6+.54*r, 0, 1.0*r][st]; }
-    else if (nd.kind === 1) { const Q = [[.35,1.9],[.45,2],[.9,2.7],[1.1,2.1]][st]; Rr = Q[0] + nd.k*(Q[1]-Q[0]); }
-    else Rr = [1.02,1.1,.09,1.0][st] + (nd.kind === 3 ? nd.L*[1,1.25,4,.45][st] : 0);
-    return [d[0]*Rr, d[1]*Rr, d[2]*Rr];
-  }
-  const NN = nodes.length, TG = [0,1,2,3].map(st => { const a = new Float32Array(NN*3); nodes.forEach((nd,i) => a.set(target(nd,st), i*3)); return a; });
-  const cur = new Float32Array(TG[0]), pos = new Float32Array(N*3);
-  const start = Float32Array.from({length:NN*3}, () => 0), delay = new Float32Array(NN);
-  for (let i = 0; i < NN; i++) { const d = dir(), r = rnd(2,3); start.set([d[0]*r, d[1]*r, d[2]*r], i*3); delay[i] = nodes[i].soma ? R()*.25 : .15 + R()*.5; }
-
-  // ---------- GL programs ----------
-  function prog(vs, fs) {
-    const p = gl.createProgram();
-    [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]].forEach(([t,s]) => { const sh = gl.createShader(t); gl.shaderSource(sh, 'precision mediump float;'+s); gl.compileShader(sh);
-      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); gl.attachShader(p, sh); });
-    gl.linkProgram(p); const u = {}, a = {};
-    for (let i = 0, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i < n; i++) { const x = gl.getActiveUniform(p,i).name; u[x] = gl.getUniformLocation(p,x); }
-    for (let i = 0, n = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES); i < n; i++) { const x = gl.getActiveAttrib(p,i).name; a[x] = gl.getAttribLocation(p,x); }
-    return {p, u, a};
-  }
-  const PROJ = `uniform vec2 uF; uniform float uZ; varying float vE;
-    vec4 proj(vec3 p){ float w = uZ - p.z; vec4 c = vec4(p.x*uF.x, p.y*uF.y, 0., w); vE = smoothstep(.98,.7,length(c.xy/w)); return c; }`;
-  const PT = prog(`attribute vec3 p; attribute float s, ph, ac, fi; uniform float uPx, uT; varying float vB, vA; ${PROJ}
-      void main(){ gl_Position = proj(p); gl_PointSize = min(s*(1.+fi*.9)*uPx/gl_Position.w, 48.); vB = (.6 + .4*sin(uT*2.5 + ph*7.))*(1.+fi*2.); vA = ac; }`,
-    `uniform vec3 uC, uA; uniform float uG; varying float vB, vA, vE;
-      void main(){ float d = length(gl_PointCoord-.5), a = smoothstep(.5,0.,d); a *= a; float c = smoothstep(.16,0.,d); vec3 col = mix(uC, uA, vA);
-        gl_FragColor = vec4((col*a*.8 + mix(col,vec3(1.),.55)*c*.75)*vB*uG*vE, 1.); }`);
-  const MI = prog(`attribute vec3 p; attribute float m; uniform float uPx; varying float vF; ${PROJ}
-      void main(){ gl_Position = proj(p); gl_PointSize = min(m*uPx/gl_Position.w, 120.); vF = m > 0. ? 1. : 0.; }`,
-    `uniform vec3 uC; uniform float uG; varying float vF, vE;
-      void main(){ float d = length(gl_PointCoord-.5), a = smoothstep(.5,0.,d); gl_FragColor = vec4(uC*a*a*uG*vF*vE, 1.); }`);
-  const LN = prog(`attribute vec3 p; attribute vec3 c; varying vec3 vC; ${PROJ} void main(){ gl_Position = proj(p); vC = c; }`,
-    `varying vec3 vC; varying float vE; void main(){ gl_FragColor = vec4(vC*vE, 1.); }`);
-  const GW = prog(`attribute vec2 q; varying vec2 vQ; void main(){ vQ = q; gl_Position = vec4(q, 0., 1.); }`,
-    `uniform vec3 uC; uniform float uG, uR; varying vec2 vQ; void main(){ float d = length(vQ)/uR; gl_FragColor = vec4(uC*uG*exp(-d*d*3.)*(1.+.8*exp(-d*d*40.)), 1.); }`);
-
-  const buf = (data, usage) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, usage || gl.STATIC_DRAW); return b; };
-  const all = i => i < NN ? nodes[i] : null;
-  const bPos = buf(pos, gl.DYNAMIC_DRAW);
-  const bSize = buf(Float32Array.from({length:N}, (_,i) => { const n = all(i); return !n ? (i >= SB ? 1.5 : 3.2) : n.soma ? rnd(3.6,5) : n.kind === 1 ? rnd(.35,.8) : n.kind === 2 ? .4 : n.kind === 3 ? 0 : n.star ? rnd(1.2,2.2) : rnd(.3,.65); }));
-  const bPh = buf(Float32Array.from({length:N}, (_,i) => all(i) ? all(i).ph : rnd(0,6.28)));
-  const bAc = buf(Float32Array.from({length:N}, (_,i) => { const n = all(i); return n ? (n.acc ? 1 : 0) : (i >= SB ? (i % 9 === 0 ? 1 : 0) : pulse[i-PB].acc ? 1 : 0); }));
-  const bFire = buf(fire, gl.DYNAMIC_DRAW);
-  const bMist = buf(Float32Array.from({length:N}, (_,i) => { const n = all(i); return n && n.kind === 0 ? (n.soma ? rnd(10,14) : rnd(4,9)) : 0; }));
-  const lPos = new Float32Array(M*6), lCol = new Float32Array(M*6), LM = Float32Array.from(lmax), LU = Float32Array.from(lmul);
-  const bLPos = buf(lPos, gl.DYNAMIC_DRAW), bLCol = buf(lCol, gl.DYNAMIC_DRAW), bQuad = buf(new Float32Array([-1,-1,1,-1,-1,1,1,1]));
-  const attr = (pr, name, b, n) => { const l = pr.a[name]; if (l == null || l < 0) return; gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); };
-  const off = pr => Object.values(pr.a).forEach(l => gl.disableVertexAttribArray(l));
+  let fb, show, U = {}, US = {};
+  try {
+    const prog = fs => { const p = gl.createProgram();
+      [[gl.VERTEX_SHADER,VS],[gl.FRAGMENT_SHADER,fs]].forEach(([ty,src]) => { const s = gl.createShader(ty); gl.shaderSource(s,src); gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); gl.attachShader(p, s); });
+      gl.bindAttribLocation(p,0,'p'); gl.linkProgram(p); return p; };
+    fb = prog(FB(S)); show = prog(SHOW);
+  } catch (e) { return null; }
+  ['prev','ink','t','lvl','spd','th','pull','dir','dec'].forEach(n => U[n] = gl.getUniformLocation(fb,n));
+  ['buf','col','lvl','th','ii'].forEach(n => US[n] = gl.getUniformLocation(show,n));
+  const tex = () => { const x = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,x);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,S,S,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE); return x; };
+  const ic = document.createElement('canvas'); ic.width = ic.height = S; const g = ic.getContext('2d');
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  const T = [tex(),tex()], F = [], inkT = tex(); let cur = 0;
+  const clearAll = () => { for (let j = 0; j < 2; j++) { gl.bindFramebuffer(gl.FRAMEBUFFER,F[j]); gl.clear(gl.COLOR_BUFFER_BIT); } };
+  for (let j = 0; j < 2; j++) { const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,T[j],0); F.push(f); }
+  gl.clearColor(0,0,0,1); clearAll();
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.viewport(0,0,S,S);
 
   // ---------- state ----------
-  let st = 0, lvl = 0, ext = 0, extUntil = 0, introT = 9, introLen = 2.4, alive = true, last = performance.now(), acc = 0, rotY = 0;
-  const P = CFG[0].slice(), col = COLS.idle.map(x => x/255), tcol = col.slice(), A3 = ACC.map(x => x/255);
-  let W = 1, H = 1, pxScale = 10;
-  const ro = new ResizeObserver(() => { const dpr = Math.min(devicePixelRatio || 1, 2); W = cv.width = Math.max(1, cv.clientWidth*dpr | 0); H = cv.height = Math.max(1, cv.clientHeight*dpr | 0); pxScale = Math.min(W,H)*.011; });
-  ro.observe(cv);
-  const sim = t => { let s = Math.max(0, Math.sin(t*9.3)) * (.55 + .45*Math.sin(t*2.1)); if (Math.sin(t*.9) > .75) s *= .1; return s; };
-  const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1-x, 3);
+  let state = 'idle', level = 0, fps = opt.fps > 15 ? 120 : (opt.fps || 30);
+  let t = 0, lvl = .1, th = 0, spk = 0, hb = 0, hbp = 0, ang = 0, act = 0, rotF = 0, dustK = 1;
+  const cc = COLS.idle.slice(), ca = ACCS.idle.slice();                                 // current colours, eased on state change
+  // intro: ti = seconds since the build started (in "full length" time, K stretches it); I1 core+lobes, I3 wave, I4 fibres
+  let ti = 99, K = 1, I1 = 1, I3 = 1, I4 = 1, IG = 0, PT = null, PTN = [1,1,1,1], arr = [0,0,0,0], ov = null, og = null;
+  const inbox = [];
+  // nerve fibres growing out of the core
+  const FI = []; for (let i = 0; i < 14; i++) FI.push({a0:i*TAU/14+(Math.random()-.5)*.3, ph:Math.random()*TAU, ph2:Math.random()*TAU, sp:.3+Math.random()*.4, L:.13+Math.random()*.1});
+  const W = (x, k) => Math.sin(x*7+t*3+k)*.5+Math.sin(x*17-t*5+k*2.3)*.3+Math.sin(x*41+t*9+k*4.1)*.2+(Math.random()-.5)*.1;
+  const bend = x => S*(.045*Math.sin(x*3.1+t*.35)+.028*Math.sin(x*6.3-t*.5))*Math.sin(x*Math.PI);   // the wave bends like a nerve
+  const fibre = (c, f) => { const a = c.a0+rotF+f*(.5*Math.sin(c.ph+t*.22)+.25*Math.sin(f*4+c.ph2-t*.35)), rr = S*(.02+c.L*(1+.5*lvl+.3*th)*f);
+    return [S/2+Math.cos(a)*rr, S/2+Math.sin(a)*rr]; };
+  const speck = (x, y, z, style) => { g.fillStyle = style; g.fillRect(x-z/2, y-z/2, z, z); };
 
-  function frame(now) {
-    if (!alive) return; requestAnimationFrame(frame);
-    const step = (now - last)/1000; if (step < 1/FPS - .002) return; const w0 = performance.now();
-    const dt = Math.min(.05, step); last = now; const t = now/1000;
-    introT += dt;
-
-    const raw = now < extUntil ? ext : st === 3 ? sim(t) : st === 2 ? .3 + .1*Math.sin(t*3) : st === 1 ? .15 + .1*Math.sin(t*2) : 0;
-    lvl += (raw - lvl) * (raw > lvl ? .5 : .12);
-    const e = 1 - Math.exp(-dt*2); CFG[st].forEach((v,i) => P[i] += (v - P[i])*e); for (let i = 0; i < 3; i++) col[i] += (tcol[i] - col[i])*e;
-    const [rot, wob, lg, pg, mg, gg, pact] = P, tg = TG[st], ip = introT/introLen, inIntro = ip < 1.2;
-    rotY += dt*rot*(1 + lvl*.5);
-    const rx = .25*Math.sin(t*.11), cy = Math.cos(rotY), sy = Math.sin(rotY), cx = Math.cos(rx), sx = Math.sin(rx);
-
-    for (let i = 0; i < NN; i++) {
-      const nd = nodes[i], i3 = i*3, k = 1 - Math.exp(-dt*2.2*nd.sp);
-      cur[i3] += (tg[i3]-cur[i3])*k; cur[i3+1] += (tg[i3+1]-cur[i3+1])*k; cur[i3+2] += (tg[i3+2]-cur[i3+2])*k;
-      let m = 1 + .012*Math.sin(t*.8 + cur[i3+1]*3);
-      if (st === 3) m += lvl*.16*(.5 + .5*Math.sin(nd.ph + t*7)); else if (st === 1) m += lvl*.12*Math.sin(cur[i3+1]*6 - t*5);
-      let x = cur[i3]*m + wob*Math.sin(t*1.3 + nd.ph), y = cur[i3+1]*m + wob*Math.sin(t*1.7 + nd.ph*1.3), z = cur[i3+2]*m + wob*Math.sin(t*1.1 + nd.ph*1.7);
-      if (inIntro) {                                                   // intro: fly in from far away with a spin
-        const q = ease((ip - delay[i]) / .55), s = (1-q)*2.4, cs = Math.cos(s), ss = Math.sin(s);
-        const ox = start[i3]*cs + start[i3+2]*ss, oz = -start[i3]*ss + start[i3+2]*cs;
-        x = ox + (x-ox)*q; y = start[i3+1] + (y-start[i3+1])*q; z = oz + (z-oz)*q;
-      }
-      const x1 = x*cy + z*sy, z1 = -x*sy + z*cy;                       // rotate (y, then x)
-      pos[i3] = x1; pos[i3+1] = y*cx - z1*sx; pos[i3+2] = y*sx + z1*cx;
-    }
-    for (let i = 0; i < somas.length; i++) fire[somas[i]] *= Math.exp(-dt*3.5);
-    const nOn = Math.round(PULSES * Math.min(1, pact + lvl*.4) * (inIntro ? ease(ip - .9) : 1));
-    for (let i = 0; i < PULSES; i++) {
-      const pu = pulse[i], o = (PB+i)*3;
-      pu.f += dt*pu.v*(1 + lvl*1.5 + (st === 2 ? 1.2 : 0));
-      if (pu.f > 1) { fire[pairs[pu.a][pu.r ? 0 : 1]] = 1; pu.f = 0; pu.a = axons[R()*axons.length|0]; pu.r = R() < .5; }
-      const a = pairs[pu.a][pu.r ? 1 : 0]*3, b = pairs[pu.a][pu.r ? 0 : 1]*3, f = pu.f;
-      if (i < nOn) { pos[o] = pos[a]+(pos[b]-pos[a])*f; pos[o+1] = pos[a+1]+(pos[b+1]-pos[a+1])*f; pos[o+2] = pos[a+2]+(pos[b+2]-pos[a+2])*f; }
-      else { pos[o] = pos[o+1] = 0; pos[o+2] = -99; }
-    }
-    const sOn = Math.round(SPARKS * Math.min(1, pact + lvl*.5) * (inIntro ? ease(ip - .9) : 1)), sp3 = st === 2 ? 1.8 : 1 + lvl;
-    for (let i = 0; i < SPARKS; i++) {
-      const s = spark[i], o = (SB+i)*3, lo = (M0+i)*6;
-      let a = pairs[s.p][s.r ? 1 : 0]*3, b = pairs[s.p][s.r ? 0 : 1]*3;
-      const L = Math.hypot(pos[b]-pos[a], pos[b+1]-pos[a+1], pos[b+2]-pos[a+2]) || .01;
-      s.f += dt*s.v*sp3/Math.max(L, .02);
-      if (s.f >= 1) {                                                  // reached a junction: jump onto another line there
-        const node = pairs[s.p][s.r ? 0 : 1], nb = adj[node];
-        if (--s.life <= 0 || nb.length < 2) spawn(s);
-        else { let q; do q = nb[R()*nb.length|0]; while (q === s.p); s.p = q; s.r = pairs[q][1] === node; s.f = 0; }
-        a = pairs[s.p][s.r ? 1 : 0]*3; b = pairs[s.p][s.r ? 0 : 1]*3;
-      }
-      const L2 = Math.hypot(pos[b]-pos[a], pos[b+1]-pos[a+1], pos[b+2]-pos[a+2]) || .01, f = Math.min(1, s.f), t0 = Math.max(0, f - .045/L2);
-      if (L2 > .2) spawn(s);                                           // stretched line (state change): hide, start elsewhere
-      if (i < sOn && L2 <= .2) {
-        pos[o] = pos[a]+(pos[b]-pos[a])*f; pos[o+1] = pos[a+1]+(pos[b+1]-pos[a+1])*f; pos[o+2] = pos[a+2]+(pos[b+2]-pos[a+2])*f;
-        lPos[lo] = pos[o]; lPos[lo+1] = pos[o+1]; lPos[lo+2] = pos[o+2];
-        lPos[lo+3] = pos[a]+(pos[b]-pos[a])*t0; lPos[lo+4] = pos[a+1]+(pos[b+1]-pos[a+1])*t0; lPos[lo+5] = pos[a+2]+(pos[b+2]-pos[a+2])*t0;
-        lCol[lo] = .45 + col[0]*.9; lCol[lo+1] = .45 + col[1]*.9; lCol[lo+2] = .45 + col[2]*.9; lCol[lo+3] = lCol[lo+4] = lCol[lo+5] = 0;
-      } else { pos[o] = pos[o+1] = 0; pos[o+2] = -99; lPos.fill(0, lo, lo+6); lCol.fill(0, lo, lo+6); }
-    }
-    const fade = inIntro ? ease((ip - .45)/.5) : 1, g = lg*(1 + lvl*.7)*fade, cr = col[0]*g, cg = col[1]*g, cb = col[2]*g;
-    for (let p = 0; p < M0; p++) {
-      const a = pairs[p][0]*3, b = pairs[p][1]*3, o = p*6, dx = pos[a]-pos[b], dy = pos[a+1]-pos[b+1], dz = pos[a+2]-pos[b+2];
-      let al = 1 - Math.sqrt(dx*dx+dy*dy+dz*dz)/LM[p]; al = al > 0 ? al : 0;
-      lPos[o]=pos[a]; lPos[o+1]=pos[a+1]; lPos[o+2]=pos[a+2]; lPos[o+3]=pos[b]; lPos[o+4]=pos[b+1]; lPos[o+5]=pos[b+2];
-      const u = al*LU[p*2], v = al*LU[p*2+1];
-      lCol[o]=cr*u; lCol[o+1]=cg*u; lCol[o+2]=cb*u; lCol[o+3]=cr*v; lCol[o+4]=cg*v; lCol[o+5]=cb*v;
-    }
-
-    // ---------- draw ----------
-    gl.viewport(0, 0, W, H); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-    const f = 2.414, F = W > H ? [f*H/W, f] : [f, f*W/H], Z = 4.2;
-    const flash = inIntro ? Math.max(0, 1 - Math.abs(ip - 1)*5) : 0;     // core flash when the intro lands
-    gl.useProgram(GW.p); attr(GW, 'q', bQuad, 2);
-    gl.uniform3fv(GW.u.uC, col); gl.uniform1f(GW.u.uG, (gg*(.7 + lvl*.6) + flash*.8)*fade); gl.uniform1f(GW.u.uR, st === 2 ? .35 : .9);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); off(GW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, bPos); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
-    gl.useProgram(MI.p); attr(MI, 'p', bPos, 3); attr(MI, 'm', bMist, 1);
-    gl.uniform2fv(MI.u.uF, F); gl.uniform1f(MI.u.uZ, Z); gl.uniform1f(MI.u.uPx, pxScale); gl.uniform3fv(MI.u.uC, col); gl.uniform1f(MI.u.uG, mg*(1 + lvl*.6)*fade);
-    gl.drawArrays(gl.POINTS, 0, NN); off(MI);
-    gl.bindBuffer(gl.ARRAY_BUFFER, bLPos); gl.bufferSubData(gl.ARRAY_BUFFER, 0, lPos);
-    gl.bindBuffer(gl.ARRAY_BUFFER, bLCol); gl.bufferSubData(gl.ARRAY_BUFFER, 0, lCol);
-    gl.useProgram(LN.p); attr(LN, 'p', bLPos, 3); attr(LN, 'c', bLCol, 3); gl.uniform2fv(LN.u.uF, F); gl.uniform1f(LN.u.uZ, Z);
-    if (fade > 0) gl.drawArrays(gl.LINES, 0, M*2); off(LN);
-    gl.useProgram(PT.p); attr(PT, 'p', bPos, 3); attr(PT, 's', bSize, 1); attr(PT, 'ph', bPh, 1); attr(PT, 'ac', bAc, 1); gl.bindBuffer(gl.ARRAY_BUFFER, bFire); gl.bufferSubData(gl.ARRAY_BUFFER, 0, fire); attr(PT, 'fi', bFire, 1);
-    gl.uniform2fv(PT.u.uF, F); gl.uniform1f(PT.u.uZ, Z); gl.uniform1f(PT.u.uPx, pxScale); gl.uniform1f(PT.u.uT, t);
-    gl.uniform3fv(PT.u.uC, col); gl.uniform3fv(PT.u.uA, A3); gl.uniform1f(PT.u.uG, pg*(1 + lvl*.5));
-    gl.drawArrays(gl.POINTS, 0, N); off(PT);
-    api.ms += (performance.now() - w0 - api.ms)*.05;                    // average CPU time per frame
+  // ---------- one 1/120 s step of the simulation (no drawing) ----------
+  function sim() {
+    t += 1/HZ;
+    let tg;
+    if (state === 'idle') tg = Math.max(level, .08+.04*Math.sin(t*.8));
+    else if (state === 'thinking') tg = Math.max(level, .26+.2*Math.sin(t*2.2)+.4*Math.pow(Math.abs(Math.sin(t*.9)),8));
+    else tg = .1+.9*level;                                                              // listening = microphone, speaking = Jarvis audio
+    lvl += (tg-lvl)*.18;
+    th += ((state === 'thinking' ? 1 : 0)-th)*.02;
+    spk += ((state === 'speaking' ? 1 : 0)-spk)*.03;
+    dustK += ((state === 'idle' ? .12 : 1)-dustK)*.02;
+    hbp = (hbp+(1+.8*th)/HZ)%1; hb = Math.exp(-hbp*9)+.6*Math.exp(-Math.pow(hbp-.28,2)*90);   // heartbeat, faster while thinking
+    ang += th*.009; if (th < .05) ang = (ang%Math.PI)*.985;                             // wave turns while thinking, settles flat after
+    act += (.25+1.6*lvl+1.2*th)/HZ; rotF += .0012*SPD[state];
+    for (let i = 0; i < 3; i++) { cc[i] += (COLS[state][i]-cc[i])*.03; ca[i] += (ACCS[state][i]-ca[i])*.03; }
+    if (PT) { ti += 1/HZ/K; IG = (1-ss(2.2,4.8,ti))*ss(0,.6,ti);                        // each part only shines as much as its pixels have arrived
+      I1 += (arr[0]/PTN[0]-I1)*.04; I3 += (arr[1]/PTN[1]-I3)*.04; I4 += (arr[2]/PTN[2]-I4)*.04; }
   }
-  requestAnimationFrame(frame);
 
-  const api = {
-    nodes: N, links: M, ms: 0, canvas: cv,
-    setFps(n) { FPS = n || 60; },
-    setState(s) { const i = SI[s] != null ? SI[s] : s; if (CFG[i]) { st = i; const c = COLS[Object.keys(SI)[i]]; for (let k = 0; k < 3; k++) tcol[k] = c[k]/255; } },
-    setLevel(v) { ext = v; extUntil = performance.now() + 300; },
-    intro(sec) { introLen = sec || 2.4; introT = 0; },
-    destroy() { alive = false; ro.disconnect(); const x = gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); }
-  };
+  // ---------- fresh ink for this frame ----------
+  function drawInk() {
+    let i, j, k, x, e, boost, amp, c, f, P, pf, gr, rr, al, R;
+    g.globalCompositeOperation = 'source-over'; g.fillStyle = '#000'; g.fillRect(0,0,S,S);
+    g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round';
+    // voice wave through the core
+    g.save(); g.translate(S/2,S/2); g.rotate(ang);
+    for (k = 0; k < 3; k++) { g.beginPath();
+      for (i = 0; i <= 120; i++) { x = i/120; e = Math.pow(Math.sin(x*Math.PI),1.5); boost = 1+1.1*Math.exp(-Math.pow((x-.5)/.11,2));
+        amp = S*(.012+.1*lvl)*e*boost*(k === 2 ? 1.5 : 1);
+        if (i) g.lineTo(S*.72*(x-.5), bend(x)+W(x,k*3)*amp*I3); else g.moveTo(S*.72*(x-.5), bend(x)+W(x,k*3)*amp*I3); }
+      c = k === 0 ? WH : (k === 1 ? ca : cc); al = (k === 0 ? .5 : .3)*I3;
+      gr = g.createLinearGradient(-S*.36,0,S*.36,0);
+      gr.addColorStop(0,rgba(c,0)); gr.addColorStop(.3,rgba(c,al*.6)); gr.addColorStop(.5,rgba(c,al)); gr.addColorStop(.7,rgba(c,al*.6)); gr.addColorStop(1,rgba(c,0));
+      g.strokeStyle = gr; g.lineWidth = (k === 0 ? 1.3 : 1)*Z; g.stroke(); }
+    g.restore();
+    // hot core
+    R = S*(.035+.07*lvl+.02*th); al = (.007+.028*lvl+.01*th+.014*hb)*I1;
+    gr = g.createRadialGradient(S/2,S/2,0,S/2,S/2,R);
+    gr.addColorStop(0,'rgba(255,255,255,'+al+')'); gr.addColorStop(.35,rgba(cc,al*.6)); gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(S/2-R,S/2-R,R*2,R*2);
+    // intro pixels that just arrived become part of the brain
+    for (i = 0; i < inbox.length; i += 2) speck(inbox[i], inbox[i+1], 1.4*Z, 'rgba(255,255,255,.95)'); inbox.length = 0;
+    // dust that falls in (far less while idle)
+    const nd = Math.floor(5*dustK*ss(5.4,6.6,ti)+Math.random());
+    for (i = 0; i < nd; i++) { const da = Math.random()*TAU, dr = S*(.14+Math.random()*.34); speck(S/2+Math.cos(da)*dr, S/2+Math.sin(da)*dr, 2*Z, i%3 ? rgba(cc,.7) : 'rgba(255,255,255,.7)'); }
+    // two soft lobes that beat
+    for (k = -1; k <= 1; k += 2) { x = S/2+k*S*(.045+.01*hb); const y = S/2+S*.008*Math.sin(t*.5+k); rr = S*(.085+.02*hb+.03*lvl);
+      gr = g.createRadialGradient(x,y,0,x,y,rr); gr.addColorStop(0,rgba(cc,(.012+.012*hb)*I1)); gr.addColorStop(1,rgba(cc,0)); g.fillStyle = gr; g.fillRect(x-rr,y-rr,rr*2,rr*2); }
+    // fibres: smooth curves with a short bright stretch travelling along each one (inward, or outward while speaking)
+    g.lineWidth = 1.2*Z;
+    for (i = 0; i < FI.length; i++) { c = FI[i]; pf = (act*c.sp+c.ph)%1.6; if (spk < .5) pf = 1.25-pf;
+      P = []; for (j = 0; j <= 24; j++) { f = fibre(c, j/24); P.push(f[0], f[1]); }
+      g.beginPath(); g.moveTo(P[0],P[1]); for (j = 1; j <= 24; j++) g.lineTo(P[j*2],P[j*2+1]); g.strokeStyle = rgba(i%4 ? cc : ca, .035*I4); g.stroke();
+      k = Math.round(pf*24);
+      if (I4 > .9 && k >= 1 && k <= 22) { g.beginPath(); g.moveTo(P[k*2-2],P[k*2-1]); g.lineTo(P[k*2],P[k*2+1]); g.lineTo(P[k*2+2],P[k*2+3]); g.lineTo(P[k*2+4],P[k*2+5]);
+        g.strokeStyle = 'rgba(255,255,255,'+(.05+.12*lvl+.08*th)+')'; g.stroke(); } }
+  }
+
+  // ---------- intro: faint 1 px pixels all over the window, sucked in at random, each landing on its own spot ----------
+  // group 0 core+lobes, 1 voice wave, 2 nerve fibres, 3 soft body
+  function target(p) {
+    if (p.g === 1) { const x = p.p1, px = S*.72*(x-.5), bd = bend(x); return [S/2+px*Math.cos(ang)-bd*Math.sin(ang), S/2+px*Math.sin(ang)+bd*Math.cos(ang)]; }
+    if (p.g === 2) return fibre(FI[p.p1], p.p2);
+    return [S/2+p.p1*S, S/2+p.p2*S];
+  }
+  function endIntro() { if (ov) ov.remove(); ov = og = PT = null; ti = 99; I1 = I3 = I4 = 1; IG = 0; }
+  function intro(sec) {
+    endIntro();
+    K = Math.max(4, Math.min(7, sec || 6.6))/6.6; ti = 0; I1 = I3 = I4 = 0; arr = [0,0,0,0]; inbox.length = 0; clearAll();
+    ov = document.createElement('canvas'); ov.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:102';
+    ov.width = window.innerWidth; ov.height = window.innerHeight; document.body.appendChild(ov); og = ov.getContext('2d');
+    const N = Math.round(Math.max(1500, Math.min(9000, ov.width*ov.height/900))*(detail >= 1 ? 1 : .5));
+    PT = []; PTN = [0,0,0,0];
+    const r3 = () => Math.random()+Math.random()+Math.random()-1.5;
+    for (let i = 0; i < N; i++) { const q = Math.random(), gp = q < .24 ? 0 : q < .56 ? 1 : q < .88 ? 2 : 3, r = .03+.15*Math.sqrt(Math.random()), a = Math.random()*TAU; PTN[gp]++;
+      PT.push({sx:Math.random()*ov.width, sy:Math.random()*ov.height, g:gp,
+        p1: gp === 0 ? r3()*.07 : gp === 1 ? .5+(Math.random()+Math.random()-1)*.5 : gp === 2 ? Math.floor(Math.random()*FI.length) : Math.cos(a)*r,
+        p2: gp === 0 ? r3()*.055 : gp === 2 ? Math.random() : Math.sin(a)*r,
+        d:.5+Math.random()*3.6, du:1+Math.random()*1.1, cu:(Math.random()-.5)*.55, done:false}); }
+    for (let k = 0; k < 4; k++) if (!PTN[k]) PTN[k] = 1;
+  }
+  function drawPT() {
+    if (!PT) return;
+    og.clearRect(0,0,ov.width,ov.height);
+    if (ti > 6.6) { endIntro(); return; }
+    const rc = cv.getBoundingClientRect(), fin = ss(0,.6,ti);
+    for (let i = 0; i < PT.length; i++) { const p = PT[i]; if (p.done) continue; const u = (ti-p.d)/p.du;
+      if (u < 0) { og.fillStyle = rgba(cc,.07*fin); og.fillRect(p.sx,p.sy,1,1); continue; }                 // far out: barely visible
+      const T2 = target(p);
+      if (u >= 1) { p.done = true; inbox.push(T2[0],T2[1]); arr[p.g]++; continue; }
+      const e = u*u*u, dx = rc.left+T2[0]/S*rc.width-p.sx, dy = rc.top+T2[1]/S*rc.height-p.sy, w = Math.sin(u*Math.PI)*p.cu*(1-e);
+      og.fillStyle = rgba(cc,.07+.93*e); og.fillRect(p.sx+dx*e-dy*w, p.sy+dy*e+dx*w, 1, 1); }                // lights up as it closes in; always 1 px
+  }
+
+  // ---------- frame loop ----------
+  let raf = 0, last = 0, acc = 0, dead = false;
+  const api = {nodes: FI.length, links: 0, ms: 0, canvas: cv,
+    setFps: f => { fps = f > 15 ? 120 : (f || 30); },          // GPU machines: screen rate (up to 120); no-GPU machines keep the HUD's low cap
+    setState: s => { if (COLS[s]) state = s; },
+    setLevel: v => { level = Math.max(0, Math.min(1, +v || 0)); },
+    intro, destroy: () => { dead = true; cancelAnimationFrame(raf); endIntro(); }};
+  function frame(ms) {
+    if (dead) return; raf = requestAnimationFrame(frame);
+    const dt = Math.min(.1, (ms-last)/1000); if (dt < 1/fps-.002) return; last = ms;
+    acc += dt*HZ; let n = Math.min(6, Math.floor(acc)); acc -= n; if (acc > 6) acc = 0; if (n < 1) return;
+    const t0 = performance.now(), mx = Math.max(cc[0],cc[1],cc[2]), D = .986;
+    for (let i = 0; i < n; i++) sim();
+    drawInk();
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,inkT); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,ic);
+    gl.useProgram(fb); gl.uniform1i(U.prev,0); gl.uniform1i(U.ink,1);
+    gl.uniform1f(U.t,t); gl.uniform1f(U.lvl,lvl); gl.uniform1f(U.spd,SPD[state]); gl.uniform1f(U.th,th);
+    gl.uniform1f(U.pull,.0062*(1+.6*IG)); gl.uniform1f(U.dir,1-2*spk);
+    gl.uniform3f(U.dec, D-(1-cc[0]/mx)*.0225, D-(1-cc[1]/mx)*.0225, D-(1-cc[2]/mx)*.0225);    // trails age into the state colour
+    gl.activeTexture(gl.TEXTURE0);
+    for (let i = 0; i < n; i++) { gl.bindTexture(gl.TEXTURE_2D,T[cur]); gl.bindFramebuffer(gl.FRAMEBUFFER,F[1-cur]); gl.drawArrays(gl.TRIANGLE_STRIP,0,4); cur = 1-cur; }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.bindTexture(gl.TEXTURE_2D,T[cur]); gl.useProgram(show);
+    gl.uniform1i(US.buf,0); gl.uniform3f(US.col,cc[0]/255,cc[1]/255,cc[2]/255); gl.uniform1f(US.lvl,lvl); gl.uniform1f(US.th,th); gl.uniform1f(US.ii,I1);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    drawPT();
+    api.ms = performance.now()-t0;
+  }
+  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); dead = true; cancelAnimationFrame(raf); endIntro(); });
+  raf = requestAnimationFrame(ms => { last = ms; raf = requestAnimationFrame(frame); });
   return api;
-}
-window.JarvisBrain = JarvisBrain;
+};
 })();
