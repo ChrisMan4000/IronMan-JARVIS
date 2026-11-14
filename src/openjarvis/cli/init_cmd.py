@@ -137,7 +137,7 @@ def _next_steps_text(engine: str, model: str = "") -> str:
             "Next steps:\n"
             "\n"
             "  1. Download LM Studio:\n"
-            "     https://lmstudio.ai\n"
+            "     https://lmstudio.ai/developers\n"
             "\n"
             "  2. Load a model and start the local server (port 1234)\n"
             "\n"

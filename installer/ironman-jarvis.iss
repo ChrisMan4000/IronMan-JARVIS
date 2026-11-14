@@ -419,7 +419,7 @@ begin
   { language model }
   ModelPage := NewPage(WakePage.ID, 'Language model', 'The AI that answers you. It runs in LM Studio on your PC.');
   Y := 0;
-  AddLink(ModelPage, Y, 'LM Studio', 'https://lmstudio.ai');
+  AddLink(ModelPage, Y, 'LM Studio', 'https://lmstudio.ai/developers');
   ModelInfo := AddText(ModelPage, Y, 'Looking at your PC...' + #13#10 + ' ', COrange, False);
   RbExist := AddRadio(ModelPage, Y, 'Use a model that is already in LM Studio:');
   ModelCombo := TNewComboBox.Create(ModelPage);
