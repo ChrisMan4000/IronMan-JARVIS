@@ -204,26 +204,36 @@ if ($FromWizard -and $WantHue) { Write-InstallStep 1 "Philips Hue: pairing with 
 Write-InstallStep 1 "Checking and installing programs (Git, uv, Node.js, Rust, Windows Terminal, LM Studio)"
 # Programs installed by an earlier run are in the registry PATH, but a process started from an old parent (the wizard) still has the OLD PATH.
 # Without this refresh the checks below fail again and again and step 1 never ends (fresh-PC bug report 2026-11-17).
-$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path
-$need = @()
-if (-not (Test-Command git))    { $need += 'Git.Git' }
-if (-not (Test-Command uv))     { $need += 'astral-sh.uv' }
-if (-not (Test-Command node))   { $need += 'OpenJS.NodeJS' }
-if (-not (Test-Command rustup)) { $need += 'Rustlang.Rustup' }
-if (-not (Test-Command wt))     { $need += 'Microsoft.WindowsTerminal' }
-if (-not (Get-LmStudioApp))     { $need += 'ElementLabs.LMStudio' }   # the APP must exist: a leftover ~\.lmstudio folder does not count
+function Update-SessionPath { $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path }
+Update-SessionPath
+function Get-MissingPrograms {
+  $m = @()
+  if (-not (Test-Command git))    { $m += 'Git.Git' }
+  if (-not (Test-Command uv))     { $m += 'astral-sh.uv' }
+  if (-not (Test-Command node))   { $m += 'OpenJS.NodeJS' }
+  if (-not (Test-Command rustup)) { $m += 'Rustlang.Rustup' }
+  if (-not (Test-Command wt))     { $m += 'Microsoft.WindowsTerminal' }
+  if (-not (Get-LmStudioApp))     { $m += 'ElementLabs.LMStudio' }   # the APP must exist: a leftover ~\.lmstudio folder does not count
+  return $m
+}
+$need = @(Get-MissingPrograms)
 if ($need.Count -gt 0) {
   Write-Host "Missing programs: $($need -join ', ')" -ForegroundColor Yellow
   if (-not (Get-Consent "Install them now with winget?")) { Write-Host "Install them yourself, then run this script again."; exit 1 }
+  # winget codes that mean "fine": 0 ok, -1978335189 (no newer version), -1978335135 (already installed), 3010 / 1641 (installed, restart pending)
+  $wingetOk = @(0, -1978335189, -1978335135, 3010, 1641)
   foreach ($i in $need) {
     winget install --id $i -e --accept-package-agreements --accept-source-agreements
-    # -1978335189 = package already installed (not an error)
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { Write-Host "winget could not install $i (code $LASTEXITCODE)." -ForegroundColor Yellow; Write-JarvisLog "winget install $i ended with code $LASTEXITCODE" }
+    if ($wingetOk -notcontains $LASTEXITCODE) { Write-JarvisLog "winget install $i ended with code $LASTEXITCODE" }   # the re-check below decides if it really failed
   }
-  if ($FromWizard) { Write-WizardLine $StatusFile 'RERUN|programs installed'; exit 10 }   # the wizard starts this script again in a fresh process
-  Write-Host ""
-  Write-Host "Close this PowerShell, open a NEW one (so the new programs are found) and run this script again." -ForegroundColor Yellow
-  exit 10
+  Update-SessionPath
+  $need = @(Get-MissingPrograms)
+  if ($need.Count -gt 0) {
+    Write-Host "Not found yet after the install: $($need -join ', '). Restarting the setup so Windows picks them up." -ForegroundColor Yellow
+    if ($FromWizard) { Write-WizardLine $StatusFile 'RERUN|programs installed'; exit 10 }   # the wizard starts this script again in a fresh process
+    Write-Host "Close this PowerShell, open a NEW one (so the new programs are found) and run this script again." -ForegroundColor Yellow
+    exit 10
+  }
 }
 Write-Host "All programs found." -ForegroundColor Green
 
@@ -249,7 +259,6 @@ Write-Host "Settings file: $cfgFile (analytics are OFF in it)" -ForegroundColor 
 
 # ---------- 3. Python and web packages ----------
 Write-InstallStep 3 "Installing Python and web packages (a few minutes)"
-rustup default stable
 # a release tag like v1.0-installer breaks the version lookup (hatch-vcs); a fixed build version avoids that for every clone
 $env:SETUPTOOLS_SCM_PRETEND_VERSION = "1.0.0"
 uv sync --extra server --extra speech --extra scheduler --extra gpu-metrics --extra voice
@@ -264,11 +273,28 @@ if ($LASTEXITCODE -ne 0) {
   Write-Host "The Tado package (python-tado) could not be installed. Everything else works; Tado heating stays off until you run this script again." -ForegroundColor Yellow
   Write-JarvisLog "python-tado could not be installed (uv pip install failed)"
 }
-# optional speed-up module (Rust). Not built on ARM PCs (Windows blocks the build there); Jarvis works the same without it.
-if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional Rust module is skipped." }
+# optional speed-up module (Rust). Needs the Visual Studio C++ Build Tools AND the Windows SDK; without them it is skipped quietly (Jarvis works the same).
+# Not built on ARM PCs either (Windows blocks the build there).
+function Test-RustBuildReady {
+  $sdk = (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\10\Include") -and (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\10\Lib")
+  $vsw = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+  $vc = $false
+  if (Test-Path $vsw) { $vc = [bool](& $vsw -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null) }
+  return ($sdk -and $vc)
+}
+if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional Rust speed-up module is skipped." }
+elseif (-not (Test-RustBuildReady)) { Write-Host "Optional Rust speed-up module skipped (needs the Visual Studio C++ Build Tools and the Windows SDK). Jarvis works the same without it." -ForegroundColor Gray; Write-JarvisLog "rust module skipped: C++ build tools or Windows SDK missing" }
 else {
-  uv run --no-sync maturin develop -m rust/crates/openjarvis-python/Cargo.toml --release
-  if ($LASTEXITCODE -ne 0) { Write-Host "Optional Rust module not built. Jarvis works the same without it." -ForegroundColor Yellow }
+  # 'minimal' profile: no doc component, so a repeated install can no longer collide on share\doc (fresh-PC bug report 2026-11-17)
+  $haveStable = ((rustup toolchain list 2>$null) -join ' ') -match 'stable'
+  if (-not $haveStable) {
+    rustup toolchain install stable --profile minimal 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { rustup toolchain uninstall stable 2>&1 | Out-Null; rustup toolchain install stable --profile minimal 2>&1 | Out-Null }   # one clean retry after a half-written download
+  }
+  rustup default stable 2>&1 | Out-Null
+  $rustLog = Join-Path $Cfg 'rust-build.log'
+  uv run --no-sync maturin develop -m rust/crates/openjarvis-python/Cargo.toml --release 2>&1 | Out-File -FilePath $rustLog -Encoding ascii
+  if ($LASTEXITCODE -ne 0) { Write-Host "Optional Rust speed-up module not built (details: $rustLog). Jarvis works the same without it." -ForegroundColor Gray; Write-JarvisLog "rust module build failed, see $rustLog" }
 }
 # npm that ships with the winget Node can be too old for frontend/package.json (needs npm >= 11.19.0): update it first (fresh-PC bug report 2026-11-17)
 function Get-NpmVersion { try { return [version](("$(npm --version 2>$null)" -split "`n")[0].Trim() -replace '[^0-9.]','') } catch { return $null } }
