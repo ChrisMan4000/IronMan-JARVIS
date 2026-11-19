@@ -79,7 +79,7 @@ end;
 var
   HuePage, TadoPage, SonosPage, WakePage, ModelPage, VoicePage, TtsPage, RagPage, KeyPage, CityPage: TWizardPage;
   HueCheck, TadoCheck, SonosCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
-  HueIpEdit, SonosIpEdit, KeyEdit, CityEdit: TNewEdit;
+  HueIpEdit, SonosIpEdit, KeyEdit, CityEdit, RagDocsEdit, RagIndexEdit: TNewEdit;
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
   ModelCombo, WhisperCombo: TNewComboBox;
   ClipEdit: TNewEdit;
@@ -503,6 +503,18 @@ begin
   AddLink(RagPage, Y, 'Big RAG plugin', 'https://lmstudio.ai/mindstudio/big-rag');
   RagCheck := AddCheck(RagPage, Y, 'Set up document search');
   AddText(RagPage, Y, 'If LM Studio asks, click install for Big RAG there; the setup waits up to 2 minutes for it.', COrange, False);
+  AddText(RagPage, Y, 'Folder with your documents (PDF, Word, text):', CText, False);
+  RagDocsEdit := TNewEdit.Create(RagPage);
+  RagDocsEdit.Parent := RagPage.Surface;
+  RagDocsEdit.Left := 0; RagDocsEdit.Top := Y; RagDocsEdit.Width := RagPage.SurfaceWidth;
+  RagDocsEdit.Text := ExpandConstant('{userdocs}\ORACLE');
+  Y := Y + ScaleY(30);
+  AddText(RagPage, Y, 'Folder for the search index (created if missing; big and slow to build, keep it outside OneDrive):', CText, False);
+  RagIndexEdit := TNewEdit.Create(RagPage);
+  RagIndexEdit.Parent := RagPage.Surface;
+  RagIndexEdit.Left := 0; RagIndexEdit.Top := Y; RagIndexEdit.Width := RagPage.SurfaceWidth;
+  RagIndexEdit.Text := 'C:\AI\Big-RAG';
+  Y := Y + ScaleY(30);
 
   { web search key }
   KeyPage := NewPage(RagPage.ID, 'Web search (optional)', 'Lets Jarvis look things up on the internet.');
@@ -786,7 +798,7 @@ begin
     S := S + NewLine;
   end
   else S := S + Space + 'Voice: Kokoro' + NewLine;
-  if RagCheck.Checked then S := S + Space + 'Document search (Big RAG)' + NewLine;
+  if RagCheck.Checked then S := S + Space + 'Document search (Big RAG)' + NewLine + Space + Space + 'documents: ' + Trim(RagDocsEdit.Text) + NewLine + Space + Space + 'index: ' + Trim(RagIndexEdit.Text) + NewLine;
   if Trim(KeyEdit.Text) <> '' then S := S + Space + 'Web search key (Firecrawl): entered' + NewLine;
   if Trim(CityEdit.Text) <> '' then S := S + Space + 'City (weather): ' + Trim(CityEdit.Text) + NewLine;
   if LmStudioInstalled then
@@ -827,6 +839,14 @@ begin
     end;
 end;
 
+function PsQuote(const S: String): String;
+var R: String;
+begin
+  R := S;
+  StringChangeEx(R, '''', '''''', True);
+  Result := R;
+end;
+
 procedure RunSetup;
 var Opts, Params, Clip, CityArg: String; Run, Code, Rc, Ticks: Integer; Lines: TArrayOfString;
 begin
@@ -835,7 +855,7 @@ begin
   if TadoCheck.Checked then Opts := Opts + ' -WantTado';
   if SonosCheck.Checked then Opts := Opts + ' -WantSonos -SonosIp ''' + Trim(SonosIpEdit.Text) + '''';
   if WakeCheck.Checked then Opts := Opts + ' -WantWake';
-  if RagCheck.Checked then Opts := Opts + ' -WantRag';
+  if RagCheck.Checked then Opts := Opts + ' -WantRag -RagDocsDir ''' + PsQuote(Trim(RagDocsEdit.Text)) + ''' -RagIndexDir ''' + PsQuote(Trim(RagIndexEdit.Text)) + '''';
   if RbOnYes.Checked and (OnlineRepo <> '') then Opts := Opts + ' -OnlineModel ''' + OnlineRepo + '''';
   if RbExist.Checked and (ModelCombo.ItemIndex >= 0) then Opts := Opts + ' -ModelId ''' + ModelKeys[ModelCombo.ItemIndex] + ''''
   else if RbT1.Checked then Opts := Opts + ' -ModelTier 1'
@@ -959,7 +979,7 @@ begin
       '2. The language model may still be downloading in the background (watch it in LM Studio, Downloads). You can start Jarvis now; chatting works once the download is done. File: ' + ExpandConstant('{%USERPROFILE}\.openjarvis\model-download.txt') + #13#10 +
       '   No language model chosen or the download failed? Open LM Studio, download one, then run this installer again.' + #13#10;
     if RagCheck.Checked then
-      S := S + '3. Document search: in LM Studio open a chat, enable the Big RAG plugin and set the documents folder, an index folder and the embedding model (README, Document search).' + #13#10;
+      S := S + '3. Document search: the folders you chose are saved. In LM Studio open a chat and enable the Big RAG plugin; if it shows empty folders, enter the ones from the install log (README, Document search).' + #13#10;
     if TadoCheck.Checked then
       S := S + '4. Tado login did not finish? Run tools\tado_login.py in the Jarvis folder.' + #13#10;
     S := S + 'Optional: to use the HUD from your phone or another PC in your home network, run tools\setup-remote-access.ps1 in the Jarvis folder (README).' + #13#10;

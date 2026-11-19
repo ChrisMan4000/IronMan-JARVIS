@@ -11,6 +11,7 @@ param(
   [switch]$WantHue, [string]$HueIp = '',
   [switch]$WantSonos, [string]$SonosIp = '',
   [switch]$WantTado, [switch]$WantWake, [switch]$WantRag,
+  [string]$RagDocsDir = '', [string]$RagIndexDir = '',   # Big RAG: folder with your documents and folder for the search index (wizard page)
   [int]$ModelTier = 0,          # 1-3 = download that size ($JarvisModelTiers in tools\jarvis-common.ps1), 0 = none
   [string]$ModelId = '',        # an LM Studio model that is already installed
   [string]$OnlineModel = '',    # optional: Hugging Face repo found by tools\model-search.ps1 (tested after the download; on failure the choice above is used)
@@ -473,10 +474,32 @@ if ($ragAsked -and -not $lmsCmd) {
   }
   if (Test-Path $ragDir) { Write-Host "  Big RAG plugin found." -ForegroundColor Green }
   else { Write-Host "  Could not confirm the plugin folder (the path may differ). Check LM Studio > Plugins for Big RAG." -ForegroundColor Yellow }
-  # documents folder (same default as the helper: JARVIS_DOC_ROOT or Documents\ORACLE)
-  $ragDocs = $env:JARVIS_DOC_ROOT
-  if (-not $ragDocs) { $ragDocs = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ORACLE' }
-  if (-not (Test-Path $ragDocs)) { New-Item -ItemType Directory -Path $ragDocs -Force | Out-Null }
+  # folders for the plugin: documents + search index. From the wizard page (or asked here); defaults as before: JARVIS_DOC_ROOT or Documents\ORACLE, and C:\AI\Big-RAG
+  $defDocs = $env:JARVIS_DOC_ROOT
+  if (-not $defDocs) { $defDocs = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ORACLE' }
+  $defIndex = 'C:\AI\Big-RAG'
+  $ragDocs = $RagDocsDir; $ragIndex = $RagIndexDir
+  if (-not $FromWizard) {
+    $a = ([string](Read-Host "  Folder with the documents to search (Enter = $defDocs)")).Trim(); if ($a) { $ragDocs = $a }
+    $b = ([string](Read-Host "  Folder for the search index (Enter = $defIndex)")).Trim(); if ($b) { $ragIndex = $b }
+  }
+  if (-not $ragDocs) { $ragDocs = $defDocs }
+  if (-not $ragIndex) { $ragIndex = $defIndex }
+  # settings file of the plugin (~\.lmstudio\big-rag-tools-config.json): Jarvis and the plugin's tools read the folders from here.
+  # A re-run with the untouched defaults keeps folders the user already set earlier.
+  $ragCfgFile = Join-Path $env:USERPROFILE '.lmstudio\big-rag-tools-config.json'
+  $ragCfg = [ordered]@{ embeddingModel = 'nomic-ai/nomic-embed-text-v1.5-GGUF'; retrievalLimit = 5; retrievalAffinityThreshold = 0.5 }
+  $oldCfg = $null
+  if (Test-Path $ragCfgFile) { try { $oldCfg = Get-Content $ragCfgFile -Raw | ConvertFrom-Json; foreach ($pr in $oldCfg.PSObject.Properties) { $ragCfg[$pr.Name] = $pr.Value } } catch { $oldCfg = $null } }
+  if ($oldCfg -and $oldCfg.documentsDirectory -and ($ragDocs -eq $defDocs)) { $ragDocs = [string]$oldCfg.documentsDirectory }
+  if ($oldCfg -and $oldCfg.vectorStoreDirectory -and ($ragIndex -eq $defIndex)) { $ragIndex = [string]$oldCfg.vectorStoreDirectory }
+  foreach ($d in $ragDocs, $ragIndex) { try { if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null } } catch { Write-Host "  Could not create the folder $d ($($_.Exception.Message))" -ForegroundColor Yellow; Write-JarvisLog "rag folder not created: $d" } }
+  $ragCfg['documentsDirectory'] = $ragDocs; $ragCfg['vectorStoreDirectory'] = $ragIndex
+  try {
+    New-Item -ItemType Directory -Force (Split-Path $ragCfgFile) | Out-Null
+    [System.IO.File]::WriteAllText($ragCfgFile, (($ragCfg | ConvertTo-Json) + "`n"), $Utf8)
+    Write-Host "  Big RAG folders saved: documents = $ragDocs ; index = $ragIndex" -ForegroundColor Green
+  } catch { Write-Host "  Could not save the Big RAG folders ($($_.Exception.Message)). Set them in LM Studio (chat > Big RAG plugin)." -ForegroundColor Yellow; Write-JarvisLog "big-rag config not written: $($_.Exception.Message)" }
   Write-Host "  Put your documents in: $ragDocs" -ForegroundColor Green
 }
 
@@ -567,8 +590,8 @@ Write-Host " 1. Open LM Studio once, then in PowerShell run: lms bootstrap  (ope
 Write-Host " 2. Language model: chosen in step 6 above. Skipped it, or want another? Run this script again."
 Write-Host " 3. Double-click the Jarvis icon on your desktop. In your browser allow the microphone and remember the decision."
 if ($ragAsked) {
-  Write-Host " 4. Document search (Big RAG): in LM Studio open a chat, enable the Big RAG plugin and set: documents folder (see step 7),"
-  Write-Host "    index folder (for example C:\AI\Big-RAG), embedding model nomic-ai/nomic-embed-text-v1.5-GGUF. Send one message to start indexing (slow)."
+  Write-Host " 4. Document search (Big RAG): the documents and index folders are already saved (step 7). In LM Studio open a chat and enable the Big RAG plugin;"
+  Write-Host "    if its settings show empty folders, copy them from the lines in step 7. Send one message to start indexing (slow)."
   Write-Host "    Then in the Jarvis folder run: uv run --no-sync python tools\ragcache.py   (see README, Document search)"
 } else {
   Write-Host " 4. Optional document search: run this script again and answer y in step 7 (README, Document search)."

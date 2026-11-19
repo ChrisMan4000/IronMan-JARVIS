@@ -125,6 +125,7 @@ Start-Job -ScriptBlock {
 } | Out-Null
 
 # --- Step 3: start the helper programs and the Jarvis server, each in its own terminal tab
+$env:OPENJARVIS_NO_UPDATE_CHECK = '1'   # no "new version available" banner in the server window: Jarvis is updated through the installer, not pip
 $env:PYTHONWARNINGS = 'ignore'; $env:HF_HUB_VERBOSITY = 'error'   # keeps harmless library warnings out of the terminal windows (inherited by the tabs; no semicolons in the wt command, wt would split it)
 # optional fan monitor: only runs if tools\setup-fan-monitor.ps1 was used (starts LibreHardwareMonitor hidden, stays up until Stop Jarvis is used)
 Stop-ScheduledTask -TaskName $JarvisFanTaskName -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Start-ScheduledTask -TaskName $JarvisFanTaskName -ErrorAction SilentlyContinue   # stop first: an old watcher would ignore the start
@@ -132,10 +133,14 @@ Stop-ScheduledTask -TaskName $JarvisFanTaskName -ErrorAction SilentlyContinue; S
 Start-Process wt -WindowStyle Minimized -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"Jarvis Services`" --suppressApplicationTitle powershell -NoExit -ExecutionPolicy Bypass -File `"$root\tools\services.ps1`""
 Start-Sleep -Seconds 2
 Start-Process wt -ArgumentList "-w jarvis new-tab -d `"$root`" --title `"Jarvis Server $JarvisServerPort`" --suppressApplicationTitle powershell -NoExit -Command `"uv run --no-sync jarvis serve --engine lmstudio --model '$model' --port $JarvisServerPort --agent orchestrator`""
-if (-not (Wait-For "http://127.0.0.1:$JarvisServerPort/health" "Jarvis")) { Exit-WithMessage "The Jarvis server did not start. Look at the 'Jarvis Server' terminal tab for the error." }
+# the FIRST start after an install can take many minutes (speech models are downloaded); wait up to 15 minutes and open the HUD even if the server is still busy
+if (-not (Wait-For "http://127.0.0.1:$JarvisServerPort/health" "Jarvis" 900)) {
+  Write-Host "The Jarvis server is still starting (first start can be slow). Opening the HUD anyway; watch the 'Jarvis Server' terminal tab." -ForegroundColor Yellow
+  Write-JarvisLog "server health not answered within 15 minutes, HUD opened anyway"
+}
 
 # --- Step 4: wait for the HUD web server (started by the Services tab), then open the browser
-if (-not (Wait-For "http://localhost:5173/" "Frontend")) { Exit-WithMessage "The HUD web server did not start. Look at %USERPROFILE%\.openjarvis\logs\vite-5173.err.log." }
+if (-not (Wait-For "http://localhost:5173/" "Frontend" 300)) { Exit-WithMessage "The HUD web server did not start. Look at %USERPROFILE%\.openjarvis\logs\vite-5173.err.log." }
 # both pages in ONE browser start: two quick "open this address" calls lose the second page while the browser is still starting
 $pages = "http://localhost:5173/", "http://localhost:5173/hud.html"
 $browser = $null
@@ -144,8 +149,9 @@ try {
   $open = (Get-ItemProperty "Registry::HKEY_CLASSES_ROOT\$progId\shell\open\command" -ErrorAction Stop).'(default)'
   if ($open -match '^"([^"]+\.exe)"' -or $open -match '^(\S+\.exe)') { $browser = $Matches[1] }
 } catch { Write-JarvisLog "default browser not found, the pages are opened one by one: $($_.Exception.Message)" }
-if ($browser -and (Test-Path $browser)) { Start-Process $browser -ArgumentList $pages }
-else { Start-Process $pages[0]; Start-Sleep -Seconds 5; Start-Process $pages[1] }
+$opened = $false
+if ($browser -and (Test-Path $browser)) { try { Start-Process $browser -ArgumentList $pages; $opened = $true } catch { Write-JarvisLog "browser start failed: $($_.Exception.Message)" } }
+if (-not $opened) { try { Start-Process $pages[0]; Start-Sleep -Seconds 5; Start-Process $pages[1] } catch { Write-JarvisLog "default browser start failed: $($_.Exception.Message)"; Write-Host "Could not open the browser. Open http://localhost:5173/hud.html yourself." -ForegroundColor Yellow } }
 
 # --- Step 5: minimise the terminal windows and remember them, so Stop Jarvis can close them even when their title has changed
 Import-JarvisWindowApi

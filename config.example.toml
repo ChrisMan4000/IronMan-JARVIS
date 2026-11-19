@@ -44,6 +44,10 @@ compute_type = "int8"
 tts_backend = "kokoro"
 voice_id = "am_adam"
 
+[updates]
+# Jarvis is updated through the installer, so the "new version available" banner is off
+auto_update = false
+
 [analytics]
 enabled = false               # no usage data is sent anywhere (upstream PostHog is OFF)
 
