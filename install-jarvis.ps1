@@ -121,14 +121,14 @@ function Get-OnlineModel([string]$Lms, [string]$RepoId) {
 function Find-OnlineModel {
   # console only: asks whether to look online, runs tools\model-search.ps1 and asks again before using the result
   $ms = Join-Path $Repo 'tools\model-search.ps1'
-  if (-not ((Read-Host "  Optional: look online for a newer model that fits your PC? (y/N)").Trim() -match '^[yY]')) { return '' }
+  if (-not (([string](Read-Host "  Optional: look online for a newer model that fits your PC? (y/N)")).Trim() -match '^[yY]')) { return '' }
   $tmpO = Join-Path $env:TEMP 'jarvis-models-online.txt'; Remove-Item $tmpO -Force -ErrorAction SilentlyContinue
   & $ms -Out $tmpO
   $bl = @(); if (Test-Path $tmpO) { $bl = @(Get-Content $tmpO | Where-Object { $_ -like 'BEST|*' }) }
   if ($bl.Count -eq 0) { Write-Host "  Nothing suitable found (or no internet). Continuing with the normal choice." -ForegroundColor Yellow; return '' }
   $bp = $bl[0] -split '\|'
   Write-Host ("   Found: {0}  (about {1} GB, added {2})" -f $bp[1], $bp[2], $bp[3])
-  if ((Read-Host "  Use it? It is tested after the download and the normal choice is used if the test fails (y/N)").Trim() -match '^[yY]') { return $bp[1] }
+  if (([string](Read-Host "  Use it? It is tested after the download and the normal choice is used if the test fails (y/N)")).Trim() -match '^[yY]') { return $bp[1] }
   return ''
 }
 function Select-InstalledModel($Models) {
@@ -136,7 +136,7 @@ function Select-InstalledModel($Models) {
   Write-Host "  Models already in LM Studio:"
   for ($i = 0; $i -lt $Models.Count; $i++) { Write-Host ("   {0}) {1}  ({2:N1} GB)" -f ($i + 1), $Models[$i].modelKey, ($Models[$i].sizeBytes / 1GB)) }
   Write-Host "   0) download a new model instead"
-  $n = (Read-Host "  Which model should Jarvis use? (number, Enter = 1)").Trim()
+  $n = ([string](Read-Host "  Which model should Jarvis use? (number, Enter = 1)")).Trim()
   if ($n -eq '') { $n = '1' }
   if ($n -match '^\d+$' -and [int]$n -ge 1 -and [int]$n -le $Models.Count) { return $Models[[int]$n - 1].modelKey }
   return $null
@@ -152,7 +152,7 @@ function Save-ModelTier([string]$Lms, [int]$WizardTier) {
     Write-Host ("   {0}) about {1} GB  {2} - {3}{4}" -f $t.Tier, $t.Gb, $t.Id, $t.Note, $mark)
   }
   if ($FromWizard) { $answer = "$WizardTier" }
-  else { $answer = (Read-Host "  Which one should I download? (1-$($JarvisModelTiers.Count), Enter = $rec, s = skip)").Trim(); if ($answer -eq '') { $answer = "$rec" } }
+  else { $answer = ([string](Read-Host "  Which one should I download? (1-$($JarvisModelTiers.Count), Enter = $rec, s = skip)")).Trim(); if ($answer -eq '') { $answer = "$rec" } }
   $tier = $JarvisModelTiers | Where-Object { "$($_.Tier)" -eq $answer } | Select-Object -First 1
   if (-not $tier) { Write-Host "  Skipped. Download a model in LM Studio yourself, or run this script again."; return $null }
   $beforeKeys = @(Get-LlmModel $Lms | ForEach-Object { $_.modelKey })
@@ -202,6 +202,9 @@ if ($FromWizard -and $WantHue) { Write-InstallStep 1 "Philips Hue: pairing with 
 
 # ---------- 1. programs ----------
 Write-InstallStep 1 "Checking and installing programs (Git, uv, Node.js, Rust, Windows Terminal, LM Studio)"
+# Programs installed by an earlier run are in the registry PATH, but a process started from an old parent (the wizard) still has the OLD PATH.
+# Without this refresh the checks below fail again and again and step 1 never ends (fresh-PC bug report 2026-11-17).
+$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path
 $need = @()
 if (-not (Test-Command git))    { $need += 'Git.Git' }
 if (-not (Test-Command uv))     { $need += 'astral-sh.uv' }
@@ -214,7 +217,8 @@ if ($need.Count -gt 0) {
   if (-not (Get-Consent "Install them now with winget?")) { Write-Host "Install them yourself, then run this script again."; exit 1 }
   foreach ($i in $need) {
     winget install --id $i -e --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) { Write-Host "winget could not install $i (code $LASTEXITCODE)." -ForegroundColor Yellow; Write-JarvisLog "winget install $i ended with code $LASTEXITCODE" }
+    # -1978335189 = package already installed (not an error)
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { Write-Host "winget could not install $i (code $LASTEXITCODE)." -ForegroundColor Yellow; Write-JarvisLog "winget install $i ended with code $LASTEXITCODE" }
   }
   if ($FromWizard) { Write-WizardLine $StatusFile 'RERUN|programs installed'; exit 10 }   # the wizard starts this script again in a fresh process
   Write-Host ""
@@ -265,6 +269,16 @@ if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { Write-Host "ARM PC: the optional 
 else {
   uv run --no-sync maturin develop -m rust/crates/openjarvis-python/Cargo.toml --release
   if ($LASTEXITCODE -ne 0) { Write-Host "Optional Rust module not built. Jarvis works the same without it." -ForegroundColor Yellow }
+}
+# npm that ships with the winget Node can be too old for frontend/package.json (needs npm >= 11.19.0): update it first (fresh-PC bug report 2026-11-17)
+function Get-NpmVersion { try { return [version](("$(npm --version 2>$null)" -split "`n")[0].Trim() -replace '[^0-9.]','') } catch { return $null } }
+$npmVer = Get-NpmVersion
+if (-not $npmVer -or $npmVer -lt [version]'11.19.0') {
+  Write-Host "npm $npmVer is too old for the HUD web packages: updating npm..." -ForegroundColor Yellow
+  npm install -g npm@latest
+  $npmVer = Get-NpmVersion
+  if (-not $npmVer -or $npmVer -lt [version]'11.19.0') { npm install -g npm@11; $npmVer = Get-NpmVersion }   # npm 12 needs a newer Node
+  Write-JarvisLog "npm version after update: $npmVer"
 }
 Set-Location "$Repo\frontend"; npm install; $npmCode = $LASTEXITCODE; Set-Location $Repo
 if ($npmCode -ne 0) { Exit-Install "npm install failed (code $npmCode): the HUD web packages are missing." }
@@ -403,7 +417,7 @@ $modelPending = ($FromWizard -and (Test-Path (Join-Path $Cfg 'model-download.txt
 # ---------- 7. document search: LM Studio plugin Big RAG (optional; https://lmstudio.ai/mindstudio/big-rag) ----------
 Write-InstallStep 7 "Document search (optional)"
 if ($FromWizard) { $ragAsked = [bool]$WantRag }
-else { $ragAsked = ((Read-Host "Set up document search over your own files? Indexing is slow and the feature is fussy (y/N)").Trim() -match '^[yY]') }
+else { $ragAsked = (([string](Read-Host "Set up document search over your own files? Indexing is slow and the feature is fussy (y/N)")).Trim() -match '^[yY]') }
 if ($ragAsked -and -not $lmsCmd) {
   Write-Host "  LM Studio command 'lms' not found. Run lms bootstrap, open a NEW PowerShell and run this script again." -ForegroundColor Yellow
 } elseif ($ragAsked) {
@@ -456,10 +470,10 @@ if ($LASTEXITCODE -ne 0) { Write-Host "  spaCy language model not installed (cod
 Write-InstallStep 9 "Philips Hue and Tado (optional)"
 if ($useHue -and -not $FromWizard) {
   Write-Host "Philips Hue (https://www.philips-hue.com/en-us/explore-hue)"
-  Connect-HueBridge (Read-Host "IP address of your Hue bridge (Hue app > Settings > Bridge)").Trim()
+  Connect-HueBridge ([string](Read-Host "IP address of your Hue bridge (Hue app > Settings > Bridge)")).Trim()
 }
 if ($useSonos) {
-  if (-not $FromWizard) { $SonosIp = (Read-Host "IP address of your Sonos speaker (Sonos app > Settings > System > About My System)").Trim() }
+  if (-not $FromWizard) { $SonosIp = ([string](Read-Host "IP address of your Sonos speaker (Sonos app > Settings > System > About My System)")).Trim() }
   Save-SonosIp $SonosIp
 }
 if ($useTado) {
