@@ -1,4 +1,3 @@
-# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """ABC for agent implementations.
 
 Adapted from IPW's ``BaseAgent`` at ``src/agents/base.py``.
@@ -186,15 +185,22 @@ class BaseAgent(ABC):
         system prompt and bypass ``_build_messages`` (and thus the prompt
         builder). This lets them honor the same persona files as one-shot
         ``jarvis ask`` (#376) by *appending* persona to — never replacing —
-        their specialized instructions. No-op when no ``prompt_builder`` is
-        wired or no persona files exist.
+        their specialized instructions. The user's current time section is
+        appended the same way. No-op when no ``prompt_builder`` is wired.
         """
         if self._prompt_builder is None:
             return system_prompt
-        persona = self._prompt_builder.persona_sections()
-        if not persona:
+        extra = "\n\n".join(
+            part
+            for part in (
+                self._prompt_builder.persona_sections(),
+                self._prompt_builder.current_time_section(),
+            )
+            if part
+        )
+        if not extra:
             return system_prompt
-        return f"{system_prompt}\n\n{persona}" if system_prompt else persona
+        return f"{system_prompt}\n\n{extra}" if system_prompt else extra
 
     def _build_messages(
         self,
@@ -482,10 +488,12 @@ class ToolUsingAgent(BaseAgent):
         executor = getattr(self, "_executor", None)
         if executor is not None:
             executor.begin_session([input])
-        # New run: reset the loop guard (one agent object serves many requests)
-        _lg = getattr(self, "_loop_guard", None)
-        if _lg is not None:
-            _lg.reset()
+        # Loop detection is per run too: without this, identical tool calls
+        # from earlier, unrelated requests count toward max_identical_calls,
+        # and a long-lived server blocks a tool after its first few uses.
+        loop_guard = getattr(self, "_loop_guard", None)
+        if loop_guard is not None:
+            loop_guard.reset()
         super()._emit_turn_start(input)
 
     def _build_messages(

@@ -1,4 +1,3 @@
-# Modified for the IronMan J.A.R.V.I.S. project (see NOTICE). Original: https://github.com/open-jarvis/OpenJarvis (Apache-2.0)
 """Kokoro TTS backend — fully open-source, runs locally.
 
 Requires the kokoro package: pip install kokoro
@@ -45,6 +44,9 @@ _VOICE_PREFIX_TO_LANG: Dict[str, str] = {
 
 _DEFAULT_LANG_CODE = "a"
 _DEFAULT_VOICE_ID = "af_heart"
+# Passed explicitly: KModel and KPipeline both print a "Defaulting repo_id"
+# warning to stdout when it is omitted, which lands mid-conversation in voice mode.
+_KOKORO_REPO_ID = "hexgrad/Kokoro-82M"
 _IMPORT_LOCK = threading.RLock()
 
 
@@ -168,7 +170,11 @@ class KokoroTTSBackend(TTSBackend):
             try:
                 # KModel is language-blind and is by far the heaviest part of
                 # Kokoro. Reuse one model across every language pipeline.
-                pipeline = KPipeline(lang_code=lang_code, repo_id="hexgrad/Kokoro-82M", model=self._ensure_model())
+                pipeline = KPipeline(
+                    lang_code=lang_code,
+                    repo_id=_KOKORO_REPO_ID,
+                    model=self._ensure_model(),
+                )
             except ImportError as exc:
                 # Kokoro loads language-specific G2P resources at init time and
                 # several languages need extra dependencies that aren't pulled in
@@ -226,7 +232,9 @@ class KokoroTTSBackend(TTSBackend):
                 else:
                     device = "cpu"
 
-        model_kwargs = {"model": self._model_path} if self._model_path else {}
+        model_kwargs: Dict[str, Any] = {"repo_id": _KOKORO_REPO_ID}
+        if self._model_path:
+            model_kwargs["model"] = self._model_path
         try:
             self._model = KModel(**model_kwargs).to(device).eval()
         except RuntimeError as exc:

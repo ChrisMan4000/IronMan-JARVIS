@@ -66,15 +66,23 @@ export default function App() {
     return () => clearInterval(interval);
   }, [importOverlay]);
 
-  // Fetch models on mount
+  // Wait for desktop setup so a startup request cannot clear the models
+  // SetupScreen loaded before handing off to chat.
   useEffect(() => {
+    if (!setupDone) return;
+    let cancelled = false;
+    setModelsLoading(true);
     fetchModels()
       .then((m) => {
-        setModels(m);
+        if (!cancelled) setModels(m);
       })
-      .catch(() => setModels([]))
-      .finally(() => setModelsLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      // Preserve models already loaded by setup if this refresh fails.
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [setupDone, setModels, setModelsLoading]);
 
   // Mirror the LM Studio model and model list from the hardware helper (auto-update)
   useEffect(() => {
@@ -107,8 +115,9 @@ export default function App() {
   // Fetch server info
 
   useEffect(() => {
+    if (!setupDone) return;
     fetchServerInfo().then(setServerInfo).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setupDone, setServerInfo]);
 
   // Poll savings and optionally share to Supabase
   useEffect(() => {
