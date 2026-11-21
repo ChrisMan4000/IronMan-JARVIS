@@ -1,0 +1,89 @@
+name: Track repo stats
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.TRAFFIC_TOKEN != '' }}
+    steps:
+      - name: Skip when the secret is missing
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::warning::Secret TRAFFIC_TOKEN is not set, nothing was tracked."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          token: ${{ secrets.TRAFFIC_TOKEN }}
+
+      - name: Fetch numbers from GitHub
+        if: env.HAS_TOKEN == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/traffic/clones > /tmp/clones.json
+          gh api repos/${{ github.repository }}/traffic/views > /tmp/views.json
+          gh api "repos/${{ github.repository }}/releases?per_page=100" > /tmp/releases.json
+
+      - name: Merge into stats file
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          python3 - <<'PYEOF'
+          import json, os
+          from datetime import datetime, timezone
+
+          path = ".github/clone-stats/stats.json"
+          os.makedirs(os.path.dirname(path), exist_ok=True)
+          try:
+              with open(path) as f:
+                  s = json.load(f)
+          except Exception:
+              s = {}
+
+          def merge(key, src, name):
+              d = s.setdefault(key, {})
+              with open(src) as f:
+                  for e in json.load(f).get(name, []):
+                      d[e["timestamp"][:10]] = {"total": e["count"], "unique": e["uniques"]}
+              s[key] = dict(sorted(d.items()))
+
+          merge("clones_daily", "/tmp/clones.json", "clones")
+          merge("views_daily", "/tmp/views.json", "views")
+
+          assets = {}
+          with open("/tmp/releases.json") as f:
+              for r in json.load(f):
+                  for a in r.get("assets", []):
+                      assets[r["tag_name"] + "/" + a["name"]] = a["download_count"]
+          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          s["downloads_now"] = assets
+          s.setdefault("downloads_history", {})[today] = sum(assets.values())
+          s["total_clones"] = sum(v["total"] for v in s["clones_daily"].values())
+          s["total_downloads"] = sum(assets.values())
+          s["last_updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          with open(path, "w") as f:
+              json.dump(s, f, indent=2)
+              f.write("\n")
+          print("clones", s["total_clones"], "downloads", s["total_downloads"])
+          PYEOF
+
+      - name: Commit and push
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/clone-stats/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update repo stats [skip ci]"
+            git push
+          fi
