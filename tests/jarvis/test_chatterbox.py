@@ -32,23 +32,37 @@ def test_health_follows_the_install(monkeypatch):
 class FakeModel:
     def __init__(self):
         self.calls = []
+        self.clips = []
 
     def generate(self, text, **kwargs):
         self.calls.append((text, kwargs))
         return np.zeros(2400, dtype=np.float32)  # 0.1 s of silence
 
 
-def test_synthesize_uses_the_clip_and_the_chosen_settings():
+def _backend(ct, monkeypatch, model="v2"):
+    """Backend with a fake model already loaded (no torch, no download)."""
+    monkeypatch.setattr(ct, "hud_settings", lambda: {"tts_model": model})
+    backend = ct.ChatterboxTTSBackend(device="cpu")
+    fake = FakeModel()
+    if model == "turbo":
+        backend._turbo = fake
+    else:
+        backend._model, backend._t3_version = fake, model
+    monkeypatch.setattr(backend, "_prep", lambda m, clip, ex: m.clips.append(clip))
+    return backend, fake
+
+
+def test_synthesize_uses_the_clip_and_the_chosen_settings(monkeypatch):
     from openjarvis.speech import chatterbox_tts as ct
 
-    backend = ct.ChatterboxTTSBackend(device="cpu")
-    backend._model = FakeModel()
-    result = backend.synthesize("Hello sir", voice_id="C:/voices/hood2.WAV", speed=1.3)
-    text, kwargs = backend._model.calls[0]
+    backend, fake = _backend(ct, monkeypatch)
+    result = backend.synthesize("Hello sir", voice_id="C:/voices/myvoice.WAV")
+    text, kwargs = fake.calls[0]
     assert text == "Hello sir"
+    assert fake.clips == ["C:/voices/myvoice.WAV"]  # the clip is prepared once, not passed every time
     assert kwargs == {
         "language_id": "en",
-        "audio_prompt_path": "C:/voices/hood2.WAV",
+        "audio_prompt_path": None,
         "exaggeration": ct.EXAGGERATION,
         "cfg_weight": ct.CFG_WEIGHT,
         "temperature": ct.TEMPERATURE,
@@ -58,13 +72,23 @@ def test_synthesize_uses_the_clip_and_the_chosen_settings():
     assert result.duration_seconds == pytest.approx(0.1)
 
 
-def test_a_voice_name_is_not_used_as_a_clip():
+def test_a_voice_name_is_not_used_as_a_clip(monkeypatch):
     from openjarvis.speech import chatterbox_tts as ct
 
-    backend = ct.ChatterboxTTSBackend(device="cpu")
-    backend._model = FakeModel()
+    backend, fake = _backend(ct, monkeypatch)
     backend.synthesize("Hi", voice_id="bm_george")
-    assert backend._model.calls[0][1]["audio_prompt_path"] is None
+    assert fake.clips == [None]
+
+
+def test_turbo_speaks_english_with_its_own_model(monkeypatch):
+    from openjarvis.speech import chatterbox_tts as ct
+
+    backend, fake = _backend(ct, monkeypatch, "turbo")
+    result = backend.synthesize("Hallo", language_id="de")
+    assert fake.calls == [("Hallo", {"temperature": ct.TEMPERATURE})]
+    assert result.metadata["lang_id"] == "en"  # Turbo is English only
+    pcm = b"".join(backend.stream("Hello"))
+    assert len(pcm) == 2400 * 2  # one 16-bit piece
 
 def _speech(seconds, rate=24000, level=0.5):
     """Noise that stands in for speech (loud enough to never count as quiet)."""

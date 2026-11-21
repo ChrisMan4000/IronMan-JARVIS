@@ -46,7 +46,10 @@ const
   COrange = $3D9AFF;   { #ff9a3d }
   CText   = $F5E9BF;   { #bfe9f5 }
   K1Text  = 'Kokoro   (one size only, 82 million parameters; light, runs on any PC, about 0.3 GB)';
-  K2Text  = 'Chatterbox   (more natural, can copy a voice; NVIDIA graphics card, about 4 GB graphics memory, several GB download)';
+  K2Text  = 'Chatterbox   (more natural, can copy a voice; NVIDIA graphics card, 3-4 GB graphics memory, several GB download)';
+  CbText1 = 'Multilingual V3   (newest, 23 languages, about 4 GB graphics memory)';
+  CbText2 = 'Multilingual V2   (older weights, 23 languages, about 4 GB graphics memory)';
+  CbText3 = 'Turbo   (English only, lighter and faster, about 3 GB graphics memory)';
 
 function DwmSetWindowAttribute(hwnd: HWND; dwAttribute: DWORD; var pvAttribute: DWORD; cbAttribute: DWORD): Longint;
   external 'DwmSetWindowAttribute@dwmapi.dll stdcall delayload';
@@ -81,7 +84,7 @@ var
   HueCheck, TadoCheck, SonosCheck, WakeCheck, RagCheck, VoiceCheck: TNewCheckBox;
   HueIpEdit, SonosIpEdit, KeyEdit, CityEdit, RagDocsEdit, RagIndexEdit: TNewEdit;
   RbExist, RbT1, RbT2, RbT3, RbSkip, VoiceRbKokoro, VoiceRbChatterbox: TNewRadioButton;
-  ModelCombo, WhisperCombo: TNewComboBox;
+  ModelCombo, WhisperCombo, CbCombo: TNewComboBox;
   ClipEdit: TNewEdit;
   ClipHint, ModelTip: TNewStaticText;
   OnlinePage: TWizardPage;
@@ -327,6 +330,17 @@ procedure ModelRadioClick(Sender: TObject);
 begin
   ModelCombo.Enabled := RbExist.Checked and RbExist.Enabled;
   ClipEdit.Enabled := VoiceRbChatterbox.Checked and VoiceRbChatterbox.Enabled;
+  CbCombo.Enabled := ClipEdit.Enabled;
+end;
+
+{ Chatterbox model from the combo: chatterbox (= Multilingual V3), chatterbox-v2, chatterbox-turbo }
+function CbChoice(): String;
+begin
+  case CbCombo.ItemIndex of
+    1: Result := 'chatterbox-v2';
+    2: Result := 'chatterbox-turbo';
+  else Result := 'chatterbox';
+  end;
 end;
 
 procedure CheckLabelClick(Sender: TObject);
@@ -478,13 +492,20 @@ begin
   { voice for the answers (Kokoro or Chatterbox) }
   TtsPage := NewPage(VoicePage.ID, 'Voice', 'How Jarvis sounds when it answers.');
   Y := 0;
-  AddText(TtsPage, Y, 'Kokoro is small and works on every PC. Chatterbox sounds more natural and can copy a voice from a short clip, but it needs an NVIDIA graphics card and a long download. The best choice for your PC is marked.', CText, False);
+  AddText(TtsPage, Y, 'Kokoro is small and works on every PC. Chatterbox sounds more natural and can copy a voice from a short clip, but it needs an NVIDIA graphics card and a long download. It comes with 5 extra voices; switch voice and model later in the HUD settings (gear, top left). The best choice for your PC is marked.', CText, False);
   AddLink(TtsPage, Y, 'Kokoro', 'https://huggingface.co/hexgrad/Kokoro-82M');
   AddLink(TtsPage, Y, 'Chatterbox', 'https://github.com/resemble-ai/chatterbox');
   VoiceRbKokoro := AddRadio(TtsPage, Y, K1Text);
   VoiceRbChatterbox := AddRadio(TtsPage, Y, K2Text);
   VoiceRbKokoro.Checked := True;
   VoiceRbKokoro.OnClick := @ModelRadioClick; VoiceRbChatterbox.OnClick := @ModelRadioClick;
+  CbCombo := TNewComboBox.Create(TtsPage);
+  CbCombo.Parent := TtsPage.Surface;
+  CbCombo.Left := ScaleX(22); CbCombo.Top := Y; CbCombo.Width := TtsPage.SurfaceWidth - ScaleX(22);
+  CbCombo.Style := csDropDownList;
+  CbCombo.Items.Add(CbText1); CbCombo.Items.Add(CbText2); CbCombo.Items.Add(CbText3);
+  CbCombo.ItemIndex := 0;
+  Y := Y + CbCombo.Height + ScaleY(8);
   ClipHint := AddText(TtsPage, Y, 'Optional, Chatterbox only: full path of a clear .wav, .mp3 or .flac clip (10-20 seconds, one speaker) of YOUR OWN voice, or a voice you have permission to copy. Empty = the built-in voice.', CText, False);
   Y := Y - ClipHint.Height - ScaleY(6);   { redo the layout: indented like the Chatterbox text, italic }
   ClipHint.Left := ScaleX(22); ClipHint.Width := TtsPage.SurfaceWidth - ScaleX(22);
@@ -743,11 +764,21 @@ begin
   if WhisperCombo.ItemIndex < 0 then WhisperCombo.ItemIndex := 0;
   SetRadioText(VoiceRbKokoro, K1Text);
   SetRadioText(VoiceRbChatterbox, K2Text);
-  if RecTts = 'chatterbox' then SetRadioText(VoiceRbChatterbox, K2Text + Mark) else SetRadioText(VoiceRbKokoro, K1Text + Mark);
+  if Pos('chatterbox', RecTts) = 1 then SetRadioText(VoiceRbChatterbox, K2Text + Mark) else SetRadioText(VoiceRbKokoro, K1Text + Mark);
+  CbCombo.Items.Clear;
+  CbCombo.Items.Add(CbText1); CbCombo.Items.Add(CbText2); CbCombo.Items.Add(CbText3);
+  if RecTts = 'chatterbox-turbo' then
+  begin
+    CbCombo.Items[2] := CbText3 + Mark; CbCombo.ItemIndex := 2;
+  end
+  else
+  begin
+    CbCombo.Items[0] := CbText1 + Mark; CbCombo.ItemIndex := 0;
+  end;
   VoiceRbChatterbox.Enabled := HasNvidia;
   SetRadioLook(VoiceRbChatterbox);
   if not HasNvidia then SetRadioText(VoiceRbChatterbox, K2Text + '   (not possible: no NVIDIA card found)');
-  VoiceRbChatterbox.Checked := (RecTts = 'chatterbox') and HasNvidia;
+  VoiceRbChatterbox.Checked := (Pos('chatterbox', RecTts) = 1) and HasNvidia;
   VoiceRbKokoro.Checked := not VoiceRbChatterbox.Checked;
   ModelRadioClick(nil);
 end;
@@ -793,7 +824,7 @@ begin
   S := S + Space + 'Speech recognition: Whisper ' + WhisperId(WhisperCombo.ItemIndex) + NewLine;
   if VoiceRbChatterbox.Checked then
   begin
-    S := S + Space + 'Voice: Chatterbox' + NewLine + Space + Space + '(several GB of graphics card packages, can take long)';
+    S := S + Space + 'Voice: Chatterbox ' + Trim(Copy(CbCombo.Items[CbCombo.ItemIndex], 1, Pos('(', CbCombo.Items[CbCombo.ItemIndex]) - 1)) + NewLine + Space + Space + '(several GB of graphics card packages, can take long)';
     if Trim(ClipEdit.Text) <> '' then S := S + ', your own voice clip';
     S := S + NewLine;
   end
@@ -864,7 +895,7 @@ begin
   Opts := Opts + ' -WhisperModel ''' + WhisperId(WhisperCombo.ItemIndex) + '''';
   if VoiceRbChatterbox.Checked then
   begin
-    Opts := Opts + ' -TtsChoice ''chatterbox''';
+    Opts := Opts + ' -TtsChoice ''' + CbChoice() + '''';
     Clip := Trim(ClipEdit.Text);
     if Clip <> '' then
     begin

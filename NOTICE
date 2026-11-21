@@ -39,7 +39,10 @@ src/openjarvis/tools/sonos_control.py   Sonos speaker tool (optional)
   src/openjarvis/tools/rss_news.py   news headlines tool
   src/openjarvis/tools/oracle_search.py  document search tool
   src/openjarvis/tools/storage/sqlite_dense.py  meaning-based memory backend (SQLite + LM Studio embeddings)
-  src/openjarvis/speech/chatterbox_tts.py  optional GPU voice (Chatterbox, needs chatterbox-tts)
+  src/openjarvis/speech/chatterbox_tts.py  optional GPU voice (Chatterbox Multilingual V3/V2 or Turbo, streaming, needs chatterbox-tts)
+  src/openjarvis/speech/voice_fx.py  optional "studio" sound for a voice clip
+  frontend/public/hud-settings.js, hud-weather.js  HUD settings panel (gear) and weather details view
+  tools/voices/                      5 Chatterbox voice clips + samples, spoken by Kokoro-82M (Apache-2.0) from a seed text
   tools/                             local hardware helper, wake word service, helper scripts
   start-jarvis.ps1, install-jarvis.ps1, uninstall-jarvis.ps1, config.example.toml
   installer/                         Inno Setup recipe, wizard images and helper for the Windows installer (.exe)

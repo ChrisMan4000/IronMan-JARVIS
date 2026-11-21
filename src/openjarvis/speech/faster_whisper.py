@@ -148,13 +148,25 @@ class FasterWhisperBackend(SpeechBackend):
                     tmp.write(audio)
 
                 kwargs = {}
-                if language:
+                if language and language.lower() != "auto":
                     kwargs["language"] = language
-                else:
+                elif not language:
                     kwargs["language"] = "en"
+                # "auto" (HUD setting): Whisper finds the spoken language itself
 
                 segments_iter, info = model.transcribe(tmp.name, **kwargs)
                 segments_list = list(segments_iter)
+                if (
+                    language and language.lower() == "auto"
+                    and getattr(info, "language", "en") not in ("en", "de")
+                    and (getattr(info, "language_probability", 1.0) or 0) < 0.7
+                ):
+                    # short, unclear clip: a rare language was a guess, so take the
+                    # likelier of English and German (IronMan J.A.R.V.I.S. change)
+                    probs = dict(getattr(info, "all_language_probs", None) or [])
+                    best = "de" if probs.get("de", 0) > probs.get("en", 0) else "en"
+                    segments_iter, info = model.transcribe(tmp.name, language=best)
+                    segments_list = list(segments_iter)
             finally:
                 try:
                     os.unlink(tmp.name)

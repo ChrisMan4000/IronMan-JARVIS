@@ -1174,6 +1174,154 @@ async def synthesize_speech(request: Request, body: SpeechSynthesizeRequest):
     )
 
 
+# ---- IronMan J.A.R.V.I.S.: streamed speech, HUD settings, voice list ----
+class SpeechStreamRequest(BaseModel):
+    text: str
+    voice: Optional[str] = None  # file name (no extension) in ~/.openjarvis/voices, or "default"
+    speed: Optional[float] = None
+    exaggeration: Optional[float] = None
+    temperature: Optional[float] = None
+    language_id: Optional[str] = None
+
+
+def _jv_voices_dir():
+    from pathlib import Path
+
+    return Path.home() / ".openjarvis" / "voices"
+
+
+def _jv_voice_clip(name: str) -> str | None:
+    """Voice name -> clip path inside the voices folder ("" = built-in voice,
+    None = no such clip on this PC: keep the voice from config.toml)."""
+    import re
+
+    if not name or name == "default":
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,60}", name):
+        raise HTTPException(status_code=400, detail="Bad voice name")
+    for ext in (".wav", ".mp3", ".flac"):
+        f = _jv_voices_dir() / (name + ext)
+        if f.is_file():
+            return str(f)
+    return None
+
+
+@speech_router.post("/synthesize_stream")
+async def synthesize_speech_stream(request: Request, body: SpeechStreamRequest):
+    """Like /synthesize, but sends 16-bit mono PCM (X-Sample-Rate) while it is made."""
+    from fastapi.responses import StreamingResponse
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing 'text'")
+    if len(text) > _MAX_TTS_CHARS:
+        raise HTTPException(status_code=413, detail=f"Text exceeds {_MAX_TTS_CHARS} characters")
+    backend = await _resolve_tts_backend(request)
+    if backend is None or not hasattr(backend, "stream"):
+        raise HTTPException(status_code=501, detail="No streaming text-to-speech backend")
+    voice_id, speed = _tts_voice_and_speed(request, backend)
+    if body.voice is not None:
+        clip = _jv_voice_clip(body.voice)
+        if clip is not None:
+            voice_id = clip
+    if body.speed is not None:
+        speed = body.speed
+
+    def gen():
+        try:
+            yield from backend.stream(
+                text, voice_id=voice_id, speed=speed, exaggeration=body.exaggeration,
+                temperature=body.temperature, language_id=body.language_id,
+            )
+        except Exception:
+            logger.exception("Streamed speech failed")
+
+    return StreamingResponse(
+        gen(), media_type="application/octet-stream",
+        headers={"X-Sample-Rate": "24000", "Cache-Control": "no-store"},
+    )
+
+
+@speech_router.get("/hud-settings")
+async def get_hud_settings():
+    """Settings of the HUD settings panel (kept in ~/.openjarvis/hud-settings.json)."""
+    from pathlib import Path
+
+    f = Path.home() / ".openjarvis" / "hud-settings.json"
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+@speech_router.post("/hud-settings")
+async def save_hud_settings(request: Request):
+    """Save the HUD settings (flat object of short values, max 20 KB)."""
+    import os
+    from pathlib import Path
+
+    raw = await request.body()
+    if len(raw) > 20000:
+        raise HTTPException(status_code=413, detail="Settings too large")
+    try:
+        data = json.loads(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Bad JSON") from exc
+    if not isinstance(data, dict) or len(data) > 80:
+        raise HTTPException(status_code=400, detail="Settings must be a small object")
+    clean = {}
+    for k, v in data.items():
+        if not isinstance(k, str) or len(k) > 40:
+            continue
+        if isinstance(v, (bool, int, float)) or (isinstance(v, str) and len(v) <= 200):
+            clean[k] = v
+    f = Path.home() / ".openjarvis" / "hud-settings.json"
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(clean, indent=1), encoding="utf-8")
+    os.replace(tmp, f)
+    return {"ok": True, "saved": len(clean)}
+
+
+@speech_router.get("/voices")
+async def list_voices():
+    """Clips in ~/.openjarvis/voices (name, effect, whether a sample exists)."""
+    d = _jv_voices_dir()
+    out = []
+    try:
+        for f in sorted(d.iterdir()):
+            if f.suffix.lower() in (".wav", ".mp3", ".flac") and f.is_file():
+                meta = {}
+                try:
+                    meta = json.loads(f.with_suffix(".json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    pass
+                out.append({
+                    "id": f.stem, "label": meta.get("label", f.stem.upper()),
+                    "desc": meta.get("desc", ""), "group": meta.get("group", "own"),
+                    "fx": meta.get("fx", ""),
+                    "sample": (d / "samples" / (f.stem + ".mp3")).is_file(),
+                })
+    except OSError:
+        pass
+    return {"voices": out}
+
+
+@speech_router.get("/voice-sample/{name}")
+async def voice_sample(name: str):
+    """Short MP3 sample of a voice (voices/samples/<name>.mp3)."""
+    import re
+
+    from fastapi.responses import FileResponse
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,60}", name):
+        raise HTTPException(status_code=400, detail="Bad voice name")
+    f = _jv_voices_dir() / "samples" / (name + ".mp3")
+    if not f.is_file():
+        raise HTTPException(status_code=404, detail="No sample")
+    return FileResponse(str(f), media_type="audio/mpeg")
+
+
 @speech_router.get("/tts/health")
 async def tts_health(request: Request):
     """Report whether voice output is available, and with which voice."""

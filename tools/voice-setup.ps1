@@ -8,7 +8,7 @@
 param(
   [string]$Repo = '',
   [string]$Whisper = '',        # tiny | base | small | medium | large-v3 (empty = recommendation)
-  [string]$Tts = '',            # kokoro | chatterbox (empty = kokoro, or asks with -Ask)
+  [string]$Tts = '',            # kokoro | chatterbox (= Multilingual V3) | chatterbox-v2 | chatterbox-turbo (English only) (empty = kokoro, or asks with -Ask)
   [string]$VoiceClip = '',      # optional .wav/.mp3/.flac of YOUR OWN voice for Chatterbox
   [double]$LlmGB = -1,          # size of the language model sharing the graphics card (-1 = guess)
   [switch]$Ask,                 # ask the questions in the console
@@ -54,8 +54,16 @@ import torch
 if not torch.cuda.is_available():
     print("NO_CUDA")
     sys.exit(2)
-from chatterbox.mtl_tts import ChatterboxMultilingualTTS as M
-M.from_pretrained(device="cuda")
+v = sys.argv[1] if len(sys.argv) > 1 else "v3"
+if v == "turbo":
+    from chatterbox.tts_turbo import ChatterboxTurboTTS as M
+    M.from_pretrained(device="cuda")
+else:
+    from chatterbox.mtl_tts import ChatterboxMultilingualTTS as M
+    M.from_pretrained(device="cuda")
+    if v == "v3":  # newer Multilingual V3 weights, swapped in by speech/chatterbox_tts.py
+        from huggingface_hub import hf_hub_download
+        hf_hub_download("ResembleAI/chatterbox", "t3_mtl23ls_v3.safetensors")
 print("CHATTERBOX_OK")
 '@
 
@@ -95,28 +103,37 @@ try {
     Write-Host ""
     Write-Host "Voice for the answers. Read more:" -ForegroundColor Cyan
     Write-Host "  Kokoro      https://huggingface.co/hexgrad/Kokoro-82M   (one size only, 82 million parameters, runs on any PC, about 0.3 GB)"
-    Write-Host "  Chatterbox  https://github.com/resemble-ai/chatterbox  (more natural, can copy a voice from a short clip of YOUR OWN voice; needs an NVIDIA GPU, about 4 GB graphics memory and up to 10 GB of disk space)"
-    $mk = ''; if ($advice.Tts -eq 'kokoro') { $mk = '   <-- recommended for your PC' }
-    Write-Host ("   1) Kokoro{0}" -f $mk)
-    $mk = ''; if ($advice.Tts -eq 'chatterbox') { $mk = '   <-- recommended for your PC' }
-    if ($hw.Nvidia) { Write-Host ("   2) Chatterbox{0}" -f $mk) } else { Write-Host "   2) Chatterbox   (not possible: no NVIDIA GPU found)" -ForegroundColor DarkGray }
-    $defT = '1'; if ($advice.Tts -eq 'chatterbox') { $defT = '2' }
-    $n = (Read-Host "  Which voice? (1-2, Enter = $defT)").Trim()
+    Write-Host "  Chatterbox  https://github.com/resemble-ai/chatterbox  (more natural, can copy a voice from a short clip of YOUR OWN voice, 5 extra voices; needs an NVIDIA GPU, 3-4 GB graphics memory and up to 10 GB of disk space)"
+    $opts = @(
+      @{ Id = 'kokoro'; Text = 'Kokoro' },
+      @{ Id = 'chatterbox'; Text = 'Chatterbox Multilingual V3   (newest, 23 languages, about 4 GB graphics memory)' },
+      @{ Id = 'chatterbox-v2'; Text = 'Chatterbox Multilingual V2   (older weights, 23 languages, about 4 GB graphics memory)' },
+      @{ Id = 'chatterbox-turbo'; Text = 'Chatterbox Turbo   (English only, lighter and faster, about 3 GB graphics memory)' }
+    )
+    $defT = '1'
+    for ($i = 0; $i -lt $opts.Count; $i++) {
+      $mk = ''; if ($advice.Tts -eq $opts[$i].Id) { $mk = '   <-- recommended for your PC'; $defT = "$($i + 1)" }
+      if ($i -gt 0 -and -not $hw.Nvidia) { Write-Host ("   {0}) {1}   (not possible: no NVIDIA GPU found)" -f ($i + 1), $opts[$i].Text) -ForegroundColor DarkGray }
+      else { Write-Host ("   {0}) {1}{2}" -f ($i + 1), $opts[$i].Text, $mk) }
+    }
+    $n = (Read-Host "  Which voice? (1-$($opts.Count), Enter = $defT)").Trim()
     if ($n -eq '') { $n = $defT }
-    if ($n -eq '2') { $Tts = 'chatterbox' } else { $Tts = 'kokoro' }
-    if ($Tts -eq 'chatterbox' -and -not $VoiceClip) {
+    if ($n -match '^[1-4]$') { $Tts = $opts[[int]$n - 1].Id } else { $Tts = 'kokoro' }
+    if ($Tts -like 'chatterbox*' -and -not $VoiceClip) {
       $VoiceClip = (Read-Host "  Optional: path of a .wav/.mp3/.flac clip of YOUR OWN voice (10-20 s, clear). Enter = the built-in voice").Trim().Trim('"')
     }
   }
   if (-not $Tts) { $Tts = 'kokoro' }
-  if ($Tts -eq 'chatterbox' -and -not $hw.Nvidia) { Write-Host "  Chatterbox needs an NVIDIA GPU. Using Kokoro instead." -ForegroundColor Yellow; $Tts = 'kokoro' }
+  if ($Tts -like 'chatterbox*' -and -not $hw.Nvidia) { Write-Host "  Chatterbox needs an NVIDIA GPU. Using Kokoro instead." -ForegroundColor Yellow; $Tts = 'kokoro' }
+  # Chatterbox model: v3 (Multilingual V3, plain 'chatterbox'), v2 or turbo; saved for the HUD in hud-settings.json (tts_model)
+  $cbModel = 'v3'; if ($Tts -eq 'chatterbox-v2') { $cbModel = 'v2' } elseif ($Tts -eq 'chatterbox-turbo') { $cbModel = 'turbo' }
 
   $device = $advice.Device; $compute = $advice.Compute
   Write-Host ""
   Write-Host ("  Chosen: Whisper {0} on the {1}, voice {2}" -f $Whisper, $(if ($device -eq 'cuda') { 'graphics card' } else { 'processor' }), $Tts) -ForegroundColor Green
 
   # ---------- 3. install and test ----------
-  if ($device -eq 'cuda' -or $Tts -eq 'chatterbox') {
+  if ($device -eq 'cuda' -or $Tts -like 'chatterbox*') {
     Write-VoiceStep "Voice: installing the NVIDIA GPU libraries (a few hundred MB)"
     uv pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*" "av>=15,<17"
     if ($LASTEXITCODE -ne 0) { Write-Host "  The NVIDIA libraries could not be installed. The tests below show what still works." -ForegroundColor Yellow; Write-JarvisLog "voice: NVIDIA libraries install failed (code $LASTEXITCODE)" }
@@ -145,13 +162,37 @@ try {
   if ($LASTEXITCODE -ne 0) { Write-Host "  Kokoro download failed. The first spoken answer will try again." -ForegroundColor Yellow }
 
   $voiceId = ''
-  if ($Tts -eq 'chatterbox') {
+  if ($Tts -like 'chatterbox*') {
     Write-VoiceStep "Voice: installing Chatterbox (several GB, this takes a long time)"
     uv pip install "chatterbox-tts==0.1.7"   # the version tested on the author's PC (it pins torch 2.6.0 and transformers 5.2.0; torch is upgraded right after)
     uv pip install --upgrade "torch>=2.7" "torchaudio>=2.7" --index-url https://download.pytorch.org/whl/cu128
     if ($LASTEXITCODE -ne 0) { Write-JarvisLog "voice: torch upgrade failed (code $LASTEXITCODE); the Chatterbox test below decides" }
     Write-VoiceStep "Voice: loading Chatterbox once (downloads its model, about 3 GB)"
-    $res = Invoke-ProjectPython $pyChatterbox @()
+    $res = Invoke-ProjectPython $pyChatterbox @($cbModel)
+    if (($res -notmatch 'CHATTERBOX_OK') -and $cbModel -ne 'turbo') {
+      # the bigger Multilingual model did not load (memory?): try the lighter Turbo once (English only)
+      Write-Host "  Chatterbox Multilingual did not load. Trying the lighter Chatterbox Turbo (English only)..." -ForegroundColor Yellow
+      $cbModel = 'turbo'; $Tts = 'chatterbox-turbo'
+      $res = Invoke-ProjectPython $pyChatterbox @($cbModel)
+    }
+    if ($res -match 'CHATTERBOX_OK') {
+      # the 5 extra Chatterbox voices (made with Kokoro, Apache-2.0) and their samples for the HUD settings; existing files are kept
+      $src = Join-Path $Repo 'tools\voices'
+      if (Test-Path $src) {
+        $vd = Join-Path $Cfg 'voices'
+        Get-ChildItem $src -Recurse -File | ForEach-Object {
+          $dest = Join-Path $vd $_.FullName.Substring($src.Length + 1)
+          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null; Copy-Item $_.FullName $dest }
+        }
+      }
+      # model choice for the voice engine and the HUD settings panel (kept with the other HUD settings)
+      try {
+        $hs = Join-Path $Cfg 'hud-settings.json'; $o = @{}
+        if (Test-Path $hs) { $j = [System.IO.File]::ReadAllText($hs, [System.Text.Encoding]::UTF8) | ConvertFrom-Json; foreach ($p in $j.PSObject.Properties) { $o[$p.Name] = $p.Value } }
+        $o['tts_model'] = $cbModel
+        [System.IO.File]::WriteAllText($hs, ($o | ConvertTo-Json -Compress), $Utf8)
+      } catch { Write-JarvisLog "voice: could not write hud-settings.json ($($_.Exception.Message))" }
+    }
     if ($res -notmatch 'CHATTERBOX_OK') {
       Write-Host "  Chatterbox did not work on this PC (see the lines above). Using Kokoro instead. You can try again later with: powershell -ExecutionPolicy Bypass -File tools\voice-setup.ps1 -Ask" -ForegroundColor Yellow
       $Tts = 'kokoro'
@@ -176,8 +217,9 @@ try {
     $c = Merge-SpeechValue -text $c -key 'model' -value $Whisper
     $c = Merge-SpeechValue -text $c -key 'device' -value $device
     $c = Merge-SpeechValue -text $c -key 'compute_type' -value $compute
-    $c = Merge-SpeechValue -text $c -key 'tts_backend' -value $Tts
-    if ($Tts -eq 'chatterbox') { $c = Merge-SpeechValue -text $c -key 'voice_id' -value $voiceId }
+    $backend = $Tts; if ($Tts -like 'chatterbox*') { $backend = 'chatterbox' }
+    $c = Merge-SpeechValue -text $c -key 'tts_backend' -value $backend
+    if ($backend -eq 'chatterbox') { $c = Merge-SpeechValue -text $c -key 'voice_id' -value $voiceId }
     elseif ($cur -ne 'kokoro') { $c = Merge-SpeechValue -text $c -key 'voice_id' -value 'am_adam' }
     [System.IO.File]::WriteAllText($cfgFile, $c, $Utf8)
     Write-Host "  Saved to $cfgFile (backup of the old file: config.toml.before-voice)" -ForegroundColor Green

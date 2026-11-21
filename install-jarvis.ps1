@@ -16,7 +16,7 @@ param(
   [string]$ModelId = '',        # an LM Studio model that is already installed
   [string]$OnlineModel = '',    # optional: Hugging Face repo found by tools\model-search.ps1 (tested after the download; on failure the choice above is used)
   [string]$WhisperModel = '',   # speech recognition size: tiny|base|small|medium|large-v3 (empty = recommended for this PC, see tools\voice-setup.ps1)
-  [string]$TtsChoice = '',      # voice: kokoro|chatterbox (empty = kokoro; plain PowerShell use asks)
+  [string]$TtsChoice = '',      # voice: kokoro|chatterbox (= Multilingual V3)|chatterbox-v2|chatterbox-turbo (English only) (empty = kokoro; plain PowerShell use asks)
   [string]$VoiceClip = '',      # optional clip of your OWN voice for Chatterbox
   [string]$City = '',           # home city for the HUD weather (tools\set-home-city.ps1); empty = keep / ask in plain PowerShell
   [string]$StatusFile = ''      # the wizard reads progress lines from this file

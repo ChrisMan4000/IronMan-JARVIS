@@ -50,7 +50,7 @@ $script:JarvisWhisperOptions = @(
   [pscustomobject]@{ Id = 'large-v3'; Download = 3.1;  Vram = 5;   Note = 'most accurate, needs a strong NVIDIA card' }
 )
 $script:JarvisWhisperIds = @($JarvisWhisperOptions | ForEach-Object { $_.Id })
-$script:JarvisVoiceBackends = 'kokoro', 'chatterbox'   # Kokoro: light, any PC. Chatterbox: NVIDIA card, nicer, can copy a voice clip.
+$script:JarvisVoiceBackends = 'kokoro', 'chatterbox', 'chatterbox-v2', 'chatterbox-turbo'   # Kokoro: light, any PC. Chatterbox (= Multilingual V3), V2, Turbo (English): NVIDIA card, nicer, can copy a voice clip.
 $script:JarvisLogFile = Join-Path $JarvisConfigDir 'logs\scripts.log'
 
 function Write-JarvisLog([string]$Message) {
@@ -182,8 +182,10 @@ function Get-VoiceRecommendation($Hardware, [double]$LlmGB = -1) {
   if ($LlmGB -lt 0) { $LlmGB = (Get-RecommendedModelTier $Hardware.Vram).Gb }
   # the language model needs its file size plus about 1.5 GB for the context (26B model: file 14.6 GB, measured 15.9 GB)
   $free = [double]$Hardware.Vram - ($LlmGB + 1.5)
-  $chatterbox = ($Hardware.Nvidia -and ($free -ge 9))       # Chatterbox about 4 GB + Whisper small or more + safety margin
-  $ttsGb = 0; if ($chatterbox) { $ttsGb = 4 }
+  # Chatterbox Multilingual V3 about 4 GB, Turbo (English only) about 3 GB, each + Whisper small or more + safety margin
+  $tts = 'kokoro'; $ttsGb = 0
+  if ($Hardware.Nvidia -and ($free -ge 9)) { $tts = 'chatterbox'; $ttsGb = 4 }
+  elseif ($Hardware.Nvidia -and ($free -ge 6)) { $tts = 'chatterbox-turbo'; $ttsGb = 3 }
   $avail = $free - $ttsGb - 1
   $gpuOk = ($Hardware.Nvidia -and ($free -ge 2))
   if ($gpuOk) {
@@ -195,7 +197,6 @@ function Get-VoiceRecommendation($Hardware, [double]$LlmGB = -1) {
     if ($Hardware.Arm -or ($Hardware.Ram -gt 0 -and $Hardware.Ram -lt 16)) { $whisper = 'base' } else { $whisper = 'small' }
     $dev = 'cpu'; $comp = 'int8'
   }
-  $tts = 'kokoro'; if ($chatterbox) { $tts = 'chatterbox' }
   return [pscustomobject]@{ Whisper = $whisper; Device = $dev; Compute = $comp; Tts = $tts; Free = [math]::Round($free, 1); GpuOk = $gpuOk }
 }
 

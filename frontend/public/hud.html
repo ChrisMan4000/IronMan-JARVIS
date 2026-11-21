@@ -32,7 +32,7 @@ html.phn #mlist{position:fixed !important;left:50% !important;top:118px !importa
 html.phn #log,html.phn #bar{animation:phnIn 1s ease 2s both}
 html.phn body #hDel{left:auto !important;top:auto !important;right:calc(3vw + 6px) !important;bottom:calc(env(safe-area-inset-bottom,0px) + 64px + var(--log-h) - 32px) !important;animation:phnIn 1s ease 2s both}
 @keyframes phnIn{from{opacity:0}}
-</style><script src="hud-version.js"></script><script src="hud-shared.js"></script><script src="hud-brain.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
+</style><script>try{window.HUDS=JSON.parse(localStorage.getItem('jvHudS')||'{}')}catch(e){window.HUDS={}}</script><script src="hud-version.js"></script><script src="hud-shared.js"></script><script src="hud-brain.js"></script><script>if(innerWidth<=820&&innerHeight>innerWidth*1.05)document.documentElement.classList.add('phn')</script></head><body>
 <canvas id="cv"></canvas><canvas id="pcv"></canvas><div id="log"></div>
 <div id="bar"><button id="tClip" title="Attach image or file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.3-8.3"/></svg></button><span id="tChip"></span><input type="text" id="tIn" placeholder="Type a message..." autocomplete="off"><button id="tSend" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button><button id="tMic" title="Two-way voice (F6). The wake word works too" aria-label="Voice"><svg viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="6" y="1" width="4" height="8"/><rect x="5" y="2" width="1" height="6"/><rect x="10" y="2" width="1" height="6"/><rect x="7" y="3" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="7" y="5" width="2" height="1" fill="#02060b" opacity=".45"/><rect x="3" y="6" width="1" height="3"/><rect x="12" y="6" width="1" height="3"/><rect x="4" y="9" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/><rect x="5" y="10" width="6" height="1"/><rect x="7" y="11" width="2" height="2"/><rect x="5" y="13" width="6" height="1"/></svg></button><input type="file" id="tFile" hidden accept="image/*,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.log,.yaml,.yml,.toml,.xml,.ps1,.sh"></div>
 <script src="hud-home.js" onerror="this.remove()"></script><script>
@@ -56,7 +56,7 @@ function trimLog(){while(log.childElementCount>400)log.removeChild(log.firstElem
 async function listen(){
   if(!on)return;
   try{ctx=ctx||new AudioContext();if(ctx.state==='suspended')await ctx.resume();
-    stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    stream=await navigator.mediaDevices.getUserMedia({audio:(window.HUDS&&HUDS.mic)?{deviceId:HUDS.mic}:true});
   }catch(e){add('sys','Microphone error: '+e.message);on=false;state='idle';return}
   micAn=ctx.createAnalyser();micAn.fftSize=1024;
   const src=ctx.createMediaStreamSource(stream);src.connect(micAn);
@@ -138,7 +138,7 @@ function addJ(text){text=futureMark(text);
   while((m=RE.exec(text))){
     if(m.index>last)putText(d,text.slice(last,m.index));
     const v=+(m[0].match(/\d{1,3}(?:\.\d+)?/)[0]),s=document.createElement('span');
-    let ct=m[0].replace(/^NN/i,'');if(!/confiden/i.test(ct))ct=ct.replace(/\s*%/,'%')+' confidence';s.textContent=ct;s.style.fontWeight='bold';
+    let ct=m[0].replace(/^NN/i,'');if(!/confiden/i.test(ct))ct=ct.replace(/\s*%/,'%')+' confidence';s.textContent=ct;s.style.fontWeight='bold';s.className='jvConf';
     s.style.color=v>=80?'#8fe6b8':v>=50?'#ff9a3d':'#ff4d4d';
     d.appendChild(s);last=m.index+m[0].length;
   }
@@ -155,7 +155,7 @@ function countQ(t){
 let lastSrc={files:[],urls:[]};
 const LINKQ=/\b(links?|sources?|urls?|file ?names?|references?)\b/i;
 const HRA=/^\W*(?:please\s+)?(?:turn|switch)\s+(on|off)\s+(?:the\s+)?(?:lights?\s+(?:in|of|at)\s+)?(?:the\s+)?(.+?)(?:\s+(?:lights?|lamps?))?\W*$/i,HRB=/^\W*(?:please\s+)?(?:turn|switch)\s+(?:the\s+)?(.+?)\s+(?:lights?|lamps?)\s+(on|off)\W*$/i;
-function hueQ(t){if(!/\b(lights?|lamps?)\b/i.test(t))return null;const HRC=/^\W*(?:please\s+)?(?:turn|switch)\s+(?:the\s+)?(?:lights?|lamps?)\s+(on|off)\s+(?:in|of|at)\s+(?:the\s+)?(.+?)\W*$/i;const ma=t.match(HRA),mb=!ma&&t.match(HRB),mc=!ma&&!mb&&t.match(HRC);let s,r;if(ma){s=ma[1];r=ma[2]}else if(mb){r=mb[1];s=mb[2]}else if(mc){s=mc[1];r=mc[2]}else return null;const rooms=r.split(/\s*(?:,|&|\band\b)\s*/i).map(x=>x.replace(/^the\s+/i,'').trim()).filter(Boolean);if(!rooms.length||rooms.some(x=>/\b(all|every|everything|whole|house|lights?|lamps?)\b/i.test(x)))return null;return{rooms:rooms,state:s.toLowerCase()}}
+function hueQ(t){if(!/\b(lights?|lamps?|licht|lichter|lampen?)\b/i.test(t))return null;const HRE=/^\W*(?:(?:hey\s+)?jarvis\W+)?(?:kannst|k\u00f6nntest|w\u00fcrdest)\s+du\s+(?:bitte\s+|mal\s+|doch\s+)*(.+?)\s+(einschalten|ausschalten|anmachen|ausmachen)\W*$/i;const HRD=/^\W*(?:(?:hey\s+)?jarvis\W+)?(?:ich\s+|kannst\s+du\s+|k\u00f6nntest\s+du\s+|w\u00fcrdest\s+du\s+)?(?:bitte\s+)?(?:schalte|schalt|schaltest|mach|mache|machst)\s+(?:bitte\s+|mal\s+|doch\s+)*(.+?)\s+(an|aus|ein|on|off|einschalten|ausschalten|anmachen|ausmachen)\W*$/i;const HRC=/^\W*(?:please\s+)?(?:turn|switch)\s+(?:the\s+)?(?:lights?|lamps?)\s+(on|off)\s+(?:in|of|at)\s+(?:the\s+)?(.+?)\W*$/i;const ma=t.match(HRA),mb=!ma&&t.match(HRB),mc=!ma&&!mb&&t.match(HRC),md=!ma&&!mb&&!mc&&(t.match(HRD)||t.match(HRE));let s,r;if(ma){s=ma[1];r=ma[2]}else if(mb){r=mb[1];s=mb[2]}else if(mc){s=mc[1];r=mc[2]}else if(md){s=/^(aus|off|ausschalten|ausmachen)$/i.test(md[2])?'off':'on';r=md[1].replace(/\b(?:das|die|den|der|im|in|vom|von|bitte|mal|doch|licht|lichter|lampen?|lights?|lamps?)\b/gi,' ').replace(/\s+/g,' ').trim()}else return null;const rooms=r.split(/\s*(?:,|&|\band\b)\s*/i).map(x=>x.replace(/^the\s+/i,'').trim()).filter(Boolean);if(!rooms.length||rooms.some(x=>/\b(all|every|everything|whole|house|lights?|lamps?)\b/i.test(x)))return null;return{rooms:rooms,state:s.toLowerCase()}}
 function tadoQ(t){const R=['living room','temp sensor','kitchen','bathroom'];if(/\d/.test(t)||/\b(all|every|everything|whole|house)\b/i.test(t))return null;if(!/\b(heating|heater|radiators?|thermostats?|schedule|boost)\b/i.test(t))return null;const l=t.toLowerCase();const f=R.filter(x=>l.includes(x));if(f.length!==1)return null;let a=null;if(/\b(resume|back to (?:the )?schedule|on (?:the )?schedule|(?:stop|end|cancel) (?:the )?boost)\b/i.test(t))a='resume';else if(/\b(?:turn|switch)\b.*\boff\b/i.test(t)&&/\b(heating|heater|radiators?|thermostats?)\b/i.test(t))a='off';if(!a)return null;return{room:f[0],action:a}}
 // News questions that name a built-in feed ("3 Tagesschau headlines") skip the model: the helper runs the rss_news code directly.
 function newsQ(t){if(!/\b(news|headlines?|rss)\b/i.test(t)||/\babout\b/i.test(t))return null;const F=[['nyt',/\b(nyt|new york times)\b/i],['bbc',/\bbbc\b/i],['dw',/\b(dw|deutsche welle)\b/i],['aljazeera',/\bal ?jazeera\b/i],['tagesschau',/\btagesschau\b/i],['spiegel',/\bspiegel\b/i],['wired',/\bwired\b/i],['ars',/\bars( technica)?\b/i],['hackernews',/\bhacker ?news\b/i],['verge',/\bverge\b/i],['arxiv',/\barxiv\b/i],['nature',/\bnature\b/i],['quanta',/\bquanta\b/i]];const f=F.filter(x=>x[1].test(t));if(f.length!==1)return null;let n=5;const W={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10},d=t.match(/\b(\d{1,2})\b/),w=t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/i);if(d)n=+d[1];else if(w)n=W[w[1].toLowerCase()];return{feed:f[0][0],limit:Math.max(1,Math.min(10,n))}}
@@ -215,15 +215,18 @@ async function ask(text){
   if(hist.length>41)hist.splice(1,hist.length-41);
   let reply,okUrls=[];   // okUrls: addresses a real web search returned in this turn (null: cannot be checked)
   try{
-    const c=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:(/\b(lights?|lamps?|hue)\b/i.test(text)?[hist[0],um]:hist).map((m,i)=>i===0&&m.role==='system'?{role:'system',content:m.content+' Current date: '+new Date().toDateString()+'. For news, weather and other current facts, call web_search and summarize the returned results, then end with a Links: line of the result URLs.'}:m)})});
+    const tq=performance.now();const c=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:(/\b(lights?|lamps?|hue)\b/i.test(text)?[hist[0],um]:hist).map((m,i)=>i===0&&m.role==='system'?{role:'system',content:m.content+' Current date: '+new Date().toDateString()+'. For news, weather and other current facts, call web_search and summarize the returned results, then end with a Links: line of the result URLs.'+(window.jvLangHint?window.jvLangHint():'')}:m)})});
     if(!c.ok)throw new Error('Chat failed: '+c.status);
-    reply=((await c.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+    const cj=await c.json();if(window.jvTok)window.jvTok(cj.usage,performance.now()-tq);reply=(cj.choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
   }catch(e){const i=hist.indexOf(um);if(i>=0)hist.splice(i,1);throw e}
   if(!img&&/\b(weather|forecast|temperature|news|headlines?|today|tonight|tomorrow|latest|right now|price of|stock|score|who won|exchange rate|wetter|nachrichten|aktuell|heute|morgen|kurs)\b/i.test(text)){try{await new Promise(r=>setTimeout(r,1300));const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.web)||0)>(window.lampSent||0))){const sr=await(await fetch("http://127.0.0.1:8765/search?q="+encodeURIComponent(text))).json();if(sr.ok&&sr.text){okUrls=okUrls.concat(sr.text.match(/https?:\/\/[^\s;,)\]>"']+/g)||[]);const c2=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:[{role:'system',content:'You are J.A.R.V.I.S. Current date: '+new Date().toDateString()+'. Answer the question briefly using ONLY the web results given. End with a Links: line of the result URLs.'},{role:'user',content:text+'\n\nWeb results:\n'+sr.text.slice(0,4000)}]})});if(c2.ok){const r2=((await c2.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(r2)reply=r2}}}}catch{/* follow-up request failed: keep the first reply */}}
+  // document question but the model skipped oracle_search: the helper searches the documents itself and the model answers from those passages (same idea as the web fallback above)
+  let docFb=false;
+  if(!img&&/\b(?:my|our)\s+(?:documents?|docs|files?|pdfs?|papers?|reports?|library)\b|\boracle\s+library\b|\b(?:documents?|files?)\s+(?:say|mention|state|discuss|contain)\b/i.test(text)){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const dr=await(await fetch("http://127.0.0.1:8765/docsearch?q="+encodeURIComponent(text))).json();if(dr.ok&&/Passages from the ORACLE/.test(dr.text||'')){const c3=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,messages:[{role:'system',content:'You are J.A.R.V.I.S. Current date: '+new Date().toDateString()+'. Answer the question in one to three short sentences of plain text, using ONLY the document passages given. Begin with your confidence in exactly this form: NN% confidence, where NN is your real confidence from 0 to 100. End with one extra final line in exactly this form: Sources: exact_file_name_1; exact_file_name_2 (file names exactly as given in the passages).'},{role:'user',content:text+'\n\nDocument passages:\n'+dr.text.slice(0,5000)}]})});if(c3.ok){const r3=((await c3.json()).choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(r3){reply=r3;docFb=true}}}}}catch{/* follow-up request failed: keep the first reply */}}
   // web_search ran but the model left out the Links line (small models often do): add the addresses the search returned
   try{const t=((await(await fetch(JarvisHud.helperUrl('/'))).json()).tools)||{};const wl=t.web_links;if((t.web||0)>(window.lampSent||0)&&wl&&wl.at>=(window.lampSent||0)&&wl.urls.length){okUrls=okUrls.concat(wl.urls);if(!img&&!/\bLinks:/i.test(reply))reply+='\nLinks: '+wl.urls.slice(0,3).join('; ')}}catch{okUrls=null/* helper not reachable: links cannot be checked, they stay */}
   if(img)um.content=text+' [image "'+img+'" was attached here]';
-  hist.push({role:'assistant',content:reply});const pr=splitReply(reply);let hid=0;if(okUrls){const n=pr.urls.length;pr.urls=pr.urls.filter(u=>linkFromSearch(u,okUrls));hid=n-pr.urls.length}addJ(pr.shown);let pf=pr.files;if(pf.length){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const nw=document.createElement("div");nw.className="src";nw.style.color="#ff9a3d";nw.style.fontWeight="bold";nw.textContent="NOTE: document search did not run, sources hidden: "+pf.join("; ");log.appendChild(nw);pf=[]}}catch{/* keep the reply without the search note */}}addSources(pf,pr.urls);if(hid){const nh=document.createElement('div');nh.className='lnk';nh.style.opacity='.6';nh.textContent='('+hid+(hid>1?' links':' link')+' hidden: not from a web search)';log.appendChild(nh)}if(pf.length||pr.urls.length)lastSrc={files:pf,urls:pr.urls};
+  hist.push({role:'assistant',content:reply});const pr=splitReply(reply);let hid=0;if(okUrls){const n=pr.urls.length;pr.urls=pr.urls.filter(u=>linkFromSearch(u,okUrls));hid=n-pr.urls.length}addJ(pr.shown);let pf=pr.files;if(pf.length){try{const sj=await(await fetch("http://127.0.0.1:8765/")).json();if(!docFb&&!(((sj.tools&&sj.tools.doc)||0)>(window.lampSent||0))){const nw=document.createElement("div");nw.className="src";nw.style.color="#ff9a3d";nw.style.fontWeight="bold";nw.textContent="NOTE: document search did not run, sources hidden: "+pf.join("; ");log.appendChild(nw);pf=[]}}catch{/* keep the reply without the search note */}}addSources(pf,pr.urls);if(hid){const nh=document.createElement('div');nh.className='lnk';nh.style.opacity='.6';nh.textContent='('+hid+(hid>1?' links':' link')+' hidden: not from a web search)';log.appendChild(nh)}if(pf.length||pr.urls.length)lastSrc={files:pf,urls:pr.urls};
   if(on)await speak(pr.spoken);
 }
 async function runText(text){state='thinking';try{await ask(text)}catch(e){add('sys',e.message)}}
@@ -233,10 +236,10 @@ async function handle(blob,heard){
   if(!heard){listen();return}
   state='thinking';
   try{
-    const fd=new FormData();fd.append('file',blob,'speech.webm');
+    const fd=new FormData();fd.append('file',blob,'speech.webm');fd.append('language',(window.HUDS&&HUDS.stt_language)||'auto');
     const r=await fetch('/v1/speech/transcribe',{method:'POST',body:fd});
     if(!r.ok)throw new Error('Transcribe failed: '+r.status);
-    const text=((await r.json()).text||'').trim();
+    const tj=await r.json();window.jvAskLang=String(tj.language||'').toLowerCase()||null;window.jvAskT=Date.now();const text=(tj.text||'').trim();
     if(!text){listen();return}if(/^\W*thanks(\W+jarvis)?\W*$/i.test(text)){on=false;state='idle';return}
     await ask(text);
   }catch(e){add('sys',e.message)}
@@ -262,7 +265,7 @@ addEventListener('paste',e=>{const f=e.clipboardData&&e.clipboardData.files&&e.c
 const W1=s=>{const w=s.replace(/[^A-Za-z0-9 ]/g,"").trim();return w.length>=2&&w.length<=9&&w.indexOf(" ")<0&&!/^(you|the|uh|um)$/i.test(w)};const BARGE=0.006;let interrupted=false;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state==='speaking'){interrupted=true;if(playing)try{playing.stop()}catch{/* already stopped */}}});
 async function bargeStart(){
-  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch{return null}
+  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{deviceId:(window.HUDS&&HUDS.mic)||undefined,echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch{return null}
   const an=ctx.createAnalyser();an.fftSize=1024;const src=ctx.createMediaStreamSource(st);src.connect(an);
   const d=new Float32Array(1024);let loud=0;let chk=false,closed=false;
   const wav=(chs,sr)=>{let n=0;chs.forEach(c=>n+=c.length);const b=new ArrayBuffer(44+n*2),v=new DataView(b);const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
@@ -303,30 +306,43 @@ async function speak(t){
   const parts=(spoken.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)||[spoken]).map(x=>x.trim()).filter(Boolean);
   const chunks=[];let cur='';
   for(const p of parts){cur+=(cur?' ':'')+p;if(cur.length>=40){chunks.push(cur);cur=''}}
-  if(cur)chunks.push(cur);{ // the first piece is kept short so the voice starts sooner (shorter still on a PC without a GPU); the rest follows while it plays
-    const lim=NOG?30:45,c0=chunks[0];
-    if(c0.length>lim+10){let k=-1;const se=c0.search(/[.!?]["')\]]*\s/);if(se>=11&&se<=lim+20)k=se+1;else{const m=c0.slice(lim-5,lim+30).search(/[,;:]\s/);if(m>=0&&c0.length-(lim-5+m)>25)k=lim-4+m}   // only at a comma, never in the middle of a phrase (that sounded cut off)
-      if(k>0){const a=c0.slice(0,k).trim(),b=c0.slice(k).trim();if(a&&b)chunks.splice(0,1,a,b)}}}
-  const fetchBuf=async x=>{const r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(45000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
-    if(!r.ok)throw new Error('Speech failed: '+r.status);return ctx.decodeAudioData(await r.arrayBuffer())};
-  window.MICMX=0;window.MICPK=0;interrupted=false;const stopB=await bargeStart();
+  if(cur)chunks.push(cur);{ // the first pieces are kept short so the voice starts sooner (shorter still on a PC without a GPU); a cut falls at a sentence end, a comma or before a joining word, never in the middle of a phrase
+    const lim=NOG?30:45;
+    const cut=(s,l)=>{if(s.length<=l+10)return -1;const se=s.search(/[.!?]["')\]]*\s/);
+      if(se>=11&&se<=l+20)return se+1;
+      const m=s.slice(l-5,l+30).search(/[,;:]\s/);
+      if(m>=0&&s.length-(l-5+m)>25)return l-4+m;
+      const w=s.slice(l-15,l+40).search(/\s(?:and|but|with|while|which|where|when|because|in|on|at|near|from|to|of|for|by|into|through|over|under|across)\s/i);
+      return(w>=0&&s.length-(l-15+w)>25)?l-15+w+1:-1};
+    const k=cut(chunks[0],lim);
+    if(k>0){const a=chunks[0].slice(0,k).trim(),b=chunks[0].slice(k).trim();if(a&&b){chunks.splice(0,1,a,b);
+      const k2=cut(chunks[1],lim*2);if(k2>0){const a2=chunks[1].slice(0,k2).trim(),b2=chunks[1].slice(k2).trim();if(a2&&b2)chunks.splice(1,1,a2,b2)}}}}
+  const HS=window.HUDS||{},lang=window.jvSpeakLang?window.jvSpeakLang(spoken):'en',SR=24000;
+  window.MICMX=0;window.MICPK=0;interrupted=false;const stopB=await bargeStart();let cancel=false;
+  outAn=ctx.createAnalyser();outAn.fftSize=1024;const vol=ctx.createGain();vol.gain.value=Math.max(0,Math.min(1,(HS.vol??100)/100));outAn.connect(vol);vol.connect(ctx.destination);
+  const srcs=[];let tNext=0,started=false;
+  playing={stop(){cancel=true;for(const s of srcs)try{s.stop()}catch{/* not started */}}};   // streamed voice: many small sounds back to back
+  const sched=ab=>{if(cancel||!on||interrupted)return;const s=ctx.createBufferSource();s.buffer=ab;s.connect(outAn);const now=ctx.currentTime;
+    if(tNext<now+0.03)tNext=now+(started?0.03:0.15);s.start(tNext);tNext+=ab.duration;srcs.push(s);started=true;state='speaking'};
+  const pcm=i16=>{const f=new Float32Array(i16.length);for(let k=0;k<i16.length;k++)f[k]=i16[k]/32768;const ab=ctx.createBuffer(1,f.length,SR);ab.copyToChannel(f,0);sched(ab)};
+  const piece=async x=>{const body={text:x,voice:HS.voice||undefined,speed:HS.speed,exaggeration:HS.exaggeration,temperature:HS.temperature,language_id:lang};
+    let r=await fetch('/v1/speech/synthesize_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
+    if(r.status===501||r.status===404){r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(45000)});   // voice engine without streaming (e.g. Kokoro): whole piece
+      if(!r.ok)throw new Error('Speech failed: '+r.status);sched(await ctx.decodeAudioData(await r.arrayBuffer()));return}
+    if(!r.ok)throw new Error('Speech failed: '+r.status);
+    const rd=r.body.getReader();let rest=new Uint8Array(0);
+    for(;;){const {done,value}=await rd.read();if(done)break;if(cancel||!on||interrupted){try{rd.cancel()}catch{/* closed */}break}
+      let b=value;if(rest.length){const m=new Uint8Array(rest.length+b.length);m.set(rest);m.set(b,rest.length);b=m}
+      const n=b.length&~1;rest=b.slice(n);if(n)pcm(new Int16Array(b.slice(0,n).buffer))}};
   try{
-    let next=fetchBuf(chunks[0]);
-    for(let i=0;i<chunks.length;i++){
-      const buf=await next;
-      if(!on||interrupted)break;
-      if(i+1<chunks.length)next=fetchBuf(chunks[i+1]);
-      outAn=ctx.createAnalyser();outAn.fftSize=1024;
-      const s=ctx.createBufferSource();s.buffer=buf;s.connect(outAn);outAn.connect(ctx.destination);
-      playing=s;state='speaking';
-      await new Promise(res=>{s.onended=res;s.start()});
-      playing=null;
-      if(interrupted)break;
-    }
-  }catch(e){if(e&&(e.name==='TimeoutError'||e.name==='AbortError')){add('sys','(voice did not answer in time, listening again)');return}throw e}finally{if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
+    for(const x of chunks){if(cancel||!on||interrupted)break;await piece(x)}   // pieces one after the other; each one already plays while it is being made (streaming)
+    while(!cancel&&on&&!interrupted&&ctx.currentTime<tNext-0.01)await new Promise(r=>setTimeout(r,50));
+  }catch(e){if(e&&(e.name==='TimeoutError'||e.name==='AbortError')){add('sys','(voice did not answer in time, listening again)');return}throw e}finally{cancel=true;for(const s of srcs)try{s.stop()}catch{/* ended */};if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
   if(interrupted)add('sys','(interrupted)');else await new Promise(r=>setTimeout(r,100));
 }
 cv.style.cursor='default';cv.onmousemove=ev=>{const rg=window.RING;cv.style.cursor=(rg&&Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)<=rg.r)?'pointer':'default'};
+cv.addEventListener('click',(ev)=>{const nb=window.NETBTN;if(nb&&ev.clientX>=nb.x&&ev.clientX<=nb.x+nb.w&&ev.clientY>=nb.y&&ev.clientY<=nb.y+nb.h){window.NETJ=!window.NETJ;try{localStorage.setItem('jvNetJ',window.NETJ?'1':'0')}catch(e){}}});
+try{window.NETJ=localStorage.getItem('jvNetJ')==='1'}catch(e){}
 cv.onclick=(ev)=>{const rg=window.RING;if(!rg||Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)>rg.r)return;
   if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch{/* already stopped */}state='idle'}
   else{on=true;ctx=ctx||new AudioContext();listen()}
@@ -335,7 +351,7 @@ cv.onclick=(ev)=>{const rg=window.RING;if(!rg||Math.hypot(ev.clientX-rg.x,ev.cli
 window.jvVoice={toggle(){if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch{/* already stopped */}state='idle'}else{on=true;ctx=ctx||new AudioContext();listen()}},isOn:()=>on};// voice on/off for optional local pages
 document.addEventListener('keydown',e=>{if(e.key==='F6'){e.preventDefault();if(on){on=false;if(rec&&rec.state==='recording')rec.stop();if(playing)try{playing.stop()}catch{/* already stopped */}state='idle'}else{on=true;ctx=ctx||new AudioContext();listen()}}});
 let wakeLast=null;
-setInterval(async()=>{try{const j=await(await fetch('http://127.0.0.1:8766')).json();if(wakeLast===null||j.wake_count<wakeLast){wakeLast=j.wake_count;return}if(j.wake_count>wakeLast){wakeLast=j.wake_count;if(!on){on=true;ctx=ctx||new AudioContext();listen()}}}catch{/* wake service offline: try again next poll */}},700);
+setInterval(async()=>{try{const j=await(await fetch('http://127.0.0.1:8766')).json();if(wakeLast===null||j.wake_count<wakeLast){wakeLast=j.wake_count;return}if(j.wake_count>wakeLast&&window.HUDS&&HUDS.wake===false){wakeLast=j.wake_count;return}if(j.wake_count>wakeLast){wakeLast=j.wake_count;if(!on){on=true;ctx=ctx||new AudioContext();listen()}}}catch{/* wake service offline: try again next poll */}},700);
 /* ---------- live data ---------- */
 let NOG=false,metrics=[],mx={},lat=0,online=false,wx=null,hw={cpu_load:0,gpu:null},hwOk=false,t00=Date.now(),fps=60,lastT=0;
 const H={cl:[],gl:[],gt:[],pw:[],lat:[],nd:[],nu:[]};
@@ -614,12 +630,12 @@ g.font=Math.max(11,fs*0.55)+'px Consolas,monospace';g.textAlign='center';g.fillS
 g.fillText(lab,W/2,cy+rr*1.2+16);g.globalAlpha=1;
 if(el<2.6){const CT='Connecting to Jarvis...',nc=Math.min(CT.length,Math.floor(el*16)),fa=el<2?1:Math.max(0,1-(el-2)/0.6);g.textAlign='center';g.fillStyle='#8fe6b8';g.shadowColor='#8fe6b8';g.shadowBlur=6;g.globalAlpha=0.9*fa;g.fillText(CT.slice(0,nc)+((nc<CT.length&&Math.floor(el*6)%2)?'_':''),W/2,cy+rr*1.2+16);g.shadowBlur=0;g.globalAlpha=1}
 }
-function frame(t){frameOrig(t);if(lastDraw===t&&!window.PHN)wearOv()}
+function frame(t){frameOrig(t);if(lastDraw===t&&!window.PHN&&!(window.HUDS&&HUDS.wear===false))wearOv()}
 function frameOrig(t){
   if(t-lastDraw<1000/MAX_FPS-3){requestAnimationFrame(frame);return}
   lastDraw=t;
   fps+=((1000/Math.max(1,t-lastT))-fps)*0.05;lastT=t;
-  const W=innerWidth,Hh=innerHeight;u=Hh/1440;const cmp=W/Hh<2.8;if(document.documentElement.classList.contains("cmp")!==cmp)document.documentElement.classList.toggle("cmp",cmp);window.CMP=cmp;const phn=W<=820&&Hh>W*1.05;if(document.documentElement.classList.contains("phn")!==phn)document.documentElement.classList.toggle("phn",phn);window.PHN=phn;if(phn){try{phnDraw(t,W,Hh)}catch(e){phnS.err=String(e)}requestAnimationFrame(frame);return}
+  const W=innerWidth,Hh=innerHeight;u=Hh/1440;const cmp=(window.HUDS&&HUDS.compact===true)||W/Hh<2.8;if(document.documentElement.classList.contains("cmp")!==cmp)document.documentElement.classList.toggle("cmp",cmp);window.CMP=cmp;const phn=W<=820&&Hh>W*1.05;if(document.documentElement.classList.contains("phn")!==phn)document.documentElement.classList.toggle("phn",phn);window.PHN=phn;if(phn){try{phnDraw(t,W,Hh)}catch(e){phnS.err=String(e)}requestAnimationFrame(frame);return}
   const LY=JarvisHud.layout(W,Hh),cx=LY.cx,cy=LY.cy,R=LY.coreR;
   const c=COL[state],C=FDC[state],dim='rgba('+c+',0.6)';
   const {pw,gap,top,h1,y2,h2,L1,L2,R2,R1}=LY;   /* one layout formula for the HUD and the boot animation (hud-shared.js) */
@@ -643,7 +659,7 @@ const tr=state==='thinking'?5:state==='speaking'?2.4:state==='listening'?1.7:0.9
 B.rate+=(tr+level*2-B.rate)*0.04;B.ph+=dt*B.rate*2;
 const br=0.5+0.5*Math.sin(B.ph),S=1+0.05*br+level*0.06,RS=R*S,sp=0.6+B.rate*0.4;
 Rc=RS*2.1;rot=t/6000*sp;window.RING={x:cx,y:cy,r:RS*2.1+20*u};
-NOG=hwOk&&!hw.gpu;MAX_FPS=NOG?12:30;const gq=hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
+NOG=hwOk&&!hw.gpu;MAX_FPS=NOG?12:(+(window.HUDS&&HUDS.fps)||30);const gq=hw.gpu,cpuL=hw.cpu_load||0,cs=Math.cos,sn=Math.sin;
 const P=(r,a)=>[cx+cs(a)*r,cy+sn(a)*r];
 const A=(r,a0,a1,w,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;arc(cx,cy,r,a0,a1)};
 const T=(r,n,len,a0,w,every,len2,col,al)=>{g.globalAlpha=al==null?1:al;g.strokeStyle=col||C;g.lineWidth=w*u;
@@ -656,7 +672,7 @@ const hist=(x,y,w,h,fn,col)=>{const n=Math.floor(w/(5*u));g.fillStyle=col;for(le
 
 /* neural brain (hud-brain.js) replaces the whole ring; without WebGL the old ring below is drawn */
 if(window.JarvisBrain&&!/[?&]nobrain/.test(location.search)&&JarvisHud.neural===undefined){const bc=document.createElement('canvas');bc.id='brainCv';bc.style.cssText='position:fixed;left:0;top:0;pointer-events:none;mix-blend-mode:screen;z-index:1';document.body.appendChild(bc);
-  JarvisHud.neural=JarvisBrain(bc,{detail:document.documentElement.classList.contains('phn')?0.5:1,fps:MAX_FPS});if(!JarvisHud.neural){bc.remove();JarvisHud.neural=null}}
+  JarvisHud.neural=JarvisBrain(bc,{detail:document.documentElement.classList.contains('phn')?0.5:(window.HUDS&&HUDS.brain==='LOW'?0.5:window.HUDS&&HUDS.brain==='MED'?0.75:1),fps:MAX_FPS});if(!JarvisHud.neural){bc.remove();JarvisHud.neural=null}}
 const NB=JarvisHud.neural;
 if(NB){const bs=Math.round(R*2.1*1.03*2.6),k=(cx-bs/2|0)+','+(cy-bs/2|0)+','+bs;if(NB.pk!==k){NB.pk=k;Object.assign(NB.canvas.style,{left:(cx-bs/2|0)+'px',top:(cy-bs/2|0)+'px',width:bs+'px',height:bs+'px'})}
   NB.setState(state);NB.setLevel(Math.min(1,level*1.6));NB.setFps(MAX_FPS)}
@@ -881,8 +897,8 @@ tx('customized by Chris',cx,ty+59*u,9*u,'rgba(180,230,255,.6)','center');}
   [['SESSION',String(Math.floor(up/60)).padStart(2,'0')+':'+String(up%60).padStart(2,'0')],['FPS',fps.toFixed(0)],['CPU THREADS',navigator.hardwareConcurrency||'-']].forEach(([k,v],i)=>{
     const y=top+245*u+i*30*u;tx(k,R1+28*u,y,13*u,dim);tx(String(v),R1+pw-24*u,y,13*u,C,'right')});
   const wy=LY.wy,wh=LY.wh;
-  box(R1,wy,pw,wh,'ATMOSPHERICS // '+HOME_CFG.name.toUpperCase(),C);window.NW=[[cx,cy,R],[R1+pw*.04,top+hcs*.1,pw*.8,hcs*.3],[R1+pw*.04,wy+wh*.1,pw*.8,wh*.3]];
-  if(wx){tx(Math.round(wx.temperature_2m)+'\u00B0C',R1+28*u,wy+150*u,Math.min(110*u,pw/4.2),C);
+  box(R1,wy,pw,wh,'ATMOSPHERICS // '+HOME_CFG.name.toUpperCase(),C);window.NW=[[cx,cy,R],[R1+pw*.04,top+hcs*.1,pw*.8,hcs*.3],[R1+pw*.04,wy+wh*.1,pw*.8,wh*.3]];window.WXBOX={x:R1,y:wy,w:pw,h:wh,u:u};{const dbw=78*u,dbh=16*u,dbx=R1+(pw-dbw)/2,dby=wy+6*u,dbc=window.WXD?'#ff9a3d':'#19d3ff';window.WXBTN={x:dbx,y:dby,w:dbw,h:dbh};g.save();g.globalAlpha=1;g.setLineDash([]);g.fillStyle='rgba(0,16,26,.75)';g.fillRect(dbx,dby,dbw,dbh);g.strokeStyle=dbc;g.lineWidth=u;g.strokeRect(dbx,dby,dbw,dbh);tx(window.WXD?'CLOSE':'DETAILS',dbx+dbw/2,dby+dbh*0.72,10*u,dbc,'center');g.restore()}
+  if(window.WXD){}else if(wx){tx(Math.round(wx.temperature_2m)+'\u00B0C',R1+28*u,wy+150*u,Math.min(110*u,pw/4.2),C);
     tx(wm(wx.weather_code),R1+28*u,wy+190*u,22*u,'#ff9a3d');tx('FEELS LIKE '+Math.round(wx.apparent_temperature)+'\u00B0C',R1+28*u,wy+225*u,15*u,dim);
     {const m=wx.mix,snow=m?m.snow:((wx.weather_code>=71&&wx.weather_code<=77)||wx.weather_code==85||wx.weather_code==86),rc=snow?'#cfe8ff':'#2b9bff',cc='#5f656c',bw=pw-56*u,bx=R1+28*u;const pc=(m&&m.pmax!=null)?m.pmax:wx.pp;tx('DAYLIGHT HOURS'+(pc==null?'':'   MAX '+(snow?'SNOW':'RAIN')+' CHANCE '+pc+'%'),bx,wy+262*u,14*u,dim);if(m){const n=28,sw=bw/n,a=Math.round(n*m.sun/100),b=a+Math.round(n*m.cloud/100);for(let i=0;i<n;i++){const col=i<a?'#ff9a3d':i<b?cc:rc;g.globalAlpha=i<a?0.75:i<b?1:0.7;g.fillStyle=col;g.fillRect(bx+i*sw,wy+272*u,sw-2*u,14*u)}g.globalAlpha=1;tx('\u25A0 SUN '+m.sun+'%',bx,wy+310*u,14*u,'#ff9a3d');tx('\u25A0 CLOUD '+m.cloud+'%',bx+bw*0.36,wy+310*u,14*u,cc);tx('\u25A0 '+(snow?'SNOW ':'RAIN ')+m.rain+'%',bx+bw*0.74,wy+310*u,14*u,rc)}else bar(bx,wy+272*u,bw,10*u,0,'#ff9a3d')}
   tx('HUMIDITY  '+wx.relative_humidity_2m+'%',R1+28*u,wy+338*u,14*u,dim);bar(R1+28*u,wy+348*u,pw-56*u,10*u,wx.relative_humidity_2m/100,'#2b9bff');
@@ -894,7 +910,8 @@ const my0=LY.my0,mh0=LY.mh0,MA=JarvisHud.mapArea({x:R1,y:my0,w:2*pw+gap,h:mh0},u
 box(R1,my0,2*pw+gap,mh0,'NETWORK TRAFFIC // WORLD',C);
 const LAT0=MA.latTop,LAT1=MA.latBottom,mh=MA.h,mwm=MA.w,mxm=MA.x,mtop=MA.top;
 const mzS0=mwm/360,mzCx=mxm+mwm/2,mzCy=mtop+mh/2,MZ=window.MZ=window.MZ||{};
-{const zp=JarvisHud.capture.active?[]:(hw.conns||[]).filter(q=>Number.isFinite(q.lon)&&Number.isFinite(q.lat)).slice(0,40);
+const NCON=window.NETJ?(hw.conns||[]).filter(q=>q.j>0).map(q=>Object.assign({},q,{n:q.j})):(hw.conns||[]);
+{const zp=JarvisHud.capture.active?[]:NCON.filter(q=>Number.isFinite(q.lon)&&Number.isFinite(q.lat)).slice(0,40);
 let za=HOME_CFG.lon,zb=HOME_CFG.lon,zc=HOME_CFG.lat,zd=HOME_CFG.lat;zp.forEach(q=>{za=Math.min(za,q.lon);zb=Math.max(zb,q.lon);zc=Math.min(zc,q.lat);zd=Math.max(zd,q.lat)});
 let tS=mzS0,tL=0,tA=13;
 if(zp.length){const sl=Math.max((zb-za)*1.3+16,30),sa=Math.max((zd-zc)*1.3+16,30*142/360);tS=Math.max(mzS0,Math.min(mwm/sl,mh/sa));tL=(za+zb)/2;tA=(zc+zd)/2}
@@ -917,7 +934,7 @@ else tx(mapOk===null?'LOADING MAP...':'MAP DATA UNAVAILABLE',mx0+mw/2,mtop+mh/2,
 const home=pj(HOME_CFG.lon,HOME_CFG.lat);
 const MP=window.MP=window.MP||{last:t,ph:0};const md=Math.min(100,t-MP.last)/1000;MP.last=t;
 const nt2=hw.net||{down_mbps:0,up_mbps:0};MP.ph+=md*(0.25+Math.min(2,(nt2.down_mbps+nt2.up_mbps)/25));
-const cs2=JarvisHud.capture.active?[]:(hw.conns||[]).slice(0,40);
+const cs2=JarvisHud.capture.active?[]:NCON.slice(0,40);
 g.save();g.globalCompositeOperation='lighter';
 cs2.forEach((q,i)=>{const e=pj(q.lon,q.lat),dx=e[0]-home[0],dy=e[1]-home[1],dist=Math.hypot(dx,dy);
   const lift=Math.max(0,Math.min(mh*0.6,dist*0.5+12*u,(home[1]+e[1]-2*mtop)-4*u)),qx=(home[0]+e[0])/2,qy=(home[1]+e[1])/2-lift,col=q.n>=3?'#ff9a3d':'#19d3ff';
@@ -932,6 +949,9 @@ g.restore();g.globalAlpha=1;
 g.strokeStyle='#ff9a3d';g.lineWidth=2*u;g.beginPath();g.arc(home[0],home[1],5*u+2*u*Math.sin(t/300),0,PI*2);g.stroke();g.restore();
 g.fillStyle='#ff9a3d';g.beginPath();g.arc(home[0],home[1],2.5*u,0,PI*2);g.fill();
 tx(HOME_CFG.name.toUpperCase(),home[0]+9*u,home[1]-7*u,11*u,'#ff9a3d');
+{const nbw=92*u,nbh=16*u,nbx=R1+2*pw+gap-nbw-14*u,nby=my0+6*u,nbc=window.NETJ?'#ff9a3d':'#19d3ff';window.NETBTN={x:nbx,y:nby,w:nbw,h:nbh};
+g.save();g.globalAlpha=1;g.setLineDash([]);g.fillStyle='rgba(0,16,26,.75)';g.fillRect(nbx,nby,nbw,nbh);g.strokeStyle=nbc;g.lineWidth=u;g.strokeRect(nbx,nby,nbw,nbh);
+tx(window.NETJ?'JARVIS ONLY':'ALL TRAFFIC',nbx+nbw/2,nby+nbh*0.72,10*u,nbc,'center');g.restore()}
 if(window.CMP){const lx=mx0+mw-136,ly=my0+mh0-60;g.globalAlpha=1;g.setLineDash([]);g.fillStyle='rgba(2,6,11,.8)';g.fillRect(lx-6,ly-4,142,62);g.lineWidth=2.5;g.strokeStyle='#19d3ff';ln(lx,ly+6,lx+14,ly+6);tx('BLUE: 1-2 CONN.',lx+20,ly+10,10,dim);g.strokeStyle='#ff9a3d';ln(lx,ly+20,lx+14,ly+20);tx('ORANGE: 3+ CONN.',lx+20,ly+24,10,dim);g.lineWidth=1.5;g.beginPath();g.arc(lx+7,ly+34,3.5,0,PI*2);g.stroke();tx('HOME: '+HOME_CFG.name.toUpperCase(),lx+20,ly+38,10,dim);tx('PULSE = NET SPEED',lx,ly+52,10,dim)}else{const lx=mx0+mw-470*u,ly=my0+mh0-30*u;g.globalAlpha=1;g.setLineDash([]);g.fillStyle='rgba(2,6,11,.8)';g.fillRect(lx-6*u,ly-4*u,482*u,24*u);
  g.lineWidth=2.5*u;g.strokeStyle='#19d3ff';ln(lx,ly+7*u,lx+16*u,ly+7*u);tx('BLUE: 1-2 CONN.',lx+22*u,ly+11*u,10*u,dim);
  g.strokeStyle='#ff9a3d';{const ox=window.CMP?0:120*u,oy=window.CMP?-14:0;ln(lx+ox,ly+7*u+oy,lx+ox+16*u,ly+7*u+oy);tx('ORANGE: 3+ CONN.',lx+ox+22*u,ly+11*u+oy,10*u,dim)}
@@ -1054,5 +1074,6 @@ pn.innerHTML='<b>ADD TO HOME SCREEN</b><div>Jarvis then opens fullscreen from it
 function done(){try{localStorage.setItem(K,'1')}catch{/* storage blocked (private window): ignore */}b.remove();pn.remove()}
 b.onclick=function(){if(dp){dp.prompt();dp.userChoice.then(done,done);return}pn.style.display=pn.style.display==='block'?'none':'block'};
 pn.querySelector('button').onclick=done;
-document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script>if(!document.documentElement.classList.contains('phn')){document.write('<script src="hud-boot-scene.js"></'+'script><script src="hud-boot.js"></'+'script>')}   /* parser-blocking on purpose: the boot overlay must cover the HUD before its first paint; phone layout (class set in <head>) has no boot animation */</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
+document.body.append(b,pn)})()</script><script src="hud-local.js" onerror="this.remove()"></script><script src="hud-weather.js"></script><script src="hud-settings.js"></script>
+<script>if(!document.documentElement.classList.contains('phn')&&!(window.HUDS&&HUDS.intro===false)){document.write('<script src="hud-boot-scene.js"></'+'script><script src="hud-boot.js"></'+'script>')}   /* parser-blocking on purpose: the boot overlay must cover the HUD before its first paint; phone layout (class set in <head>) has no boot animation */</script><script>(function(){var b=document.getElementById('tMic');if(!b)return;function sync(){var on=!!(window.jvVoice&&window.jvVoice.isOn());b.classList.toggle('on',on);b.title=on?'Voice is on (click or F6 to stop)':'Two-way voice (F6). The wake word works too'}b.onclick=function(){if(window.jvVoice)window.jvVoice.toggle();setTimeout(sync,60)};setInterval(sync,300)})()</script>
 </body></html>

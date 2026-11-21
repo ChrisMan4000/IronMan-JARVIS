@@ -32,6 +32,7 @@ from helper_http import (
 )
 
 from openjarvis.tools.hue_set import HueSetTool
+from openjarvis.tools.oracle_search import OracleSearchTool
 from openjarvis.tools.rss_news import FEEDS, RssNewsTool
 from openjarvis.tools.tado_heating import TadoHeatingTool
 from openjarvis.tools.web_search import WebSearchTool
@@ -89,6 +90,14 @@ def _search(q: dict[str, str]) -> Any:
     return WebSearchTool().execute(query=text, max_results=5)
 
 
+def _docs(q: dict[str, str]) -> Any:
+    """/docsearch?q=<text> -> oracle_search passages (when the model skipped it)."""
+    text = q.get("q", "").strip()[: QUERY_CHARS["search"]]
+    if not text:
+        return {"ok": False, "text": "empty query"}
+    return OracleSearchTool().execute(query=text, limit=4)
+
+
 # --------------------------------------------------------------------------- routes
 ROUTES: dict[str, Route] = {
     "/": lambda h: send(h, 200, helper_stats.live.snapshot()),
@@ -96,6 +105,7 @@ ROUTES: dict[str, Route] = {
     "/tado": trusted_tool_route("tado", _tado),
     "/news": trusted_tool_route("news", _news),
     "/search": trusted_tool_route("search", _search, SEARCH_REPLY_CHARS),
+    "/docsearch": trusted_tool_route("docsearch", _docs, SEARCH_REPLY_CHARS),
     "/count": helper_docs.serve_count,
     "/docexists": helper_docs.serve_docexists,
     "/doc": helper_docs.serve_doc,

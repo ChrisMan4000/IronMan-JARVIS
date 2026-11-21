@@ -12,6 +12,7 @@ import logging
 import os
 import subprocess  # nosec B404 - only netstat, by full path
 import threading
+import time
 from typing import Any
 
 from helper_stats import every, live, program
@@ -42,6 +43,57 @@ def public_ips(netstat_output: str) -> dict[str, int]:
                 continue
             ips[ip] = ips.get(ip, 0) + 1
     return ips
+
+
+def public_conns(netstat_output: str) -> list[tuple[str, int]]:
+    """(public IP, owning process id) of every established TCP connection.
+
+    Needs `netstat -o`; lines without a process id give id 0.
+    """
+    out: list[tuple[str, int]] = []
+    for line in netstat_output.splitlines():
+        p = line.split()
+        if len(p) >= 4 and p[0] == "TCP" and p[3] == "ESTABLISHED":
+            ip = p[2].rsplit(":", 1)[0].strip("[]")
+            try:
+                a = ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            if a.is_private or a.is_loopback or a.is_link_local or a.is_multicast:
+                continue
+            pid = int(p[4]) if len(p) > 4 and p[4].isdigit() else 0
+            out.append((ip, pid))
+    return out
+
+
+JARVIS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).lower()
+_pid_cache: dict[str, Any] = {"t": 0.0, "pids": set()}
+
+
+def jarvis_pids() -> set[int]:
+    """Process ids that run from the Jarvis folder (server, helper, wake word, Vite).
+
+    Refreshed at most every 10 seconds. Empty when psutil is not installed.
+    """
+    now = time.monotonic()
+    if now - _pid_cache["t"] < 10:
+        return _pid_cache["pids"]
+    pids: set[int] = set()
+    try:
+        import psutil
+    except ImportError:
+        psutil = None
+    if psutil is not None:
+        for proc in psutil.process_iter(["pid", "exe", "cmdline"]):
+            try:
+                text = " ".join([proc.info.get("exe") or "", *(proc.info.get("cmdline") or [])])
+            except Exception:  # noqa: BLE001 - a process may vanish while we look
+                continue
+            if JARVIS_ROOT in text.lower():
+                pids.add(proc.info["pid"])
+    _pid_cache["t"] = now
+    _pid_cache["pids"] = pids
+    return pids
 
 
 def locate(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -82,23 +134,33 @@ class GeoCache:
                 record = None
             self.places[ip] = locate(record)
 
-    def map_dots(self, ips: dict[str, int]) -> list[dict[str, Any]]:
+    def map_dots(
+        self, ips: dict[str, int], jarvis: dict[str, int] | None = None
+    ) -> list[dict[str, Any]]:
         """The map dots: one per located address, with its connection count."""
         out = []
         for ip, n in ips.items():
             place = self.places.get(ip, {})
             if "lat" in place:
-                out.append({"ip": ip, "n": n, **place})
+                dot = {"ip": ip, "n": n, **place}
+                if jarvis is not None:
+                    dot["j"] = jarvis.get(ip, 0)
+                out.append(dot)
         return out
 
     def step(self) -> None:
         """Refresh the connection list for the map."""
         output = subprocess.check_output(  # nosec B603 - fixed program and arguments
-            [program("netstat"), "-n", "-p", "tcp"], text=True, timeout=8
+            [program("netstat"), "-n", "-o", "-p", "tcp"], text=True, timeout=8
         )
         ips = public_ips(output)
         self.look_up([i for i in ips if i not in self.places])
-        live.set("conns", self.map_dots(ips))
+        mine = jarvis_pids()
+        jn: dict[str, int] = {}
+        for ip, pid in public_conns(output):
+            if pid in mine:
+                jn[ip] = jn.get(ip, 0) + 1
+        live.set("conns", self.map_dots(ips, jn))
 
 
 def start() -> None:
