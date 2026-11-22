@@ -20,8 +20,10 @@ import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from openjarvis.tools import jarvis_home
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import tool_reply
 from openjarvis.tools import device_log
 from openjarvis.tools import oxxify_protocol as proto
 from openjarvis.tools._stubs import BaseTool, ToolSpec
@@ -43,8 +45,8 @@ from openjarvis.tools.oxxify_protocol import (
 T = TypeVar("T")
 
 TOOL_NAME = "oxxify_vent"
-CFG_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "oxxify.json")
-LOG_FILE = os.path.join(os.path.expanduser("~"), ".openjarvis", "oxxify-set-log.txt")
+CFG_FILE = jarvis_home.path("oxxify.json")
+LOG_FILE = jarvis_home.path("oxxify-set-log.txt")
 DEFAULT_NAME = "Ventilation"
 VENT_READ_BACK_DELAY = 1.0  # seconds before the unit reports a change
 
@@ -194,8 +196,7 @@ def plan_change(action: str, value: str) -> Plan | str:
     return planner(value)
 
 
-def _result(text: str, ok: bool = True) -> ToolResult:
-    return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
+_result = tool_reply.reply_for(TOOL_NAME)
 
 
 # ---------------------------------------------------------------------------- the tool

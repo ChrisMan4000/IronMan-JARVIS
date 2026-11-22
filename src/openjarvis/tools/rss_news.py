@@ -23,6 +23,7 @@ from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import tool_reply
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
 TOOL_NAME = "rss_news"
@@ -59,8 +60,7 @@ class FeedError(Exception):
     """The feed cannot be used; the message is safe to show to the user."""
 
 
-def _fail(msg: str) -> ToolResult:
-    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
+_fail = tool_reply.failure_for(TOOL_NAME)
 
 
 # ------------------------------------------------------------------- address safety

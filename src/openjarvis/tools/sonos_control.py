@@ -25,16 +25,18 @@ from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
+from openjarvis.tools import jarvis_home, tool_reply
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
 TOOL_NAME = "sonos_control"
+_fail = tool_reply.failure_for(TOOL_NAME)
 VOLUME_CAP = 80  # a voice command never sets the volume above this
 VOLUME_STEP = 10  # volume_up / volume_down change by this much
 TIMEOUT = 4  # seconds for one request to the speaker
 READ_BACK_DELAY = 0.6  # seconds before the speaker is read back
-LOG_FILE = Path.home() / ".openjarvis" / "sonos-set-log.txt"
+LOG_FILE = Path(jarvis_home.path("sonos-set-log.txt"))
 ACTIONS = (
     "status", "play", "pause", "next", "previous",
     "volume", "volume_up", "volume_down", "mute", "unmute",
@@ -451,8 +453,8 @@ class SonosControlTool(BaseTool):
             is_fav = str(action).strip().lower() == "play_favorite"
             arg = params.get("name") if is_fav and params.get("name") else params.get("value")
             text, ok = apply(action, arg)
-            return ToolResult(tool_name=TOOL_NAME, content=text, success=ok)
+            return tool_reply.reply(TOOL_NAME, text, ok)
         except SonosError as e:
-            return ToolResult(tool_name=TOOL_NAME, content="Sonos error: %s" % e, success=False)
+            return _fail("Sonos error: %s" % e)
         except Exception as e:  # any other problem becomes a short tool reply
-            return ToolResult(tool_name=TOOL_NAME, content="Sonos error: %s" % type(e).__name__, success=False)
+            return _fail("Sonos error: %s" % type(e).__name__)

@@ -38,6 +38,7 @@ Files added by this project:
 src/openjarvis/tools/sonos_control.py   Sonos speaker tool (optional)
   src/openjarvis/tools/rss_news.py   news headlines tool
   src/openjarvis/tools/oracle_search.py  document search tool
+  src/openjarvis/tools/tool_reply.py, jarvis_home.py  shared reply builder of the home tools, one place for the .openjarvis folder
   src/openjarvis/tools/storage/sqlite_dense.py  meaning-based memory backend (SQLite + LM Studio embeddings)
   src/openjarvis/speech/chatterbox_tts.py  optional GPU voice (Chatterbox Multilingual V3/V2 or Turbo, streaming, needs chatterbox-tts)
   src/openjarvis/speech/voice_fx.py  optional "studio" sound for a voice clip

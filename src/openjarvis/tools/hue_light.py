@@ -17,6 +17,7 @@ from typing import Any, TypedDict
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import tool_reply
 from openjarvis.tools import hue_bridge
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 from openjarvis.tools.hue_colors import (
@@ -51,8 +52,7 @@ class LampInfo(LampCapabilities):
     hex: str  # approximate display colour
 
 
-def _fail(msg: str) -> ToolResult:
-    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
+_fail = tool_reply.failure_for(TOOL_NAME)
 
 
 def lamp_capabilities(lamp: dict[str, Any]) -> LampCapabilities:

@@ -13,6 +13,7 @@ import os
 import subprocess  # nosec B404 - only netstat, by full path
 import threading
 import time
+from collections.abc import Iterator
 from typing import Any
 
 from helper_stats import every, live, program
@@ -28,56 +29,61 @@ GEO_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dbip.mmdb")
 CONN_EVERY = 5  # seconds between connection checks
 
 
+def _public_established(netstat_output: str) -> Iterator[tuple[str, int]]:
+    """(public IP, owning process id) for each established TCP line of `netstat -o`.
+
+    Lines without a process id give id 0.
+    """
+    for line in netstat_output.splitlines():
+        p = line.split()
+        if len(p) < 4 or p[0] != "TCP" or p[3] != "ESTABLISHED":
+            continue
+        ip = p[2].rsplit(":", 1)[0].strip("[]")
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if a.is_private or a.is_loopback or a.is_link_local or a.is_multicast:
+            continue
+        yield ip, int(p[4]) if len(p) > 4 and p[4].isdigit() else 0
+
+
 def public_ips(netstat_output: str) -> dict[str, int]:
     """Public IPs with established TCP connections, with a count each."""
     ips: dict[str, int] = {}
-    for line in netstat_output.splitlines():
-        p = line.split()
-        if len(p) >= 4 and p[0] == "TCP" and p[3] == "ESTABLISHED":
-            ip = p[2].rsplit(":", 1)[0].strip("[]")
-            try:
-                a = ipaddress.ip_address(ip)
-            except ValueError:
-                continue
-            if a.is_private or a.is_loopback or a.is_link_local or a.is_multicast:
-                continue
-            ips[ip] = ips.get(ip, 0) + 1
+    for ip, _pid in _public_established(netstat_output):
+        ips[ip] = ips.get(ip, 0) + 1
     return ips
 
 
 def public_conns(netstat_output: str) -> list[tuple[str, int]]:
-    """(public IP, owning process id) of every established TCP connection.
-
-    Needs `netstat -o`; lines without a process id give id 0.
-    """
-    out: list[tuple[str, int]] = []
-    for line in netstat_output.splitlines():
-        p = line.split()
-        if len(p) >= 4 and p[0] == "TCP" and p[3] == "ESTABLISHED":
-            ip = p[2].rsplit(":", 1)[0].strip("[]")
-            try:
-                a = ipaddress.ip_address(ip)
-            except ValueError:
-                continue
-            if a.is_private or a.is_loopback or a.is_link_local or a.is_multicast:
-                continue
-            pid = int(p[4]) if len(p) > 4 and p[4].isdigit() else 0
-            out.append((ip, pid))
-    return out
+    """(public IP, owning process id) of every established TCP connection."""
+    return list(_public_established(netstat_output))
 
 
 JARVIS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).lower()
-_pid_cache: dict[str, Any] = {"t": 0.0, "pids": set()}
+_pid_cache: dict[str, Any] = {"t": 0.0, "pids": frozenset()}
+_pid_lock = threading.Lock()
 
 
-def jarvis_pids() -> set[int]:
+def jarvis_pids() -> frozenset[int]:
     """Process ids that run from the Jarvis folder (server, helper, wake word, Vite).
 
     Refreshed at most every 10 seconds. Empty when psutil is not installed.
+    Returns an immutable snapshot, so callers cannot change the cache.
     """
-    now = time.monotonic()
-    if now - _pid_cache["t"] < 10:
-        return _pid_cache["pids"]
+    with _pid_lock:
+        now = time.monotonic()
+        if now - _pid_cache["t"] < 10:
+            return _pid_cache["pids"]
+        pids = _scan_jarvis_pids()
+        _pid_cache["t"] = now
+        _pid_cache["pids"] = pids
+        return pids
+
+
+def _scan_jarvis_pids() -> frozenset[int]:
+    """Look at every process once (slow; jarvis_pids caches the answer)."""
     pids: set[int] = set()
     try:
         import psutil
@@ -91,9 +97,7 @@ def jarvis_pids() -> set[int]:
                 continue
             if JARVIS_ROOT in text.lower():
                 pids.add(proc.info["pid"])
-    _pid_cache["t"] = now
-    _pid_cache["pids"] = pids
-    return pids
+    return frozenset(pids)
 
 
 def locate(record: dict[str, Any] | None) -> dict[str, Any]:

@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 
+import httpx
 import pytest
 
 pytest.importorskip("starlette")
@@ -92,9 +93,11 @@ def test_everything_else_needs_a_login(gw):
 
 
 def test_public_icons_skip_the_login(gw):
-    # A public path gets past the login check: 502 when no HUD web server runs, 200 when
-    # Jarvis is running on this PC (never 401 or a redirect to the login page).
-    assert gw.get("/hud.webmanifest", follow_redirects=False).status_code in (200, 502)
+    # A public path gets past the login check and is forwarded; the HUD web server is
+    # replaced by a fake one, so the result does not depend on what runs on this PC.
+    fake_hud = httpx.AsyncClient(transport=httpx.MockTransport(lambda _r: httpx.Response(200, stream=httpx.ByteStream(b"icon"))))
+    gw.app.state.client = fake_hud
+    assert gw.get("/hud.webmanifest", follow_redirects=False).status_code == 200
     assert gw.post("/hud.webmanifest").status_code == 401  # only GET/HEAD are public
 
 

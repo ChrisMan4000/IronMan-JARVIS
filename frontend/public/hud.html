@@ -298,7 +298,7 @@ async function bargeStart(){
 function spokenTemp(t){return t.replace(/(?:(?<![\w.])(-|\u2212)\s?)?(\d+(?:[.,]\d+)?)\s*(?:°\s*([CF])\b|\u2103|\u2109|°)/gi,(m,sg,n,u)=>{const f=m.indexOf('\u2109')>=0?'F':m.indexOf('\u2103')>=0?'C':(u||'').toUpperCase();
   return (sg?'minus ':'')+n+(n==='1'?' degree':' degrees')+(f==='C'?' centigrade':f==='F'?' Fahrenheit':'')})}
 async function speak(t){
-  const clean=spokenTemp(t).replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>~]/g,'').replace(/\s+/g,' ').trim();   // links and the ~~ / ** marks are not read aloud (markdown links keep their text)
+  const clean=spokenTemp(t).replace(/\[([^\]]*)\]\(\s*[^)\s]*\)/g,'$1').replace(/(?:https?:\/\/|www\.)\S+/gi,'').replace(/[*#`_>~]/g,'').replace(/\s+/g,' ').replace(/(\d+\s?%\s*confidence)\s*,/gi,'$1').trim();   // no comma pause after the confidence phrase; links and the ~~ / ** marks are not read aloud (markdown links keep their text)
   if(!clean||!on)return;
   // the source list is never read aloud; the rest of the answer is read in full, sentence by sentence (the next piece is prepared while one plays)
   let spoken=clean.replace(/\s*\bSources?:.*$/i,'').trim();
@@ -317,6 +317,8 @@ async function speak(t){
     const k=cut(chunks[0],lim);
     if(k>0){const a=chunks[0].slice(0,k).trim(),b=chunks[0].slice(k).trim();if(a&&b){chunks.splice(0,1,a,b);
       const k2=cut(chunks[1],lim*2);if(k2>0){const a2=chunks[1].slice(0,k2).trim(),b2=chunks[1].slice(k2).trim();if(a2&&b2)chunks.splice(1,1,a2,b2)}}}}
+  {const head=chunks.slice(0,2),m=[];let c='';for(const x of chunks.slice(2)){c+=(c?' ':'')+x;if(c.length>=120){m.push(c);c=''}}   // later pieces are longer (fewer gaps between pieces)
+    if(c){if(m.length&&c.length<40)m[m.length-1]+=' '+c;else m.push(c)}chunks.splice(0,chunks.length,...head,...m)}
   const HS=window.HUDS||{},lang=window.jvSpeakLang?window.jvSpeakLang(spoken):'en',SR=24000;
   window.MICMX=0;window.MICPK=0;interrupted=false;const stopB=await bargeStart();let cancel=false;
   outAn=ctx.createAnalyser();outAn.fftSize=1024;const vol=ctx.createGain();vol.gain.value=Math.max(0,Math.min(1,(HS.vol??100)/100));outAn.connect(vol);vol.connect(ctx.destination);
@@ -324,20 +326,25 @@ async function speak(t){
   playing={stop(){cancel=true;for(const s of srcs)try{s.stop()}catch{/* not started */}}};   // streamed voice: many small sounds back to back
   const sched=ab=>{if(cancel||!on||interrupted)return;const s=ctx.createBufferSource();s.buffer=ab;s.connect(outAn);const now=ctx.currentTime;
     if(tNext<now+0.03)tNext=now+(started?0.03:0.15);s.start(tNext);tNext+=ab.duration;srcs.push(s);started=true;state='speaking'};
-  const pcm=i16=>{const f=new Float32Array(i16.length);for(let k=0;k<i16.length;k++)f[k]=i16[k]/32768;const ab=ctx.createBuffer(1,f.length,SR);ab.copyToChannel(f,0);sched(ab)};
-  const piece=async x=>{const body={text:x,voice:HS.voice||undefined,speed:HS.speed,exaggeration:HS.exaggeration,temperature:HS.temperature,language_id:lang};
-    let r=await fetch('/v1/speech/synthesize_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});   // a voice piece that never comes back must not leave the HUD on SPEAKING
+  const emit=i16=>{const f=new Float32Array(i16.length);for(let k=0;k<i16.length;k++)f[k]=i16[k]/32768;const ab=ctx.createBuffer(1,f.length,SR);ab.copyToChannel(f,0);sched(ab)};
+  let hold=new Int16Array(0);   // the voice engine ends every piece with 0.1-0.5 s of silence (measured): the last 0.55 s is held back and the silent end is cut, so pieces join without a gap
+  const pcm=i16=>{const m=new Int16Array(hold.length+i16.length);m.set(hold);m.set(i16,hold.length);const keep=Math.floor(SR*0.55);if(m.length>keep){emit(m.slice(0,m.length-keep));hold=m.slice(m.length-keep)}else hold=m};
+  const flush=()=>{let e=hold.length;while(e>0&&Math.abs(hold[e-1])<400)e--;e=Math.min(hold.length,e+Math.floor(SR*0.05));if(e>0)emit(hold.slice(0,e));hold=new Int16Array(0)};
+  const acs=[];const open=x=>{const body={text:x,voice:HS.voice||undefined,speed:HS.speed,exaggeration:HS.exaggeration,temperature:HS.temperature,language_id:lang};const ac=new AbortController();acs.push(ac);
+    const pr=fetch('/v1/speech/synthesize_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.any([ac.signal,AbortSignal.timeout(60000)])});pr.catch(()=>{});return pr};   // the next piece is requested while the current one plays: the voice engine queues it and starts it the moment the last one ends
+  const piece=async(x,rp)=>{
+    let r=await rp;   // a voice piece that never comes back must not leave the HUD on SPEAKING
     if(r.status===501||r.status===404){r=await fetch('/v1/speech/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x}),signal:AbortSignal.timeout(45000)});   // voice engine without streaming (e.g. Kokoro): whole piece
       if(!r.ok)throw new Error('Speech failed: '+r.status);sched(await ctx.decodeAudioData(await r.arrayBuffer()));return}
     if(!r.ok)throw new Error('Speech failed: '+r.status);
     const rd=r.body.getReader();let rest=new Uint8Array(0);
     for(;;){const {done,value}=await rd.read();if(done)break;if(cancel||!on||interrupted){try{rd.cancel()}catch{/* closed */}break}
       let b=value;if(rest.length){const m=new Uint8Array(rest.length+b.length);m.set(rest);m.set(b,rest.length);b=m}
-      const n=b.length&~1;rest=b.slice(n);if(n)pcm(new Int16Array(b.slice(0,n).buffer))}};
+      const n=b.length&~1;rest=b.slice(n);if(n)pcm(new Int16Array(b.slice(0,n).buffer))}flush()};
   try{
-    for(const x of chunks){if(cancel||!on||interrupted)break;await piece(x)}   // pieces one after the other; each one already plays while it is being made (streaming)
+    let nr=chunks.length?open(chunks[0]):null;for(let i=0;i<chunks.length;i++){if(cancel||!on||interrupted)break;const cr=nr;nr=i+1<chunks.length?open(chunks[i+1]):null;await piece(chunks[i],cr)}   // pieces one after the other; each one already plays while it is being made (streaming)
     while(!cancel&&on&&!interrupted&&ctx.currentTime<tNext-0.01)await new Promise(r=>setTimeout(r,50));
-  }catch(e){if(e&&(e.name==='TimeoutError'||e.name==='AbortError')){add('sys','(voice did not answer in time, listening again)');return}throw e}finally{cancel=true;for(const s of srcs)try{s.stop()}catch{/* ended */};if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
+  }catch(e){if(e&&(e.name==='TimeoutError'||e.name==='AbortError')){add('sys','(voice did not answer in time, listening again)');return}throw e}finally{cancel=true;for(const a of acs)try{a.abort()}catch{/* done */};for(const s of srcs)try{s.stop()}catch{/* ended */};if(stopB)stopB();playing=null;if(state==='speaking')state='idle'}
   if(interrupted)add('sys','(interrupted)');else await new Promise(r=>setTimeout(r,100));
 }
 cv.style.cursor='default';cv.onmousemove=ev=>{const rg=window.RING;cv.style.cursor=(rg&&Math.hypot(ev.clientX-rg.x,ev.clientY-rg.y)<=rg.r)?'pointer':'default'};
@@ -966,20 +973,20 @@ cs2.slice().sort((a,b)=>b.n-a.n).slice(0,6).forEach((q,i)=>{const y=fy+(i+1)*18*
   /* R2: data stream + core rings */
   box(R2,top,pw,hcs,'DATA STREAM',C);
   const k2=0,off=0;
-if(!window.CSTI){window.CSTI=1;window.CSTFX=0.92;const cstF=()=>fetch('/v1/savings').then(r=>r.json()).then(j=>{window.CST=j}).catch(()=>{});cstF();setInterval(cstF,5000)}
+if(!window.CSTI){window.CSTI=1;window.CSTFX=0.92;window.CSTKWH=0.34;window.CSTWHK=1.25;const cstF=()=>fetch('/v1/savings').then(r=>r.json()).then(j=>{window.CST=j}).catch(()=>{});cstF();setInterval(cstF,5000)}
 {const cstD=window.CST;
 if(!cstD||!cstD.total_tokens){tx('AWAITING FIRST INFERENCE',R2+28*u,top+80*u,12*u,dim)}
 else{
 const cstH=Math.min(48*u,(hcs-104*u)/4);const cstY=top+72*u;
-const cstK=cstD.total_tokens>=1000?(cstD.total_tokens/1000).toFixed(1)+'K':cstD.total_tokens;
+const cstE=cstD.total_tokens/1000*window.CSTWHK/1000*window.CSTKWH;const cstK=cstD.total_tokens>=1000?(cstD.total_tokens/1000).toFixed(1)+'K':cstD.total_tokens;
 tx('LOCAL (YOUR HARDWARE)',R2+28*u,cstY,12*u,'#8fe6b8');
-tx('€'+((cstD.local_cost||0)*window.CSTFX).toFixed(4),R2+pw-24*u,cstY,12*u,'#8fe6b8','right');
+tx('€'+cstE.toFixed(4),R2+pw-24*u,cstY,12*u,'#8fe6b8','right');
 tx(cstD.total_calls+' REQ / '+cstK+' TOK',R2+28*u,cstY+16*u,10*u,dim);
-tx('ELECTRICITY ONLY',R2+pw-24*u,cstY+16*u,10*u,dim,'right');
+tx('ELECTRICITY COST EST.',R2+pw-24*u,cstY+16*u,10*u,dim,'right');
 (cstD.per_provider||[]).slice(0,3).forEach((p,i)=>{const y=cstY+cstH*(i+1)+4*u;
 tx(String(p.label).toUpperCase().slice(0,22),R2+28*u,y,12*u,C);
 tx('€'+(p.total_cost*window.CSTFX).toFixed(4),R2+pw-24*u,y,12*u,C,'right');
-const sv=(p.total_cost-(cstD.local_cost||0))*window.CSTFX;
+const sv=p.total_cost*window.CSTFX-cstE;
 if(sv>0)tx('SAVED €'+sv.toFixed(4),R2+pw-24*u,y+16*u,10*u,'#8fe6b8','right')});
 tx('*ASSUMES SAME TOKENS AS CLOUD MODELS',R2+28*u,top+hcs-16*u,9*u,dim);
 }}

@@ -20,11 +20,12 @@ try:  # Windows only: the user's saved environment variables
 except ImportError:
     winreg = None
 
+from openjarvis.tools import jarvis_home
 from openjarvis.tools import device_log
 
 logger = logging.getLogger(__name__)
 
-_JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
+_JARVIS_DIR = jarvis_home.JARVIS_DIR
 KEY_FILE = os.path.join(_JARVIS_DIR, "hue-key.txt")  # app key: never print or share it
 LOG_FILE = os.path.join(_JARVIS_DIR, "hue-set-log.txt")
 TIMEOUT = 5  # seconds per bridge request

@@ -18,10 +18,37 @@ import logging
 import threading
 from typing import Any
 
+from openjarvis.tools import jarvis_home
 from openjarvis.core.registry import TTSRegistry
 from openjarvis.speech.tts import TTSBackend, TTSResult
 
 logger = logging.getLogger(__name__)
+
+
+def _log_to_file() -> None:
+    """Keep warnings and errors of the voice code in <home>/logs/voice.log.
+
+    The server window scrolls away and a failed voice request was invisible; this file
+    names the real error (for example graphics memory). No speech text is logged.
+    """
+    try:
+        from logging.handlers import RotatingFileHandler
+
+        folder = os.path.join(os.path.expanduser("~"), ".openjarvis", "logs")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, "voice.log")
+        fh = RotatingFileHandler(path, maxBytes=500_000, backupCount=1, encoding="utf-8")
+        fh.setLevel(logging.WARNING)
+        fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        for name in (__name__, "openjarvis.server.api_routes"):
+            lg = logging.getLogger(name)
+            if not any(getattr(h, "baseFilename", "") == fh.baseFilename for h in lg.handlers):
+                lg.addHandler(fh)
+    except Exception:  # a logging problem must never stop the voice from loading
+        pass
+
+
+_log_to_file()
 
 SAMPLE_RATE = 24000  # Chatterbox output rate
 EXAGGERATION = 1.0  # emotion strength; 1.5 added stray sounds with the cloned voice
@@ -78,8 +105,8 @@ def trim_tail(samples: Any, text: str, rate: int = SAMPLE_RATE) -> Any:
     return samples
 
 
-VOICES_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis", "voices")
-HUD_SETTINGS = os.path.join(os.path.expanduser("~"), ".openjarvis", "hud-settings.json")
+VOICES_DIR = jarvis_home.path("voices")
+HUD_SETTINGS = jarvis_home.path("hud-settings.json")
 T3_FILES = {"v2": "t3_mtl23ls_v2.safetensors", "v3": "t3_mtl23ls_v3.safetensors"}
 TOKENS_PER_SECOND = 25  # Chatterbox speech tokens per second of audio
 FIRST_CHUNK_TOKENS = 18  # first streamed piece (~0.7 s of speech) -> fast first sound
@@ -208,6 +235,19 @@ class ChatterboxTTSBackend(TTSBackend):
             logger.info("Chatterbox: Turbo loaded")
         return self._turbo
 
+    def _reset_model(self) -> None:
+        """Drop the models and free graphics memory; the next request loads them again.
+
+        Used after a failed request (for example graphics memory ran out): without it
+        the broken model stayed loaded and every later request failed too.
+        """
+        with self._lock:
+            self._model = self._default_conds = None
+            self._turbo = self._turbo_conds = None
+            self._t3_version = ""
+            self._cond_key = None
+        _free_gpu()
+
     def _turbo_wav(self, model: Any, text: str, temperature: float) -> Any:
         """Whole sentence with Turbo (it has no token-by-token streaming here)."""
         import numpy as np
@@ -284,16 +324,24 @@ class ChatterboxTTSBackend(TTSBackend):
             # nothing to say (only marks such as "~~"): Chatterbox would mumble for seconds
             wav = np.zeros(int(SAMPLE_RATE * 0.1), np.float32)
         else:
-            with self._lock:
-                model = self._ensure_model()
-                self._prep(model, clip, ex)
-                if self._kind == "turbo":
-                    wav, lang = self._turbo_wav(model, text, te), "en"
-                else:
-                    wav = model.generate(
-                        text, language_id=lang, audio_prompt_path=None,
-                        exaggeration=ex, cfg_weight=CFG_WEIGHT, temperature=te,
-                    )
+            for attempt in (0, 1):
+                try:
+                    with self._lock:
+                        model = self._ensure_model()
+                        self._prep(model, clip, ex)
+                        if self._kind == "turbo":
+                            wav, lang = self._turbo_wav(model, text, te), "en"
+                        else:
+                            wav = model.generate(
+                                text, language_id=lang, audio_prompt_path=None,
+                                exaggeration=ex, cfg_weight=CFG_WEIGHT, temperature=te,
+                            )
+                    break
+                except Exception:
+                    if attempt:
+                        raise
+                    logger.exception("Chatterbox: synthesis failed, reloading the model and trying once more")
+                    self._reset_model()
         if hasattr(wav, "cpu"):  # torch tensor -> numpy
             wav = wav.cpu().numpy()
         wav = np.atleast_2d(wav)  # (channels, samples)
@@ -324,6 +372,44 @@ class ChatterboxTTSBackend(TTSBackend):
         exaggeration: float | None = None,
         temperature: float | None = None,
         language_id: str | None = None,
+    ):
+        """Like _stream_once, but a model that fails before any sound is reloaded and tried once more.
+
+        A failure used to end as an empty 200 answer (silent HUD) and the broken model
+        stayed loaded; now it is dropped after every failure so the next request starts clean.
+        """
+        produced = False
+        for attempt in (0, 1):
+            failed = [False]
+            try:
+                for chunk in self._stream_once(
+                    text, voice_id=voice_id, speed=speed, exaggeration=exaggeration,
+                    temperature=temperature, language_id=language_id, failed=failed,
+                ):
+                    produced = True
+                    yield chunk
+            except Exception:
+                if produced or attempt:
+                    raise
+                logger.exception("Chatterbox stream: failed before any sound")
+                failed[0] = True
+            if not failed[0]:
+                return
+            self._reset_model()
+            if produced or attempt:
+                return
+            logger.warning("Chatterbox stream: model reloaded, trying once more")
+
+    def _stream_once(
+        self,
+        text: str,
+        *,
+        voice_id: str = "",
+        speed: float = 1.0,
+        exaggeration: float | None = None,
+        temperature: float | None = None,
+        language_id: str | None = None,
+        failed: list | None = None,
     ):
         """Yield 16-bit mono PCM bytes (24 kHz) while the speech is still being made.
 
@@ -392,6 +478,8 @@ class ChatterboxTTSBackend(TTSBackend):
                 except _StopGen:
                     logger.info("Chatterbox stream: stopped long tail after %d tokens", count[0])
                 except Exception:
+                    if failed is not None:
+                        failed[0] = True
                     logger.exception("Chatterbox stream: token generation failed")
                 finally:
                     q.put(None)

@@ -12,9 +12,11 @@ import os
 import re
 import time
 
+from openjarvis.tools import jarvis_home
+
 logger = logging.getLogger(__name__)
 
-JARVIS_DIR = os.path.join(os.path.expanduser("~"), ".openjarvis")
+JARVIS_DIR = jarvis_home.JARVIS_DIR
 WEB_LINKS_FILE = os.path.join(JARVIS_DIR, "tool-web_search-links.txt")
 MAX_LINKS = 3  # links the HUD adds when the model wrote none
 SAVED_LINKS = 20  # links kept, so the HUD can check the model's links against the search

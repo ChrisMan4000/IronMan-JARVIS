@@ -11,6 +11,7 @@ from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import tool_reply
 from openjarvis.tools import hue_bridge
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
@@ -26,8 +27,7 @@ VERIFIED, PARTLY, UNCONFIRMABLE, FAILED = (
 room_verdict = hue_bridge.room_verdict
 
 
-def _fail(msg: str) -> ToolResult:
-    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
+_fail = tool_reply.failure_for(TOOL_NAME)
 
 
 @ToolRegistry.register(TOOL_NAME)

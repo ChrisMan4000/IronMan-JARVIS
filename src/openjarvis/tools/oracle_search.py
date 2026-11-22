@@ -11,6 +11,7 @@ from typing import Any
 
 from openjarvis.core.registry import ToolRegistry
 from openjarvis.core.types import ToolResult
+from openjarvis.tools import tool_reply
 from openjarvis.tools import rag_cache
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
@@ -25,12 +26,10 @@ UNTRUSTED_NOTE = (
 )
 
 
-def _fail(msg: str) -> ToolResult:
-    return ToolResult(tool_name=TOOL_NAME, content=msg, success=False)
+_fail = tool_reply.failure_for(TOOL_NAME)
 
 
-def _ok(text: str) -> ToolResult:
-    return ToolResult(tool_name=TOOL_NAME, content=text, success=True)
+_ok = tool_reply.reply_for(TOOL_NAME)
 
 
 def _limit(raw: Any) -> int:

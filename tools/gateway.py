@@ -50,7 +50,7 @@ COOKIE = "jarvis_gw"
 SECONDS_PER_DAY = 24 * 60 * 60
 SESSION_SECONDS = 30 * SECONDS_PER_DAY  # a login lasts 30 days
 PBKDF2_ITERATIONS = 200000
-MIN_PASSWORD = 4
+MIN_PASSWORD = 8
 MAX_TRIES = 5  # wrong passwords in a row before a lockout
 LOCKOUT_SECONDS = 300
 # The services behind the gateway (all on this PC only).
@@ -349,7 +349,7 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
 app = Starlette(
     routes=[
         Route("/login", login, methods=["GET", "POST"]),
-        Route("/logout", logout, methods=["GET"]),
+        Route("/logout", logout, methods=["POST"]),  # POST: a link or image cannot log you out
         Route(
             "/{path:path}",
             proxy,
