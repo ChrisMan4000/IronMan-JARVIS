@@ -10,6 +10,8 @@
 ![The same HUD, with an orange box on every panel telling you where its data comes from](docs/images/hud-annotated.png)
 <sub>Every orange box says where that panel gets its data.</sub>
 
+<p align="center"><img src="docs/images/hud-settings.png" alt="The settings panel (gear, top left) with voice choice, speaking pace, listening and chat options" width="420"><br><sub>The settings panel (gear, top left): frame rate, voices (JARVIS, Chatterbox voices, your own clips), listening and chat options.</sub></p>
+
 > <sub><i>**Credit where it is due:** this is a **fork of [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (Apache-2.0). The brain, the server and the engine are theirs. I added the full-screen HUD, voice, smart-home tools and installer on top. Please go give the original project a star. The original README is in [docs/OPENJARVIS-README.md](docs/OPENJARVIS-README.md).</i></sub>
 
 <p align="center">
