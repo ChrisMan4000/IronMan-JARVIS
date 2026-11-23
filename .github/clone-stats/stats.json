@@ -55,6 +55,14 @@
     "2026-11-20": {
       "total": 1,
       "unique": 1
+    },
+    "2026-11-21": {
+      "total": 35,
+      "unique": 17
+    },
+    "2026-11-22": {
+      "total": 28,
+      "unique": 13
     }
   },
   "views_daily": {
@@ -113,15 +121,24 @@
     "2026-11-20": {
       "total": 19,
       "unique": 6
+    },
+    "2026-11-21": {
+      "total": 25,
+      "unique": 12
+    },
+    "2026-11-22": {
+      "total": 25,
+      "unique": 13
     }
   },
   "downloads_now": {
-    "v1.0-installer/IronMan-JARVIS-Installer.exe": 1
+    "v1.0-installer/IronMan-JARVIS-Installer.exe": 2
   },
   "downloads_history": {
-    "2026-11-21": 1
+    "2026-11-21": 1,
+    "2026-11-23": 2
   },
-  "total_clones": 197,
-  "total_downloads": 1,
-  "last_updated": "2026-11-21T17:47:28Z"
+  "total_clones": 260,
+  "total_downloads": 2,
+  "last_updated": "2026-11-23T17:59:04Z"
 }
